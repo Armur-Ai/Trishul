@@ -509,7 +509,7 @@ These need an owner's call before Phase 0 finishes.
    cover the audience), or publish as `trishul-cli`. Recommendation: drop pip.
 2. **Default engine.** Opengrep versus Semgrep CE. Recommendation: Opengrep, with Semgrep as a
    fallback if already installed.
-3. **Module and repo naming.** The Go module is still `armur-codescanner` and the working folder
+3. **Module and repo naming.** The Go module is still `github.com/Armur-Ai/Trishul` and the working folder
    `Armur-Code-Scanner`. Recommendation: rename the module to `github.com/Armur-Ai/trishul` as
    part of the single-binary merge.
 4. **Versioning.** The CLI prints `v0.1.0` and nothing has been released. Recommendation: tag

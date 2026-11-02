@@ -1,7 +1,7 @@
 package tasks
 
 import (
-	"armur-codescanner/internal/redis"
+	"github.com/Armur-Ai/Trishul/internal/redis"
 	"encoding/json"
 	"time"
 

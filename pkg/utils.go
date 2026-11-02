@@ -1,7 +1,7 @@
 package utils
 
 import (
-	pkg "armur-codescanner/pkg/common"
+	pkg "github.com/Armur-Ai/Trishul/pkg/common"
 	"encoding/json"
 	"fmt"
 	"os"

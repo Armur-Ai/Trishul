@@ -1,10 +1,10 @@
 package api
 
 import (
-	"armur-codescanner/internal/middleware"
-	"armur-codescanner/internal/tasks"
-	utils "armur-codescanner/pkg"
-	"armur-codescanner/pkg/sarif"
+	"github.com/Armur-Ai/Trishul/internal/middleware"
+	"github.com/Armur-Ai/Trishul/internal/tasks"
+	utils "github.com/Armur-Ai/Trishul/pkg"
+	"github.com/Armur-Ai/Trishul/pkg/sarif"
 	"encoding/json"
 	"fmt"
 	"net/http"

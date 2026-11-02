@@ -3,7 +3,7 @@ package internal
 import (
 	"testing"
 
-	utils "armur-codescanner/pkg"
+	utils "github.com/Armur-Ai/Trishul/pkg"
 )
 
 func TestCategorizeJSCPDResults_Empty(t *testing.T) {

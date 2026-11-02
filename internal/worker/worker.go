@@ -1,10 +1,10 @@
 package worker
 
 import (
-	"armur-codescanner/internal/logger"
-	"armur-codescanner/internal/tasks"
-	"armur-codescanner/internal/webhook"
-	utils "armur-codescanner/pkg"
+	"github.com/Armur-Ai/Trishul/internal/logger"
+	"github.com/Armur-Ai/Trishul/internal/tasks"
+	"github.com/Armur-Ai/Trishul/internal/webhook"
+	utils "github.com/Armur-Ai/Trishul/pkg"
 	"context"
 	"encoding/json"
 	"fmt"

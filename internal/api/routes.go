@@ -1,7 +1,7 @@
 package api
 
 import (
-	"armur-codescanner/internal/middleware"
+	"github.com/Armur-Ai/Trishul/internal/middleware"
 
 	"github.com/gin-gonic/gin"
 )

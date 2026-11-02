@@ -1,4 +1,4 @@
 build: 
-	go build -o armur-cli
+	go build -o github.com/Armur-Ai/Trishul/cli
 i: 
-	./armur-cli interactive
+	./github.com/Armur-Ai/Trishul/cli interactive

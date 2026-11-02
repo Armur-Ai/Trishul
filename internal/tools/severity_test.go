@@ -1,7 +1,7 @@
 package internal
 
 import (
-	"armur-codescanner/internal/models"
+	"github.com/Armur-Ai/Trishul/internal/models"
 	"testing"
 )
 

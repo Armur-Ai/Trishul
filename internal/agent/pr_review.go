@@ -1,7 +1,7 @@
 package agent
 
 import (
-	"armur-codescanner/internal/tasks"
+	"github.com/Armur-Ai/Trishul/internal/tasks"
 	"context"
 	"encoding/json"
 	"fmt"

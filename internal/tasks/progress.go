@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"armur-codescanner/internal/redis"
+	"github.com/Armur-Ai/Trishul/internal/redis"
 )
 
 // ToolProgress represents the status of an individual tool execution.

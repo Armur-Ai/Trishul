@@ -9,7 +9,7 @@ import (
 	"os"
 	"time"
 
-	"armur-codescanner/internal/redis"
+	"github.com/Armur-Ai/Trishul/internal/redis"
 )
 
 const cacheTTL = 24 * time.Hour

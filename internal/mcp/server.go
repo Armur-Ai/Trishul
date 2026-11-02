@@ -13,9 +13,9 @@ import (
 	"strings"
 	"time"
 
-	"armur-codescanner/internal/ai"
-	"armur-codescanner/internal/models"
-	"armur-codescanner/internal/tasks"
+	"github.com/Armur-Ai/Trishul/internal/ai"
+	"github.com/Armur-Ai/Trishul/internal/models"
+	"github.com/Armur-Ai/Trishul/internal/tasks"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"

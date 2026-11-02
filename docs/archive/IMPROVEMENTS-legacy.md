@@ -1186,7 +1186,7 @@ These apply to all code written going forward, ensuring future contributors unde
 - [ ] `internal/models/finding.go` — every field of the `Finding` struct must have an inline comment
 - [ ] `internal/api/types.go` — every API request/response struct field must have a `json` tag + godoc comment (used for OpenAPI generation)
 - [ ] Run `golint ./...` and `godoc ./...` in CI to enforce comment coverage
-- [ ] Generate HTML godoc and publish to `pkg.go.dev/github.com/armur-ai/armur-codescanner`
+- [ ] Generate HTML godoc and publish to `pkg.go.dev/github.com/armur-ai/github.com/Armur-Ai/Trishul`
 
 ---
 
@@ -1290,9 +1290,9 @@ that automatically validates every change — not a tool they remember to run ma
 
 #### 15.2 Go Module & Package Naming
 
-- [x] Rename Go module from `armur-codescanner` to `armur` in `go.mod`
+- [x] Rename Go module from `github.com/Armur-Ai/Trishul` to `armur` in `go.mod`
 - [x] Rename CLI module from `armur-cli` to `armur-cli` (keep as-is — it's fine)
-- [x] Update all internal import paths: `armur-codescanner/internal/...` → `armur/internal/...`
+- [x] Update all internal import paths: `github.com/Armur-Ai/Trishul/internal/...` → `armur/internal/...`
 - [x] Update Docker image names: `armur/scanner` → `armur/agent` (keep `armur/scanner` as alias)
 - [x] Update GitHub Actions references: `armur-ai/armur-scan-action` → `armur-ai/armur-action`
 

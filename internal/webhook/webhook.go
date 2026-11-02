@@ -4,7 +4,7 @@
 package webhook
 
 import (
-	"armur-codescanner/internal/logger"
+	"github.com/Armur-Ai/Trishul/internal/logger"
 	"bytes"
 	"crypto/hmac"
 	"crypto/sha256"

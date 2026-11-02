@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"armur-codescanner/internal/logger"
+	"github.com/Armur-Ai/Trishul/internal/logger"
 )
 
 // DASTResult holds findings from dynamic testing.

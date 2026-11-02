@@ -1,8 +1,8 @@
 package internal
 
 import (
-	"armur-codescanner/internal/logger"
-	utils "armur-codescanner/pkg"
+	"github.com/Armur-Ai/Trishul/internal/logger"
+	utils "github.com/Armur-Ai/Trishul/pkg"
 	"bytes"
 	"encoding/json"
 	"fmt"

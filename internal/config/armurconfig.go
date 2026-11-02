@@ -3,7 +3,7 @@
 package config
 
 import (
-	"armur-codescanner/internal/logger"
+	"github.com/Armur-Ai/Trishul/internal/logger"
 	"bytes"
 	"fmt"
 	"os"

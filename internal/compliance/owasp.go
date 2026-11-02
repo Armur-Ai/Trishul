@@ -1,7 +1,7 @@
 package compliance
 
 import (
-	"armur-codescanner/internal/models"
+	"github.com/Armur-Ai/Trishul/internal/models"
 	"fmt"
 	"strings"
 )

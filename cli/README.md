@@ -22,10 +22,10 @@ git clone https://github.com/Armur-AI/Armur-Code-Scanner.git
 cd Armur-Code-Scanner/cli
 
 # Build the CLI
-go build -o armur-cli
+go build -o github.com/Armur-Ai/Trishul/cli
 
 # Move to your PATH (optional). This allows you to run the cli in any directory on your system
-sudo mv armur-cli /usr/local/bin/
+sudo mv github.com/Armur-Ai/Trishul/cli /usr/local/bin/
 ```
 
 ## Usage
@@ -35,12 +35,12 @@ sudo mv armur-cli /usr/local/bin/
 The CLI can be configured in the following ways:
 
 1. **Docker**
-   You can either run the codescanner on docker using the `armur-cli docker up` command or you can run and setup on your machine (no recommended) because of the extra work.
+   You can either run the codescanner on docker using the `github.com/Armur-Ai/Trishul/cli docker up` command or you can run and setup on your machine (no recommended) because of the extra work.
 
 2. **Interactive Mode**:
 
 ```bash
-armur-cli config
+github.com/Armur-Ai/Trishul/cli config
 ```
 
 This will launch an interactive prompt where you can:
@@ -52,13 +52,13 @@ This will launch an interactive prompt where you can:
 
 ```bash
 # Set API URL
-armur-cli config api_url https://api.armur.ai
+github.com/Armur-Ai/Trishul/cli config api_url https://api.armur.ai
 
 # Set Redis URL
-armur-cli config redis_url redis://localhost:6379
+github.com/Armur-Ai/Trishul/cli config redis_url redis://localhost:6379
 
 # Set API Key
-armur-cli config api_key your-api-key-here
+github.com/Armur-Ai/Trishul/cli config api_key your-api-key-here
 ```
 
 4. **Environment Variables**:
@@ -74,7 +74,7 @@ export ARMUR_API_KEY=your-api-key-here
 The API audit feature allows you to perform detailed code analysis through an interactive interface:
 
 ```bash
-armur-cli api
+github.com/Armur-Ai/Trishul/cli api
 ```
 
 This will launch an interactive prompt where you can:
@@ -95,32 +95,32 @@ The audit results will be displayed in the terminal.
 
 ```bash
 # Scan a repository
-armur-cli scan https://github.com/user/repo --language python
+github.com/Armur-Ai/Trishul/cli scan https://github.com/user/repo --language python
 
 # Scan a local file or directory
-armur-cli scan /path/to/your/code
+github.com/Armur-Ai/Trishul/cli scan /path/to/your/code
 
 # Enable advanced scanning
-armur-cli scan <target> --advanced
+github.com/Armur-Ai/Trishul/cli scan <target> --advanced
 
 # Output in JSON format
-armur-cli scan <target> --output json
+github.com/Armur-Ai/Trishul/cli scan <target> --output json
 ```
 
 ### Report Generation
 
 ```bash
 # Generate an OWASP report
-armur-cli report <task-id> --type owasp
+github.com/Armur-Ai/Trishul/cli report <task-id> --type owasp
 
 # Generate a SANS report
-armur-cli report <task-id> --type sans
+github.com/Armur-Ai/Trishul/cli report <task-id> --type sans
 ```
 
 ### View Scan Status
 
 ```bash
-armur-cli status <task-id>
+github.com/Armur-Ai/Trishul/cli status <task-id>
 ```
 
 ## Examples
@@ -128,20 +128,20 @@ armur-cli status <task-id>
 ### Basic Repository Scan
 
 ```bash
-armur-cli scan https://github.com/user/repo --language python
+github.com/Armur-Ai/Trishul/cli scan https://github.com/user/repo --language python
 ```
 
 ### Local Directory Scan with Advanced Analysis
 
 ```bash
-armur-cli scan ./my-project --advanced
+github.com/Armur-Ai/Trishul/cli scan ./my-project --advanced
 ```
 
 ### API Audit Example
 
 ```bash
 # Start an interactive API audit
-armur-cli api
+github.com/Armur-Ai/Trishul/cli api
 
 # The tool will prompt you for:
 # 1. Audit type (Vulnerability/Audit/Optimization/Codefix/Documentation)
@@ -153,7 +153,7 @@ armur-cli api
 ### Generate OWASP Report
 
 ```bash
-armur-cli report abc123 --type owasp
+github.com/Armur-Ai/Trishul/cli report abc123 --type owasp
 ```
 
 ## Contributing

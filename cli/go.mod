@@ -1,4 +1,4 @@
-module armur-cli
+module github.com/Armur-Ai/Trishul/cli
 
 go 1.25.0
 

@@ -1,7 +1,7 @@
 package main
 
 import (
-	"armur-cli/cmd"
+	"github.com/Armur-Ai/Trishul/cli/cmd"
 )
 
 func main() {

@@ -1,7 +1,7 @@
 package middleware
 
 import (
-	"armur-codescanner/internal/logger"
+	"github.com/Armur-Ai/Trishul/internal/logger"
 	"net/http"
 	"sync"
 	"time"

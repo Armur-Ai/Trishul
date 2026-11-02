@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"armur-codescanner/internal/models"
+	"github.com/Armur-Ai/Trishul/internal/models"
 )
 
 // AttackGraph represents the full attack graph for a scan.

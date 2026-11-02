@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	"armur-cli/internal/history"
+	"github.com/Armur-Ai/Trishul/cli/internal/history"
 	"fmt"
 	"os"
 

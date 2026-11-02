@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"armur-codescanner/internal/redis"
+	"github.com/Armur-Ai/Trishul/internal/redis"
 )
 
 // cancelRegistry stores cancel functions keyed by task ID.

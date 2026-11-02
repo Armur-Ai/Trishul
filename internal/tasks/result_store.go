@@ -6,7 +6,7 @@ import (
 	"errors"
 	"time"
 
-	"armur-codescanner/internal/redis"
+	"github.com/Armur-Ai/Trishul/internal/redis"
 )
 
 var redisClient = redis.RedisClient()

@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	"armur-cli/internal/config"
+	"github.com/Armur-Ai/Trishul/cli/internal/config"
 	"fmt"
 	"net"
 	"os"

@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"armur-codescanner/internal/ai"
-	"armur-codescanner/internal/logger"
+	"github.com/Armur-Ai/Trishul/internal/ai"
+	"github.com/Armur-Ai/Trishul/internal/logger"
 )
 
 // Sandbox represents an isolated execution environment for DAST testing.

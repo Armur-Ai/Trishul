@@ -1,16 +1,16 @@
 package main
 
 import (
-	"armur-codescanner/internal/api"
-	"armur-codescanner/internal/redis"
-	"armur-codescanner/internal/worker"
+	"github.com/Armur-Ai/Trishul/internal/api"
+	"github.com/Armur-Ai/Trishul/internal/redis"
+	"github.com/Armur-Ai/Trishul/internal/worker"
 	"log"
 	"os"
 
 	"github.com/gin-gonic/gin"
 	"github.com/hibiken/asynq"
 
-	_ "armur-codescanner/docs"
+	_ "github.com/Armur-Ai/Trishul/docs"
 
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"

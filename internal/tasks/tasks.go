@@ -1,10 +1,10 @@
 package tasks
 
 import (
-	"armur-codescanner/internal/config"
-	"armur-codescanner/internal/logger"
-	tools "armur-codescanner/internal/tools"
-	utils "armur-codescanner/pkg"
+	"github.com/Armur-Ai/Trishul/internal/config"
+	"github.com/Armur-Ai/Trishul/internal/logger"
+	tools "github.com/Armur-Ai/Trishul/internal/tools"
+	utils "github.com/Armur-Ai/Trishul/pkg"
 	"context"
 	"errors"
 	"fmt"

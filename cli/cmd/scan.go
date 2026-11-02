@@ -1,10 +1,10 @@
 package cmd
 
 import (
-	"armur-cli/internal/api"
-	"armur-cli/internal/config"
-	"armur-cli/internal/history"
-	"armur-cli/internal/utils"
+	"github.com/Armur-Ai/Trishul/cli/internal/api"
+	"github.com/Armur-Ai/Trishul/cli/internal/config"
+	"github.com/Armur-Ai/Trishul/cli/internal/history"
+	"github.com/Armur-Ai/Trishul/cli/internal/utils"
 	"encoding/json"
 	"fmt"
 	"os"

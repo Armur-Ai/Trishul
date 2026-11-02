@@ -1,4 +1,4 @@
-module armur-codescanner
+module github.com/Armur-Ai/Trishul
 
 go 1.25.0
 

@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	"armur-cli/internal/tui"
+	"github.com/Armur-Ai/Trishul/cli/internal/tui"
 	"fmt"
 	"os"
 
