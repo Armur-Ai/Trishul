@@ -14,27 +14,27 @@ var completionCmd = &cobra.Command{
 To load completions:
 
 Bash:
-  $ source <(vibescan completion bash)
+  $ source <(trishul completion bash)
   # To load completions for each session, execute once:
   # Linux:
-  $ vibescan completion bash > /etc/bash_completion.d/armur
+  $ trishul completion bash > /etc/bash_completion.d/armur
   # macOS:
-  $ vibescan completion bash > $(brew --prefix)/etc/bash_completion.d/armur
+  $ trishul completion bash > $(brew --prefix)/etc/bash_completion.d/armur
 
 Zsh:
-  $ source <(vibescan completion zsh)
+  $ source <(trishul completion zsh)
   # To load completions for each session, execute once:
-  $ vibescan completion zsh > "${fpath[1]}/_armur"
+  $ trishul completion zsh > "${fpath[1]}/_armur"
 
 Fish:
-  $ vibescan completion fish | source
+  $ trishul completion fish | source
   # To load completions for each session, execute once:
-  $ vibescan completion fish > ~/.config/fish/completions/armur.fish
+  $ trishul completion fish > ~/.config/fish/completions/armur.fish
 
 PowerShell:
-  PS> vibescan completion powershell | Out-String | Invoke-Expression
+  PS> trishul completion powershell | Out-String | Invoke-Expression
   # To load completions for each session, add to your profile:
-  PS> vibescan completion powershell > armur.ps1 && . ./armur.ps1
+  PS> trishul completion powershell > armur.ps1 && . ./armur.ps1
 `,
 	DisableFlagsInUseLine: true,
 	ValidArgs:             []string{"bash", "zsh", "fish", "powershell"},

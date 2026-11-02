@@ -1,12 +1,12 @@
 <div align="center">
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="banner/vibescan-dark.svg">
-  <source media="(prefers-color-scheme: light)" srcset="banner/vibescan-light.svg">
-  <img src="banner/vibescan-dark.svg" alt="vibescan: code from Cursor, Claude Code, Copilot and Windsurf flows through security scanners and comes out ready to ship or flagged" width="100%">
+  <source media="(prefers-color-scheme: dark)" srcset="banner/trishul-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="banner/trishul-light.svg">
+  <img src="banner/trishul-dark.svg" alt="trishul: code from Cursor, Claude Code, Copilot and Windsurf flows through security scanners and comes out ready to ship or flagged" width="100%">
 </picture>
 
-# vibescan
+# trishul
 
 ### The open-source security scanner for AI-generated code
 
@@ -14,7 +14,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Go](https://img.shields.io/badge/Go-1.25+-00ADD8?logo=go&logoColor=white)](https://golang.org)
-[![GitHub Stars](https://img.shields.io/github/stars/Armur-Ai/vibescan?style=social)](https://github.com/Armur-Ai/vibescan)
+[![GitHub Stars](https://img.shields.io/github/stars/Armur-Ai/trishul?style=social)](https://github.com/Armur-Ai/trishul)
 [![Discord](https://img.shields.io/discord/1021371417134125106?label=Discord&logo=discord)](https://discord.gg/PEycrqvd)
 
 [Why](#why) &bull; [What it catches](#what-it-catches) &bull; [Quick start](#quick-start) &bull; [Scanners](#scanners) &bull; [Status](#project-status) &bull; [Roadmap](#roadmap) &bull; [Contributing](#contributing)
@@ -24,7 +24,7 @@
 ---
 
 <div align="center">
-<img src="demo/scan.gif" alt="vibescan scanning an AI-generated Express app and reporting command injection, XSS, eval and hardcoded credentials" width="100%">
+<img src="demo/scan.gif" alt="trishul scanning an AI-generated Express app and reporting command injection, XSS, eval and hardcoded credentials" width="100%">
 </div>
 
 ## Why
@@ -37,7 +37,7 @@ AI assistants write code that compiles, runs, and demos well. Whether it is safe
 
 The mistakes are repetitive: a service key in the browser bundle, a database table anyone can read, an API route with no login check, a dependency that was never real. Traditional scanners were built for a different kind of code and a different kind of team.
 
-vibescan is built for this kind: it runs the best open-source scanners behind one command, and it is growing a rule set aimed at what AI tools actually get wrong.
+trishul is built for this kind: it runs the best open-source scanners behind one command, and it is growing a rule set aimed at what AI tools actually get wrong.
 
 ## What it catches
 
@@ -60,23 +60,23 @@ Against our own reference target, [`examples/vibe-coded-app`](examples/vibe-code
 
 ## Quick start
 
-vibescan is pre-release. There are no published packages yet, so you build it from source. You need Docker and Go 1.25 or newer.
+trishul is pre-release. There are no published packages yet, so you build it from source. You need Docker and Go 1.25 or newer.
 
 ```bash
-git clone https://github.com/Armur-Ai/vibescan
-cd vibescan
+git clone https://github.com/Armur-Ai/trishul
+cd trishul
 
 # 1. Start the scan engine (first build takes a few minutes)
 docker compose up -d --build
 
 # 2. Build the CLI
-(cd cli && go build -o ../bin/vibescan .)
+(cd cli && go build -o ../bin/trishul .)
 
 # 3. Scan a file
-./bin/vibescan scan examples/vibe-coded-app/server.js
+./bin/trishul scan examples/vibe-coded-app/server.js
 
 # 4. Or scan a repository
-./bin/vibescan scan https://github.com/you/your-app -l js
+./bin/trishul scan https://github.com/you/your-app -l js
 ```
 
 Languages for `-l`: `go`, `py`, `js`, `rust`, `java`, `ruby`, `php`, `c`, `iac`, `sol`.
@@ -84,18 +84,18 @@ Languages for `-l`: `go`, `py`, `js`, `rust`, `java`, `ruby`, `php`, `c`, `iac`,
 Useful flags:
 
 ```bash
-./bin/vibescan scan <repo-url> -l js --advanced          # deep pass: dependencies, IaC, duplication, dead code
-./bin/vibescan scan <target> --output json               # machine-readable results
-./bin/vibescan scan <target> --fail-on-severity high     # non-zero exit for CI
+./bin/trishul scan <repo-url> -l js --advanced          # deep pass: dependencies, IaC, duplication, dead code
+./bin/trishul scan <target> --output json               # machine-readable results
+./bin/trishul scan <target> --fail-on-severity high     # non-zero exit for CI
 ```
 
-Running `./bin/vibescan` with no arguments opens the interactive menu:
+Running `./bin/trishul` with no arguments opens the interactive menu:
 
 <div align="center">
-<img src="demo/menu.gif" alt="the vibescan interactive terminal menu" width="85%">
+<img src="demo/menu.gif" alt="the trishul interactive terminal menu" width="85%">
 </div>
 
-> **Do not run `pip install vibescan`.** That name on PyPI belongs to an unrelated project. An earlier version of this README listed it by mistake.
+> **Do not run `pip install trishul`.** That name on PyPI belongs to an unrelated project. An earlier version of this README listed it by mistake.
 
 ### Using the API directly
 
@@ -118,7 +118,7 @@ Interactive API docs are served at `http://localhost:4500/swagger/index.html`.
 
 ## Scanners
 
-vibescan does not reinvent static analysis. It orchestrates established open-source scanners in parallel, normalises severities, maps findings to CWEs, and returns one report.
+trishul does not reinvent static analysis. It orchestrates established open-source scanners in parallel, normalises severities, maps findings to CWEs, and returns one report.
 
 | Target | Standard scan | Deep pass (`--advanced`) |
 |---|---|---|
@@ -154,7 +154,7 @@ Coming next, in order: Gitleaks and validated secret detection, hallucinated-dep
 | AI explanations and fixes, PR review | Implemented as packages, not yet wired to the CLI |
 | Sandboxed DAST, exploit simulation, attack paths | Implemented as packages, not yet wired. Returning as verification of static findings. |
 
-If something in this README does not work as written, that is a bug. Please [open an issue](https://github.com/Armur-Ai/vibescan/issues).
+If something in this README does not work as written, that is a bug. Please [open an issue](https://github.com/Armur-Ai/trishul/issues).
 
 ## Roadmap
 
@@ -162,7 +162,7 @@ The plan is in [ROADMAP.md](ROADMAP.md). In short:
 
 | Phase | Goal |
 |---|---|
-| **0. Make the promise true** | One binary, no Redis, no Docker. `npx vibescan scan .` on a clean machine in under a minute. |
+| **0. Make the promise true** | One binary, no Redis, no Docker. `npx trishul scan .` on a clean machine in under a minute. |
 | **1. Vibe-native detection** | Our own analyzers for the Vibe Top 10: exposed keys, open Supabase and Firebase data, missing authorization, hallucinated dependencies. |
 | **2. In the agent loop** | A working MCP server, editor hooks, and fix prompts, so the agent that wrote the bug fixes it. Scanning of rules files and MCP configs. |
 | **3. Scanner breadth** | Opengrep, Gitleaks, GuardDog, zizmor, Ruff and more, each with a fixture that proves it fires. |
@@ -181,11 +181,11 @@ Run the tests with `go test ./...` from the repo root and from `cli/`.
 
 ## Security
 
-Found a vulnerability in vibescan itself? See [SECURITY.md](SECURITY.md).
+Found a vulnerability in trishul itself? See [SECURITY.md](SECURITY.md).
 
 ## Credits
 
-vibescan stands on the work of the projects it runs:
+trishul stands on the work of the projects it runs:
 [Semgrep](https://github.com/semgrep/semgrep),
 [Trivy](https://github.com/aquasecurity/trivy),
 [OSV-Scanner](https://github.com/google/osv-scanner),
@@ -196,7 +196,7 @@ vibescan stands on the work of the projects it runs:
 [TruffleHog](https://github.com/trufflesecurity/trufflehog),
 [Brakeman](https://github.com/presidentbeef/brakeman),
 [Slither](https://github.com/crytic/slither),
-and the [rest of the pipeline](#scanners). If vibescan finds something for you, one of them probably did the hard part.
+and the [rest of the pipeline](#scanners). If trishul finds something for you, one of them probably did the hard part.
 
 ## License
 
@@ -206,8 +206,8 @@ MIT. See [LICENSE](LICENSE).
 
 <div align="center">
 
-[Roadmap](ROADMAP.md) &bull; [Discord](https://discord.gg/PEycrqvd) &bull; [Issues](https://github.com/Armur-Ai/vibescan/issues)
+[Roadmap](ROADMAP.md) &bull; [Discord](https://discord.gg/PEycrqvd) &bull; [Issues](https://github.com/Armur-Ai/trishul/issues)
 
-*AI wrote it. vibescan checks it.*
+*AI wrote it. trishul checks it.*
 
 </div>

@@ -2,7 +2,7 @@
   "name": "vibe-coded-app",
   "version": "0.0.0",
   "private": true,
-  "description": "Intentionally vulnerable fixture for vibescan. Do not deploy.",
+  "description": "Intentionally vulnerable fixture for trishul. Do not deploy.",
   "main": "server.js",
   "dependencies": {
     "@supabase/supabase-js": "^2.39.0",

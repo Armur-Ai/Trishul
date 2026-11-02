@@ -6,8 +6,8 @@ const https = require("https");
 const path = require("path");
 const os = require("os");
 
-const REPO = "Armur-Ai/vibescan";
-const BIN_NAME = os.platform() === "win32" ? "vibescan.exe" : "vibescan";
+const REPO = "Armur-Ai/trishul";
+const BIN_NAME = os.platform() === "win32" ? "trishul.exe" : "trishul";
 
 function getPlatform() {
   const platform = os.platform();
@@ -38,12 +38,12 @@ function getLatestVersion() {
   return new Promise((resolve, reject) => {
     https.get(
       `https://api.github.com/repos/${REPO}/releases/latest`,
-      { headers: { "User-Agent": "vibescan-npm-installer" } },
+      { headers: { "User-Agent": "trishul-npm-installer" } },
       (res) => {
         if (res.statusCode === 302 || res.statusCode === 301) {
           https.get(
             res.headers.location,
-            { headers: { "User-Agent": "vibescan-npm-installer" } },
+            { headers: { "User-Agent": "trishul-npm-installer" } },
             (res2) => {
               let data = "";
               res2.on("data", (chunk) => (data += chunk));
@@ -81,7 +81,7 @@ async function install() {
     const tag = version.replace(/^v/, "");
 
     const ext = osName === "windows" ? "zip" : "tar.gz";
-    const filename = `vibescan_${tag}_${osName}_${arch}.${ext}`;
+    const filename = `trishul_${tag}_${osName}_${arch}.${ext}`;
     const url = `https://github.com/${REPO}/releases/download/${version}/${filename}`;
 
     const binDir = path.join(__dirname, "..", "bin");
@@ -89,18 +89,18 @@ async function install() {
 
     const tmpFile = path.join(os.tmpdir(), filename);
 
-    console.log(`Downloading vibescan ${version} for ${osName}/${arch}...`);
+    console.log(`Downloading trishul ${version} for ${osName}/${arch}...`);
 
     // Download binary
     execSync(`curl -fsSL -o "${tmpFile}" "${url}"`, { stdio: "inherit" });
 
     // Extract
     if (ext === "tar.gz") {
-      execSync(`tar -xzf "${tmpFile}" -C "${binDir}" vibescan`, {
+      execSync(`tar -xzf "${tmpFile}" -C "${binDir}" trishul`, {
         stdio: "inherit",
       });
     } else {
-      execSync(`unzip -o "${tmpFile}" vibescan.exe -d "${binDir}"`, {
+      execSync(`unzip -o "${tmpFile}" trishul.exe -d "${binDir}"`, {
         stdio: "inherit",
       });
     }
@@ -116,12 +116,12 @@ async function install() {
       fs.unlinkSync(tmpFile);
     } catch {}
 
-    console.log(`vibescan ${version} installed successfully!`);
-    console.log(`Run: npx vibescan run .`);
+    console.log(`trishul ${version} installed successfully!`);
+    console.log(`Run: npx trishul run .`);
   } catch (err) {
-    console.error("Failed to install vibescan binary:", err.message);
+    console.error("Failed to install trishul binary:", err.message);
     console.error(
-      "You can install manually: brew install Armur-Ai/tap/vibescan"
+      "You can install manually: brew install Armur-Ai/tap/trishul"
     );
     process.exit(0); // Don't fail npm install
   }

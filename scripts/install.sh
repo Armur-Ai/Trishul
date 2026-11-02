@@ -1,12 +1,12 @@
 #!/bin/sh
-# vibescan — Universal Installer
-# Usage: curl -fsSL https://raw.githubusercontent.com/Armur-Ai/vibescan/main/scripts/install.sh | sh
+# trishul — Universal Installer
+# Usage: curl -fsSL https://raw.githubusercontent.com/Armur-Ai/trishul/main/scripts/install.sh | sh
 
 set -e
 
-REPO="Armur-Ai/vibescan"
-INSTALL_DIR="${VIBESCAN_INSTALL_DIR:-/usr/local/bin}"
-BINARY_NAME="vibescan"
+REPO="Armur-Ai/trishul"
+INSTALL_DIR="${TRISHUL_INSTALL_DIR:-/usr/local/bin}"
+BINARY_NAME="trishul"
 
 # Colors
 RED='\033[0;31m'
@@ -54,10 +54,10 @@ get_latest_version() {
     tmpfile=$(mktemp)
     if command -v curl > /dev/null 2>&1; then
         curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" \
-            -H "User-Agent: vibescan-installer" > "$tmpfile" 2>/dev/null
+            -H "User-Agent: trishul-installer" > "$tmpfile" 2>/dev/null
     elif command -v wget > /dev/null 2>&1; then
         wget -qO "$tmpfile" "https://api.github.com/repos/${REPO}/releases/latest" \
-            --header="User-Agent: vibescan-installer" 2>/dev/null
+            --header="User-Agent: trishul-installer" 2>/dev/null
     else
         error "curl or wget required for installation"
     fi
@@ -78,14 +78,14 @@ main() {
     EXT="tar.gz"
     if [ "$OS" = "windows" ]; then
         EXT="zip"
-        BINARY_NAME="vibescan.exe"
+        BINARY_NAME="trishul.exe"
     fi
 
-    FILENAME="vibescan_${TAG}_${OS}_${ARCH}.${EXT}"
+    FILENAME="trishul_${TAG}_${OS}_${ARCH}.${EXT}"
     URL="https://github.com/${REPO}/releases/download/${VERSION}/${FILENAME}"
 
     echo ""
-    info "vibescan installer"
+    info "trishul installer"
     info "Version:  ${VERSION}"
     info "Platform: ${OS}/${ARCH}"
     echo ""
@@ -131,17 +131,17 @@ main() {
     fi
 
     echo ""
-    success "vibescan ${VERSION} installed to ${INSTALL_DIR}/${BINARY_NAME}"
+    success "trishul ${VERSION} installed to ${INSTALL_DIR}/${BINARY_NAME}"
     echo ""
     echo "  Get started:"
-    echo "    ${CYAN}vibescan run .${NC}        scan current directory"
-    echo "    ${CYAN}vibescan doctor${NC}       check tool availability"
-    echo "    ${CYAN}vibescan --help${NC}       see all commands"
+    echo "    ${CYAN}trishul run .${NC}        scan current directory"
+    echo "    ${CYAN}trishul doctor${NC}       check tool availability"
+    echo "    ${CYAN}trishul --help${NC}       see all commands"
     echo ""
 
     # Verify it works
-    if command -v vibescan > /dev/null 2>&1; then
-        success "Installation verified — vibescan is in your PATH"
+    if command -v trishul > /dev/null 2>&1; then
+        success "Installation verified — trishul is in your PATH"
     else
         echo "  ${RED}Note:${NC} ${INSTALL_DIR} may not be in your PATH."
         echo "  Add it: export PATH=\"${INSTALL_DIR}:\$PATH\""

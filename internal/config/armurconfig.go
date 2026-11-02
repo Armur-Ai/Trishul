@@ -62,20 +62,42 @@ type PluginConfig struct {
 	Language string `yaml:"language"`
 }
 
-const configFileName = ".armur.yml"
+// configFileName is the canonical per-project config name. ".armur.yml" is kept
+// as a deprecated legacy alias for backward compatibility (see the
+// VibeScan→Trishul rename, docs/rename-vibescan-to-trishul.md). Precedence:
+// the canonical name wins; a legacy file is used only when the canonical one is
+// absent, and its use is reported.
+const (
+	configFileName       = ".trishul.yml"
+	legacyConfigFileName = ".armur.yml"
+)
 
-// LoadProjectConfig reads the .armur.yml file from repoPath, if it exists.
-// If the file is absent, a zero-value ArmurConfig is returned without error.
+// LoadProjectConfig reads the project config from repoPath, if it exists. It
+// prefers the canonical .trishul.yml and falls back to the legacy .armur.yml
+// (with a deprecation notice). If neither is present, a zero-value ArmurConfig
+// is returned without error.
 func LoadProjectConfig(repoPath string) (*ArmurConfig, error) {
 	cfgPath := filepath.Join(repoPath, configFileName)
+	legacyPath := filepath.Join(repoPath, legacyConfigFileName)
 
 	data, err := os.ReadFile(cfgPath)
 	if os.IsNotExist(err) {
-		logger.Debug().Str("path", cfgPath).Msg(".armur.yml not found; using defaults")
-		return &ArmurConfig{}, nil
-	}
-	if err != nil {
+		// Canonical absent — try the legacy name.
+		legacyData, legacyErr := os.ReadFile(legacyPath)
+		if os.IsNotExist(legacyErr) {
+			logger.Debug().Str("path", cfgPath).Msg(".trishul.yml not found; using defaults")
+			return &ArmurConfig{}, nil
+		}
+		if legacyErr != nil {
+			return nil, fmt.Errorf("could not read %s: %w", legacyPath, legacyErr)
+		}
+		logger.Warn().Str("path", legacyPath).Msg(".armur.yml is deprecated; rename it to .trishul.yml")
+		cfgPath, data = legacyPath, legacyData
+	} else if err != nil {
 		return nil, fmt.Errorf("could not read %s: %w", cfgPath, err)
+	} else if _, legacyErr := os.Stat(legacyPath); legacyErr == nil {
+		// Both present: canonical wins, legacy ignored but reported.
+		logger.Warn().Str("ignored", legacyPath).Str("using", cfgPath).Msg("both .trishul.yml and legacy .armur.yml exist; using .trishul.yml")
 	}
 
 	var cfg ArmurConfig
@@ -83,7 +105,7 @@ func LoadProjectConfig(repoPath string) (*ArmurConfig, error) {
 		return nil, fmt.Errorf("could not parse %s: %w", cfgPath, err)
 	}
 
-	logger.Info().Str("path", cfgPath).Msg(".armur.yml loaded")
+	logger.Info().Str("path", cfgPath).Msg("project config loaded")
 	return &cfg, nil
 }
 

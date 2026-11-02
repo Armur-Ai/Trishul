@@ -191,7 +191,7 @@ func githubAPIGet(ctx context.Context, url string) ([]byte, error) {
 	}
 
 	req.Header.Set("Accept", "application/vnd.github.v3+json")
-	req.Header.Set("User-Agent", "vibescan-pr-review")
+	req.Header.Set("User-Agent", "trishul-pr-review")
 
 	if token := os.Getenv("GITHUB_TOKEN"); token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
@@ -218,7 +218,7 @@ func githubAPIGet(ctx context.Context, url string) ([]byte, error) {
 // clonePRBranch clones the repository and checks out the PR's head branch.
 // It returns the path to the temporary directory containing the clone.
 func clonePRBranch(ctx context.Context, owner, repo string, prNum int, headBranch string) (string, error) {
-	tmpDir, err := os.MkdirTemp(os.TempDir(), fmt.Sprintf("vibescan-pr-%d-*", prNum))
+	tmpDir, err := os.MkdirTemp(os.TempDir(), fmt.Sprintf("trishul-pr-%d-*", prNum))
 	if err != nil {
 		return "", fmt.Errorf("creating temp dir: %w", err)
 	}

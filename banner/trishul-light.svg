@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" width="1200" height="400" role="img" aria-label="vibescan: code from Cursor, Claude Code, Copilot and Windsurf flows through security scanners and comes out either ready to ship or flagged">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" width="1200" height="400" role="img" aria-label="trishul: code from Cursor, Claude Code, Copilot and Windsurf flows through security scanners and comes out either ready to ship or flagged">
 <style>
   .flow { fill: none; stroke-width: 2; stroke-dasharray: 7 7; animation: flow 1.4s linear infinite; }
   .chip { animation: pulse 3.2s ease-in-out infinite; }
