@@ -1,9 +1,9 @@
 version: 2
 
 builds:
-  - id: vibescan-server
+  - id: trishul-server
     main: ./cmd/server
-    binary: vibescan-server
+    binary: trishul-server
     env:
       - CGO_ENABLED=0
     goos:
@@ -18,9 +18,9 @@ builds:
       - -X main.commit={{.ShortCommit}}
       - -X main.date={{.Date}}
 
-  - id: vibescan-cli
+  - id: trishul-cli
     dir: cli
-    binary: vibescan
+    binary: trishul
     env:
       - CGO_ENABLED=0
     goos:
@@ -39,16 +39,16 @@ builds:
 archives:
   - id: cli-archive
     builds:
-      - vibescan-cli
-    name_template: "vibescan_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+      - trishul-cli
+    name_template: "trishul_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     format_overrides:
       - goos: windows
         format: zip
 
   - id: server-archive
     builds:
-      - vibescan-server
-    name_template: "vibescan-server_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+      - trishul-server
+    name_template: "trishul-server_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
 
 checksum:
   name_template: 'checksums.txt'
@@ -62,17 +62,17 @@ changelog:
       - '^test:'
 
 brews:
-  - name: vibescan
+  - name: trishul
     ids:
       - cli-archive
     repository:
       owner: Armur-Ai
       name: homebrew-tap
       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
-    homepage: "https://vibescan.dev"
+    homepage: "https://trishul.dev"
     description: "Security Scanner for Vibe-Coded Software — SAST + DAST + exploit simulation"
     license: "MIT"
     install: |
-      bin.install "vibescan"
+      bin.install "trishul"
     test: |
-      system "#{bin}/vibescan", "version"
+      system "#{bin}/trishul", "version"

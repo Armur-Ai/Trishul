@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generates banner/vibescan-dark.svg and banner/vibescan-light.svg.
+"""Generates banner/trishul-dark.svg and banner/trishul-light.svg.
 
 Run from the repo root:  python3 banner/build.py
 
@@ -33,7 +33,7 @@ def build(t):
     out = []
     add = out.append
     add('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" width="1200" height="400" '
-        'role="img" aria-label="vibescan: code from Cursor, Claude Code, Copilot and Windsurf flows '
+        'role="img" aria-label="trishul: code from Cursor, Claude Code, Copilot and Windsurf flows '
         'through security scanners and comes out either ready to ship or flagged">')
     add(f"""<style>
   .flow {{ fill: none; stroke-width: 2; stroke-dasharray: 7 7; animation: flow 1.4s linear infinite; }}
@@ -97,5 +97,5 @@ def build(t):
 if __name__ == "__main__":
     here = Path(__file__).parent
     for name, theme in THEMES.items():
-        (here / f"vibescan-{name}.svg").write_text(build(theme), encoding="utf-8")
-        print(f"wrote banner/vibescan-{name}.svg")
+        (here / f"trishul-{name}.svg").write_text(build(theme), encoding="utf-8")
+        print(f"wrote banner/trishul-{name}.svg")

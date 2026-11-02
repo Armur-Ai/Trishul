@@ -3,7 +3,7 @@
 **Intentionally vulnerable. Do not deploy, and do not reuse any of this code.**
 
 A small app written the way AI coding assistants tend to write one. It is the reference target for
-vibescan: the demo recordings scan it, and the [roadmap](../../ROADMAP.md) exit tests are defined
+trishul: the demo recordings scan it, and the [roadmap](../../ROADMAP.md) exit tests are defined
 against it.
 
 Every credential in this folder is fake.

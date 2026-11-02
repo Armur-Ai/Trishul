@@ -2,7 +2,7 @@
 #
 # Prerequisites, from the repo root:
 #   docker compose up -d --build
-#   (cd cli && go build -o ../bin/vibescan .)
+#   (cd cli && go build -o ../bin/trishul .)
 # Then:
 #   vhs demo/scan.tape
 
@@ -22,7 +22,7 @@ Enter
 Show
 
 Sleep 500ms
-Type "vibescan scan examples/vibe-coded-app/server.js"
+Type "trishul scan examples/vibe-coded-app/server.js"
 Sleep 600ms
 Enter
 Sleep 16s

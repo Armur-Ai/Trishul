@@ -1,5 +1,5 @@
 """
-vibescan CLI wrapper — downloads and runs the vibescan Go binary.
+trishul CLI wrapper — downloads and runs the trishul Go binary.
 
 On first run, downloads the correct binary for your OS/arch from GitHub Releases.
 Subsequent runs use the cached binary.
@@ -17,8 +17,8 @@ import urllib.request
 import json
 import zipfile
 
-REPO = "Armur-Ai/vibescan"
-BIN_DIR = os.path.join(os.path.expanduser("~"), ".vibescan", "bin")
+REPO = "Armur-Ai/trishul"
+BIN_DIR = os.path.join(os.path.expanduser("~"), ".trishul", "bin")
 RELEASES_URL = f"https://api.github.com/repos/{REPO}/releases/latest"
 
 
@@ -49,7 +49,7 @@ def _get_latest_version():
     """Fetch the latest release tag from GitHub."""
     try:
         req = urllib.request.Request(
-            RELEASES_URL, headers={"User-Agent": "vibescan-pip-installer"}
+            RELEASES_URL, headers={"User-Agent": "trishul-pip-installer"}
         )
         with urllib.request.urlopen(req, timeout=15) as resp:
             data = json.loads(resp.read().decode())
@@ -59,30 +59,30 @@ def _get_latest_version():
 
 
 def _bin_path():
-    """Return the path to the vibescan binary."""
-    name = "vibescan.exe" if platform.system().lower() == "windows" else "vibescan"
+    """Return the path to the trishul binary."""
+    name = "trishul.exe" if platform.system().lower() == "windows" else "trishul"
     return os.path.join(BIN_DIR, name)
 
 
 def _download_binary():
-    """Download and install the vibescan binary."""
+    """Download and install the trishul binary."""
     os_name, arch = _platform_info()
     version = _get_latest_version()
     tag = version.lstrip("v")
 
     ext = "zip" if os_name == "windows" else "tar.gz"
-    filename = f"vibescan_{tag}_{os_name}_{arch}.{ext}"
+    filename = f"trishul_{tag}_{os_name}_{arch}.{ext}"
     url = f"https://github.com/{REPO}/releases/download/{version}/{filename}"
 
     os.makedirs(BIN_DIR, exist_ok=True)
 
-    print(f"Downloading vibescan {version} for {os_name}/{arch}...")
+    print(f"Downloading trishul {version} for {os_name}/{arch}...")
 
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp_file = os.path.join(tmpdir, filename)
         urllib.request.urlretrieve(url, tmp_file)
 
-        bin_name = "vibescan.exe" if os_name == "windows" else "vibescan"
+        bin_name = "trishul.exe" if os_name == "windows" else "trishul"
         dest = os.path.join(BIN_DIR, bin_name)
 
         if ext == "tar.gz":
@@ -95,7 +95,7 @@ def _download_binary():
         if os_name != "windows":
             os.chmod(dest, os.stat(dest).st_mode | stat.S_IEXEC)
 
-    print(f"vibescan {version} installed to {dest}")
+    print(f"trishul {version} installed to {dest}")
 
 
 def main():
@@ -106,8 +106,8 @@ def main():
         _download_binary()
 
     if not os.path.isfile(binary):
-        print("Failed to install vibescan binary.", file=sys.stderr)
-        print("Install manually: brew install Armur-Ai/tap/vibescan", file=sys.stderr)
+        print("Failed to install trishul binary.", file=sys.stderr)
+        print("Install manually: brew install Armur-Ai/tap/trishul", file=sys.stderr)
         sys.exit(1)
 
     try:
@@ -116,7 +116,7 @@ def main():
     except KeyboardInterrupt:
         sys.exit(130)
     except Exception as e:
-        print(f"Failed to run vibescan: {e}", file=sys.stderr)
+        print(f"Failed to run trishul: {e}", file=sys.stderr)
         sys.exit(1)
 
 

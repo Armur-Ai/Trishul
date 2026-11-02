@@ -1,12 +1,13 @@
 package config
 
 import (
+	"fmt"
 	"os"
 
 	"gopkg.in/yaml.v3"
 )
 
-// ProjectConfig represents the .vibescan.yml project configuration.
+// ProjectConfig represents the .trishul.yml project configuration.
 type ProjectConfig struct {
 	Scan struct {
 		Depth             string `yaml:"depth"`
@@ -26,15 +27,27 @@ type ProjectConfig struct {
 	} `yaml:"output"`
 }
 
-// LoadProjectConfig loads .vibescan.yml from the given directory (or cwd if empty).
+// LoadProjectConfig loads the project config from the given directory (or cwd
+// if empty). It prefers the canonical .trishul.yml and falls back to the
+// deprecated legacy .vibescan.yml for backward compatibility (see
+// docs/rename-vibescan-to-trishul.md). The canonical name always wins.
 func LoadProjectConfig(dir string) (*ProjectConfig, error) {
-	path := ".vibescan.yml"
+	prefix := ""
 	if dir != "" && dir != "." {
-		path = dir + "/.vibescan.yml"
+		prefix = dir + "/"
 	}
+	path := prefix + ".trishul.yml"
+	legacyPath := prefix + ".vibescan.yml"
 
 	data, err := os.ReadFile(path)
-	if err != nil {
+	if os.IsNotExist(err) {
+		legacyData, legacyErr := os.ReadFile(legacyPath)
+		if legacyErr != nil {
+			return nil, err // report the canonical not-found error
+		}
+		fmt.Fprintf(os.Stderr, "warning: %s is deprecated; rename it to %s\n", legacyPath, path)
+		data = legacyData
+	} else if err != nil {
 		return nil, err
 	}
 

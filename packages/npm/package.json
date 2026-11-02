@@ -1,9 +1,9 @@
 {
-  "name": "@vibescan/cli",
+  "name": "@trishul/cli",
   "version": "0.0.1",
-  "description": "vibescan — Security Scanner for Vibe-Coded Software. SAST + DAST + exploit simulation + attack path analysis.",
+  "description": "trishul — Security Scanner for Vibe-Coded Software. SAST + DAST + exploit simulation + attack path analysis.",
   "bin": {
-    "vibescan": "bin/vibescan.js"
+    "trishul": "bin/trishul.js"
   },
   "scripts": {
     "postinstall": "node scripts/install.js"
@@ -21,15 +21,15 @@
     "ai-generated-code",
     "code-review"
   ],
-  "author": "Armur AI <hello@vibescan.dev>",
+  "author": "Armur AI <hello@trishul.dev>",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Armur-Ai/vibescan"
+    "url": "https://github.com/Armur-Ai/trishul"
   },
-  "homepage": "https://vibescan.dev",
+  "homepage": "https://trishul.dev",
   "bugs": {
-    "url": "https://github.com/Armur-Ai/vibescan/issues"
+    "url": "https://github.com/Armur-Ai/trishul/issues"
   },
   "engines": {
     "node": ">=16"

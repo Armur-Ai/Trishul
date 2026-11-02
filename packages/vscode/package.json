@@ -1,65 +1,65 @@
 {
-  "name": "vibescan",
-  "displayName": "vibescan — Security Scanner for Vibe-Coded Software",
+  "name": "trishul",
+  "displayName": "trishul — Security Scanner for Vibe-Coded Software",
   "description": "Security scanner for AI-generated code — SAST, DAST, exploit simulation, attack path analysis",
   "version": "0.0.1",
-  "publisher": "vibescan",
+  "publisher": "trishul",
   "engines": {
     "vscode": "^1.85.0"
   },
   "categories": ["Linters", "Other"],
   "keywords": ["security", "scanner", "SAST", "DAST", "DevSecOps", "vibecoding", "ai-code"],
   "activationEvents": [
-    "workspaceContains:.vibescan.yml",
-    "onCommand:vibescan.scanWorkspace"
+    "workspaceContains:.trishul.yml",
+    "onCommand:trishul.scanWorkspace"
   ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
       {
-        "command": "vibescan.scanWorkspace",
-        "title": "vibescan: Scan Workspace"
+        "command": "trishul.scanWorkspace",
+        "title": "trishul: Scan Workspace"
       },
       {
-        "command": "vibescan.explainFinding",
-        "title": "vibescan: Explain Finding"
+        "command": "trishul.explainFinding",
+        "title": "trishul: Explain Finding"
       },
       {
-        "command": "vibescan.fixFinding",
-        "title": "vibescan: Fix with AI"
+        "command": "trishul.fixFinding",
+        "title": "trishul: Fix with AI"
       }
     ],
     "configuration": {
-      "title": "vibescan",
+      "title": "trishul",
       "properties": {
-        "vibescan.scanDepth": {
+        "trishul.scanDepth": {
           "type": "string",
           "default": "quick",
           "enum": ["quick", "deep"],
           "description": "Default scan depth"
         },
-        "vibescan.scanOnSave": {
+        "trishul.scanOnSave": {
           "type": "boolean",
           "default": false,
           "description": "Automatically scan on file save"
         },
-        "vibescan.scanOnOpen": {
+        "trishul.scanOnOpen": {
           "type": "boolean",
           "default": true,
           "description": "Scan workspace when opened"
         },
-        "vibescan.minSeverity": {
+        "trishul.minSeverity": {
           "type": "string",
           "default": "medium",
           "enum": ["info", "low", "medium", "high", "critical"],
           "description": "Minimum severity to display"
         },
-        "vibescan.binaryPath": {
+        "trishul.binaryPath": {
           "type": "string",
-          "default": "vibescan",
-          "description": "Path to the vibescan binary"
+          "default": "trishul",
+          "description": "Path to the trishul binary"
         },
-        "vibescan.useLocalMode": {
+        "trishul.useLocalMode": {
           "type": "boolean",
           "default": true,
           "description": "Run scans locally without a server"

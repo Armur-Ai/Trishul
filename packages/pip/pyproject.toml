@@ -3,13 +3,13 @@ requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "vibescan"
+name = "trishul"
 version = "0.0.1"
-description = "vibescan — Security Scanner for Vibe-Coded Software"
+description = "trishul — Security Scanner for Vibe-Coded Software"
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.8"
-authors = [{name = "Armur AI", email = "hello@vibescan.dev"}]
+authors = [{name = "Armur AI", email = "hello@trishul.dev"}]
 keywords = ["security", "sast", "dast", "scanner", "vulnerability", "devsecops"]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -25,12 +25,12 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://vibescan.dev"
-Repository = "https://github.com/Armur-Ai/vibescan"
-Issues = "https://github.com/Armur-Ai/vibescan/issues"
+Homepage = "https://trishul.dev"
+Repository = "https://github.com/Armur-Ai/trishul"
+Issues = "https://github.com/Armur-Ai/trishul/issues"
 
 [project.scripts]
-vibescan = "vibescan.cli:main"
+trishul = "trishul.cli:main"
 
 [tool.setuptools.packages.find]
-include = ["vibescan*"]
+include = ["trishul*"]

@@ -60,7 +60,7 @@ var doctorCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		fmt.Println(color.CyanString("vibescan doctor"))
+		fmt.Println(color.CyanString("trishul doctor"))
 		fmt.Println(strings.Repeat("─", 50))
 
 		exitCode := 0
@@ -73,7 +73,7 @@ var doctorCmd = &cobra.Command{
 			printCheck(true, "API server", cfg.API.URL)
 		} else {
 			printCheck(false, "API server", cfg.API.URL+" (not reachable)")
-			fmt.Println("              → Start with: vibescan serve")
+			fmt.Println("              → Start with: trishul serve")
 		}
 
 		// Check Redis
@@ -91,7 +91,7 @@ var doctorCmd = &cobra.Command{
 		if cfg.APIKey != "" {
 			printCheck(true, "API key", "configured")
 		} else {
-			printWarn("API key", "not configured (set with: vibescan config set api_key <key>)")
+			printWarn("API key", "not configured (set with: trishul config set api_key <key>)")
 		}
 
 		// Check Docker
@@ -101,11 +101,11 @@ var doctorCmd = &cobra.Command{
 			printWarn("Docker", "not found (needed for sandbox DAST)")
 		}
 
-		// Check .vibescan.yml
-		if _, err := os.Stat(".vibescan.yml"); err == nil {
-			printCheck(true, ".vibescan.yml", "found in current directory")
+		// Check .trishul.yml
+		if _, err := os.Stat(".trishul.yml"); err == nil {
+			printCheck(true, ".trishul.yml", "found in current directory")
 		} else {
-			printWarn(".vibescan.yml", "not found (create with: vibescan init)")
+			printWarn(".trishul.yml", "not found (create with: trishul init)")
 		}
 
 		fmt.Println(strings.Repeat("─", 50))

@@ -2,7 +2,7 @@
 //
 // This is the kind of Express backend an AI assistant produces from a prompt like
 // "build me a notes API with login and an AI summary endpoint". Every flaw below
-// is one that vibescan is expected to catch.
+// is one that trishul is expected to catch.
 
 const express = require("express");
 const cors = require("cors");

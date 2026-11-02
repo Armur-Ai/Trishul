@@ -22,10 +22,10 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-// StartMCPServer starts the vibescan MCP server over stdio.
+// StartMCPServer starts the trishul MCP server over stdio.
 func StartMCPServer() error {
 	s := server.NewMCPServer(
-		"vibescan",
+		"trishul",
 		"1.0.0",
 		server.WithToolCapabilities(true),
 		server.WithResourceCapabilities(true, false),
@@ -187,7 +187,7 @@ func registerScanCodeTool(s *server.MCPServer) {
 		}
 
 		// Create temp directory and write the code snippet
-		tmpDir, err := os.MkdirTemp("", "vibescan-snippet-*")
+		tmpDir, err := os.MkdirTemp("", "trishul-snippet-*")
 		if err != nil {
 			return mcp.NewToolResultError(fmt.Sprintf("failed to create temp directory: %s", err)), nil
 		}
@@ -502,11 +502,11 @@ func registerGetHistoryTool(s *server.MCPServer) {
 			return mcp.NewToolResultError(fmt.Sprintf("failed to determine home directory: %s", err)), nil
 		}
 
-		dbPath := filepath.Join(homeDir, ".vibescan", "history.db")
+		dbPath := filepath.Join(homeDir, ".trishul", "history.db")
 
 		// Check if DB exists
 		if _, err := os.Stat(dbPath); os.IsNotExist(err) {
-			return mcp.NewToolResultText("No scan history found. Run a scan first with `vibescan scan`."), nil
+			return mcp.NewToolResultText("No scan history found. Run a scan first with `trishul scan`."), nil
 		}
 
 		db, err := sql.Open("sqlite", dbPath)
@@ -607,13 +607,13 @@ func registerResources(s *server.MCPServer) {
 			}, nil
 		}
 
-		dbPath := filepath.Join(homeDir, ".vibescan", "history.db")
+		dbPath := filepath.Join(homeDir, ".trishul", "history.db")
 		if _, err := os.Stat(dbPath); os.IsNotExist(err) {
 			return []mcp.ResourceContents{
 				mcp.TextResourceContents{
 					URI:      request.Params.URI,
 					MIMEType: "application/json",
-					Text:     `{"findings": [], "note": "No scan history. Run vibescan scan first."}`,
+					Text:     `{"findings": [], "note": "No scan history. Run trishul scan first."}`,
 				},
 			}, nil
 		}

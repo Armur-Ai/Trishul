@@ -1,7 +1,7 @@
 # Records demo/menu.gif: the interactive menu.
 #
 # Prerequisite, from the repo root:
-#   (cd cli && go build -o ../bin/vibescan .)
+#   (cd cli && go build -o ../bin/trishul .)
 # Then:
 #   vhs demo/menu.tape
 
@@ -21,7 +21,7 @@ Enter
 Show
 
 Sleep 400ms
-Type "vibescan"
+Type "trishul"
 Sleep 400ms
 Enter
 Sleep 1500ms

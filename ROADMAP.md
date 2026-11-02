@@ -1,4 +1,4 @@
-# vibescan roadmap
+# trishul roadmap
 
 **The open-source security scanner for AI-generated code.**
 Find vulnerabilities in Cursor, Claude Code, Copilot and Windsurf generated applications before they reach production.
@@ -82,22 +82,22 @@ repository scan and a single-file scan. They are marked *fixed* below. Everythin
 
 | Promise | What happens today |
 |---|---|
-| `brew install Armur-Ai/tap/vibescan` | The tap has no vibescan formula. The repo has no GitHub releases, so nothing can be installed from it. |
-| `npm install -g @vibescan/cli` | 404. The package was never published. |
-| `pip install vibescan` | **Installs someone else's package.** `vibescan` on PyPI is an unrelated third-party project. We were telling users to install code we do not control. |
+| `brew install Armur-Ai/tap/trishul` | The tap has no trishul formula. The repo has no GitHub releases, so nothing can be installed from it. |
+| `npm install -g @trishul/cli` | 404. The package was never published. |
+| `pip install trishul` | **Installs someone else's package.** `trishul` on PyPI is an unrelated third-party project. We were telling users to install code we do not control. |
 | `curl ... install.sh \| sh` | Downloads from GitHub releases. There are none. |
-| "No flags, no config" | Scanning needs the `armur-server` binary, a Redis instance, and every tool installed by hand. On a clean dev Mac `vibescan doctor` reports 2 of 25 tools. |
+| "No flags, no config" | Scanning needs the `armur-server` binary, a Redis instance, and every tool installed by hand. On a clean dev Mac `trishul doctor` reports 2 of 25 tools. |
 | `docker-compose up` | *Fixed.* The image did not build (Go 1.23 base against a 1.25 `go.mod`, a Python dependency conflict, a pinned Trivy download that no longer exists) and the compose file ran `go run` in an image with no Go toolchain. |
-| `vibescan scan <repo>` | *Fixed.* The CLI waited forever: the progress stream only ever reports `queued`, because nothing writes per-tool progress. The CLI now polls task status as well. The progress feed itself is still empty. |
-| `vibescan scan <file>` | *Fixed.* The CLI sent JSON to an endpoint that expects a multipart upload. |
-| `vibescan scan <directory>` | Not supported. `/scan/local` is never called by the CLI, and it enqueues the wrong scan type (a repo clone). |
+| `trishul scan <repo>` | *Fixed.* The CLI waited forever: the progress stream only ever reports `queued`, because nothing writes per-tool progress. The CLI now polls task status as well. The progress feed itself is still empty. |
+| `trishul scan <file>` | *Fixed.* The CLI sent JSON to an endpoint that expects a multipart upload. |
+| `trishul scan <directory>` | Not supported. `/scan/local` is never called by the CLI, and it enqueues the wrong scan type (a repo clone). |
 | `--advanced` | Runs a separate set of tools instead of adding to the standard scan, and the summary card does not count its findings ("Total findings: 0" on a scan with 200+). |
 | Scan output | The `FILE` column is empty, messages are cut at 40 characters, and the total disagrees with the rows shown. |
-| `vibescan mcp` | Prints setup instructions and exits. The real server in `internal/mcp` is never started. Tool names are still `armur_*`. |
+| `trishul mcp` | Prints setup instructions and exits. The real server in `internal/mcp` is never started. Tool names are still `armur_*`. |
 | DAST, exploit simulation, attack paths, AI PR review | Nothing in the server or CLI imports these packages. |
 | "30+ tools" | 37 runners are wired, but the Docker image installs about 17, and it installs `trufflehog3` (an unrelated older Python project) rather than TruffleHog (now removed from the image, so deep scans skip secret detection). Gitleaks, Grype, govulncheck, npm/pip audit, LLM, PII and crypto checks have wrappers that nothing calls. ShellCheck is advertised and does not exist. |
 | JavaScript / TypeScript | The main language of vibe-coded apps gets two tools: Semgrep and ESLint. |
-| `.vibescan.yml` | The CLI writes `.vibescan.yml`. The server reads `.armur.yml`. |
+| `.trishul.yml` | The CLI writes `.trishul.yml`. The server reads `.armur.yml`. |
 
 ### Bugs to fix before anything else
 
@@ -119,7 +119,7 @@ repository scan and a single-file scan. They are marked *fixed* below. Everythin
 
 ### The honest summary
 
-vibescan is a well-tested orchestration server with a good-looking CLI shell and a lot of
+trishul is a well-tested orchestration server with a good-looking CLI shell and a lot of
 unconnected feature code. It is not yet a product someone can install and run. The old roadmap
 shows 996 boxes checked; most of the later ones are scaffolds. **Phase 0 exists to close that gap.**
 
@@ -187,14 +187,14 @@ Every rule we ship maps to one of these plus a CWE. Reports lead with the Vibe T
 ## 6. Product pillars
 
 1. **Ten seconds to first finding.** One static binary. No server, no Redis, no Docker for the
-   default path. `npx vibescan` works on a fresh machine.
+   default path. `npx trishul` works on a fresh machine.
 2. **Vibe-native detection.** Our own rule pack and stack analyzers for the Vibe Top 10, on top of
    the best open-source scanners.
 3. **In the agent loop.** MCP server, editor hooks, and fix prompts, so the agent that wrote the
    bug fixes it before the human sees it.
 4. **Signal over volume.** A default profile that shows only security findings worth acting on.
    Complexity, docstring and style tools are off unless asked for.
-5. **Proof in public.** A reproducible benchmark of what each AI tool generates and what vibescan
+5. **Proof in public.** A reproducible benchmark of what each AI tool generates and what trishul
    catches, published on a schedule.
 
 ---
@@ -206,11 +206,11 @@ stranger on a clean machine.
 
 ### Phase 0: Make the promise true (v0.1)
 
-Nothing else matters until a stranger can install vibescan and get a real result.
+Nothing else matters until a stranger can install trishul and get a real result.
 
 **Local engine**
 - [ ] Merge CLI and server into one Go module and one binary. The scan pipeline is called as a
-      library; `vibescan serve` remains for the API use case.
+      library; `trishul serve` remains for the API use case.
 - [ ] Remove Redis and Asynq from the default path. In-process worker pool.
 - [ ] Delete `RemoveNonRelevantFiles` from every scan path. Select files per tool with include
       globs instead. Never mutate the scan target. Add a test that scans a fixture and asserts the
@@ -221,8 +221,8 @@ Nothing else matters until a stranger can install vibescan and get a real result
 - [ ] Make `--advanced` a superset of the standard scan, and count its findings in the summary.
 
 **Tool provisioning**
-- [ ] `vibescan tools install`: download pinned, checksummed releases of each scanner into
-      `~/.vibescan/tools`. No `pip install`, no `go install` at scan time.
+- [ ] `trishul tools install`: download pinned, checksummed releases of each scanner into
+      `~/.trishul/tools`. No `pip install`, no `go install` at scan time.
 - [ ] Fallback `--docker` mode that runs the same pipeline in one published image.
 - [x] Make the Dockerfile build again.
 - [ ] Pin every tool version in the image, add the real TruffleHog, and build the image in CI on
@@ -234,14 +234,14 @@ Nothing else matters until a stranger can install vibescan and get a real result
 - [ ] First tagged release through goreleaser; verify brew, npm and the install script on clean
       macOS, Linux and Windows runners in CI.
 - [ ] Resolve the PyPI name collision (see [Open decisions](#12-open-decisions)).
-- [ ] Wire `vibescan mcp` to the real server; rename tools to `vibescan_*`.
-- [ ] One config file name: `.vibescan.yml`, with `.armur.yml` read as a fallback for one release.
+- [ ] Wire `trishul mcp` to the real server; rename tools to `trishul_*`.
+- [ ] One config file name: `.trishul.yml`, with `.armur.yml` read as a fallback for one release.
 - [ ] Purge `armur` from `action.yml`, pre-commit hooks, docs and changelog.
 - [ ] Hide or remove CLI commands whose backends are not wired (`review`, `explain`, `fix`) until
       they work.
 - [ ] Stop using Semgrep `--config=auto`; ship a pinned, licence-clean rule set, offline by default.
 
-**Exit test:** on a clean macOS and a clean Ubuntu runner, `npx vibescan scan .` against
+**Exit test:** on a clean macOS and a clean Ubuntu runner, `npx trishul scan .` against
 `examples/vibe-coded-app` finishes in under 60 seconds, reports the planted findings, leaves the
 directory untouched, and makes no network calls other than tool downloads and vulnerability
 database updates.
@@ -275,7 +275,7 @@ both vulnerable and safe variants.
       predicate.
 
 **Dependency intelligence (V04)**
-- [ ] `vibescan deps`: for every dependency in manifests, lockfiles and import statements, check
+- [ ] `trishul deps`: for every dependency in manifests, lockfiles and import statements, check
       the registry. Flag names that do not exist, were published within the last 30 days, have
       negligible downloads, or sit within edit distance of a popular package.
 - [ ] Malicious package detection via OSV `MAL-` advisories and GuardDog heuristics.
@@ -315,24 +315,24 @@ Where we stop being "another scanner" and become part of how AI-written code get
 - [ ] **MCP server that earns its place.** Tools: scan path, scan diff, check a dependency before
       installing it, explain a finding, list open findings. Works with Claude Code, Cursor,
       Windsurf, Copilot and Codex. One-line install for each.
-- [ ] **Editor hooks.** `vibescan hooks install` writes a Claude Code `PostToolUse` hook that scans
+- [ ] **Editor hooks.** `trishul hooks install` writes a Claude Code `PostToolUse` hook that scans
       files after each edit and a `Stop` hook that blocks completion on new critical findings; the
       equivalent for Cursor hooks.
 - [ ] **Pre-install guard.** A hook on shell commands that checks `npm install`, `pip install` and
-      `npx` targets against `vibescan deps` before they run.
-- [ ] **Fix prompts.** `vibescan fix --prompt` emits a paste-ready prompt with file, line, the
+      `npx` targets against `trishul deps` before they run.
+- [ ] **Fix prompts.** `trishul fix --prompt` emits a paste-ready prompt with file, line, the
       vulnerable code, the required property of the fix, and how to verify it. No API key needed;
       the user's own agent does the work.
-- [ ] **Guard rules.** `vibescan guard` writes a security section into `CLAUDE.md`, `AGENTS.md`,
+- [ ] **Guard rules.** `trishul guard` writes a security section into `CLAUDE.md`, `AGENTS.md`,
       `.cursor/rules` and `copilot-instructions.md`, tailored to the detected stack and to the
       findings this repo keeps producing.
-- [ ] **Agent surface scan (V10).** `vibescan agent-scan`: hidden and bidirectional Unicode in
+- [ ] **Agent surface scan (V10).** `trishul agent-scan`: hidden and bidirectional Unicode in
       rules files and skills; instruction-injection phrases; MCP servers launched with unpinned
       `npx -y` or `uvx`; secrets in MCP config; blanket permission allow-lists; hooks that run
       remote code.
 - [ ] **AI provenance.** Identify AI-authored commits from trailers and agent metadata;
-      `vibescan scan --ai-authored` scans only that code; reports show findings by author type.
-- [ ] Wire `vibescan explain` and `vibescan fix` to the existing `internal/ai` providers.
+      `trishul scan --ai-authored` scans only that code; reports show findings by author type.
+- [ ] Wire `trishul explain` and `trishul fix` to the existing `internal/ai` providers.
 
 **Exit test:** in a recorded session, an agent writes a Supabase table without RLS, the hook
 fires, the agent receives the finding, and fixes it without the human typing anything.
@@ -355,9 +355,9 @@ if a listed tool has no passing fixture.
 - [ ] **GitHub Action** on the Marketplace with SARIF upload and a PR comment that leads with the
       three findings that matter.
 - [ ] **PR review** wired to `internal/agent`, diff-aware, commenting inline.
-- [ ] **Web scan at vibescan.dev.** Paste a public repo URL, get a report. The top of the funnel
+- [ ] **Web scan at trishul.dev.** Paste a public repo URL, get a report. The top of the funnel
       for people who will never open a terminal.
-- [ ] **Badge.** "Scanned by vibescan" with grade, linking to the public report.
+- [ ] **Badge.** "Scanned by trishul" with grade, linking to the public report.
 - [ ] **Extension** for VS Code, Cursor and Windsurf (one codebase).
 - [ ] Docs site that matches the product, plus `CONTRIBUTING.md` with a rule-writing guide.
 
@@ -367,7 +367,7 @@ first benchmark run, not before.
 
 ### Phase 5: Runtime verification (after v1.0)
 
-- [ ] `vibescan probe <url>` for apps you own: exposed `.env` and `.git`, source maps, keys in
+- [ ] `trishul probe <url>` for apps you own: exposed `.env` and `.git`, source maps, keys in
       bundles, Supabase tables readable with the anon key, open Firebase databases, headers.
       Requires proof of ownership before any active check.
 - [ ] Wire the existing sandbox, DAST and exploit packages to confirm static findings, so reports
@@ -468,13 +468,13 @@ generated applications before they reach production."
 1. Phase 0 done: quiet release, fix what breaks for the first fifty users.
 2. Phase 1 done: public launch. Show HN, r/cursor, r/ClaudeAI, r/vibecoding, X. The demo is a
    thirty-second recording: generate an app, scan it, paste the fix prompt, rescan clean.
-3. Phase 2 done: second launch aimed at agent users: "vibescan inside Claude Code and Cursor".
+3. Phase 2 done: second launch aimed at agent users: "trishul inside Claude Code and Cursor".
 4. Phase 4: the benchmark report is the third launch and the one that gets press.
 
 **Compounding loops**
 - The Vibe Top 10 as a standalone page others link to.
 - The badge on scanned repos.
-- Agents recommending vibescan because `guard` put it in the repo's rules file.
+- Agents recommending trishul because `guard` put it in the repo's rules file.
 - A rule-contribution path simple enough that a finding on X becomes a merged rule in a day.
 - One "we scanned N apps built with X" post per major AI tool.
 
@@ -490,7 +490,7 @@ generated applications before they reach production."
 
 | Risk | Why it matters | Mitigation |
 |---|---|---|
-| **Name collision** | `vibescan` on PyPI belongs to someone else; several "vibe" scanners already exist | Decide the package names now; reserve npm, the VS Code publisher and the domain; never document an install path we do not own |
+| **Name collision** | `trishul` on PyPI belongs to someone else; several "vibe" scanners already exist | Decide the package names now; reserve npm, the VS Code publisher and the domain; never document an install path we do not own |
 | **Rule licensing** | Semgrep's registry rules carry a licence that restricts use in competing products | Own rule pack plus permissively licensed community rules; engine via Opengrep |
 | **Bundled tool licences** | Some candidates (Bearer, CodeQL) restrict redistribution or commercial use | Licence review is part of the definition of done for every tool added |
 | **Crowded category** | New scanners appear monthly | Depth that regex scanners cannot copy quickly: stack analyzers, taint rules, benchmark, agent loop |
@@ -505,18 +505,18 @@ generated applications before they reach production."
 
 These need an owner's call before Phase 0 finishes.
 
-1. **Package names.** PyPI `vibescan` is taken. Options: drop pip entirely (npm, brew and curl
-   cover the audience), or publish as `vibescan-cli`. Recommendation: drop pip.
+1. **Package names.** PyPI `trishul` is taken. Options: drop pip entirely (npm, brew and curl
+   cover the audience), or publish as `trishul-cli`. Recommendation: drop pip.
 2. **Default engine.** Opengrep versus Semgrep CE. Recommendation: Opengrep, with Semgrep as a
    fallback if already installed.
 3. **Module and repo naming.** The Go module is still `armur-codescanner` and the working folder
-   `Armur-Code-Scanner`. Recommendation: rename the module to `github.com/Armur-Ai/vibescan` as
+   `Armur-Code-Scanner`. Recommendation: rename the module to `github.com/Armur-Ai/trishul` as
    part of the single-binary merge.
 4. **Versioning.** The CLI prints `v0.1.0` and nothing has been released. Recommendation: tag
    `v0.1.0` at the Phase 0 exit test and stay below 1.0 until the benchmark gates pass.
 5. **Telemetry.** Opt-in anonymous scan counts are the only way to measure the funnel.
    Recommendation: opt-in, documented, off by default.
-6. **Hosted scan.** Whether vibescan.dev offers a free web scan in Phase 4 or earlier. It is the
+6. **Hosted scan.** Whether trishul.dev offers a free web scan in Phase 4 or earlier. It is the
    strongest top-of-funnel move and also an operating cost. The domain currently returns 503.
 
 ---
@@ -525,14 +525,14 @@ These need an owner's call before Phase 0 finishes.
 
 In order. Each is a separate PR.
 
-1. Remove `pip install vibescan` from every doc and package README. *(Done in the README.)*
+1. Remove `pip install trishul` from every doc and package README. *(Done in the README.)*
 2. Delete `RemoveNonRelevantFiles` from scan paths; add the "target is untouched" test.
 3. Add a Docker image build to CI. *(The Dockerfile itself is fixed.)*
-4. Merge `cli/` and the server into one module; `vibescan scan .` runs the pipeline in-process.
+4. Merge `cli/` and the server into one module; `trishul scan .` runs the pipeline in-process.
 5. Replace `--config=auto` with a pinned local rule directory.
 6. Wire Gitleaks, OSV-Scanner, npm and pip audit into the default JS/TS and Python pipelines.
-7. `vibescan tools install` with pinned, checksummed downloads.
-8. Wire `vibescan mcp` to `internal/mcp`; rename tools to `vibescan_*`.
+7. `trishul tools install` with pinned, checksummed downloads.
+8. Wire `trishul mcp` to `internal/mcp`; rename tools to `trishul_*`.
 9. Rename leftovers: `action.yml`, pre-commit hooks, config file name, docs.
 10. Tag `v0.1.0`, publish brew and npm, run the Phase 0 exit test in CI, then re-record the demos
     with `vhs demo/scan.tape` and `vhs demo/menu.tape`.

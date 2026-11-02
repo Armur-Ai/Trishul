@@ -8,9 +8,9 @@ import (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "vibescan",
-	Short: "vibescan — Security Scanner for Vibe-Coded Software",
-	Long:  `vibescan is a security scanner built for the vibecoding era. It analyzes AI-generated code, runs it in a sandbox, simulates attacks, and shows you exactly how to fix what it finds.`,
+	Use:   "trishul",
+	Short: "trishul — Security Scanner for Vibe-Coded Software",
+	Long:  `trishul is a security scanner built for the vibecoding era. It analyzes AI-generated code, runs it in a sandbox, simulates attacks, and shows you exactly how to fix what it finds.`,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		verbose, _ := cmd.Flags().GetBool("verbose")
 		if verbose {

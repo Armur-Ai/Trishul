@@ -4,7 +4,7 @@ const { execFileSync } = require("child_process");
 const path = require("path");
 const os = require("os");
 
-const binName = os.platform() === "win32" ? "vibescan.exe" : "vibescan";
+const binName = os.platform() === "win32" ? "trishul.exe" : "trishul";
 const binPath = path.join(__dirname, binName);
 
 try {
@@ -14,7 +14,7 @@ try {
     process.exit(err.status);
   }
   console.error(
-    "Failed to run vibescan. Try reinstalling: npm install -g @vibescan/cli"
+    "Failed to run trishul. Try reinstalling: npm install -g @trishul/cli"
   );
   process.exit(1);
 }
