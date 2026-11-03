@@ -52,3 +52,23 @@ func TestConfirmedRuntimeStatus(t *testing.T) {
 		t.Fatalf("confirmed exploit should be runtime_confirmed: %+v", b.SourceClaims)
 	}
 }
+
+func TestEmitEnvelope(t *testing.T) {
+	r := models.ScanResult{TaskID: "t3", Findings: []models.Finding{
+		{ID: "x", Tool: "gosec", Source: "sast", Category: "security_issues", Severity: models.SeverityHigh, File: "a.go"},
+	}}
+	env, err := EmitEnvelope(r, "v1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if env.Kind != "CodeAnalysisBundle" || env.Namespace != contracts.NSTrishul {
+		t.Fatalf("envelope meta wrong: kind=%q ns=%q", env.Kind, env.Namespace)
+	}
+	var got contracts.CodeAnalysisBundle
+	if err := env.Decode(&got); err != nil {
+		t.Fatal(err)
+	}
+	if got.RunID != "t3" || len(got.SourceClaims) != 1 {
+		t.Fatalf("decoded bundle wrong: %+v", got)
+	}
+}

@@ -16,6 +16,18 @@ import (
 	contracts "github.com/Armur-Ai/armur-contracts"
 )
 
+// EmitEnvelope wraps the emitted CodeAnalysisBundle in a versioned suite
+// envelope attributed to Trishul, ready to send to Akira/Engira over any
+// contracts transport.
+func EmitEnvelope(r models.ScanResult, producerVersion string) (contracts.Envelope, error) {
+	bundle := EmitCodeAnalysisBundle(r, producerVersion)
+	return contracts.NewEnvelope(
+		contracts.NSTrishul,
+		contracts.Producer{Product: "trishul", Version: producerVersion},
+		"CodeAnalysisBundle", bundle,
+	)
+}
+
 // EmitCodeAnalysisBundle converts a Trishul ScanResult into a
 // contracts.CodeAnalysisBundle. producerVersion stamps the Trishul build.
 func EmitCodeAnalysisBundle(r models.ScanResult, producerVersion string) contracts.CodeAnalysisBundle {
