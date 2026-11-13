@@ -2,9 +2,11 @@ package api
 
 import (
 	"github.com/Armur-Ai/Trishul/internal/middleware"
+	"github.com/Armur-Ai/Trishul/internal/models"
 	"github.com/Armur-Ai/Trishul/internal/tasks"
 	utils "github.com/Armur-Ai/Trishul/pkg"
 	"github.com/Armur-Ai/Trishul/pkg/sarif"
+	"github.com/Armur-Ai/Trishul/pkg/suite"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -214,6 +216,28 @@ func TaskStatus(c *gin.Context) {
 		data, marshalErr := sarifLog.Marshal()
 		if marshalErr != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to marshal SARIF output"})
+			return
+		}
+		c.Data(http.StatusOK, "application/json", data)
+		return
+	}
+
+	// Support the Armur-suite CodeAnalysisBundle via ?format=bundle — Trishul's
+	// code evidence in the shared contract vocabulary that Akira/Engira consume,
+	// with declared vs. adjudicated vs. runtime-confirmed status preserved.
+	if strings.EqualFold(c.Query("format"), "bundle") {
+		var sr models.ScanResult
+		if raw, marshalErr := json.Marshal(result); marshalErr == nil {
+			_ = json.Unmarshal(raw, &sr)
+		}
+		env, emitErr := suite.EmitEnvelope(sr, "dev")
+		if emitErr != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to build CodeAnalysisBundle"})
+			return
+		}
+		data, marshalErr := json.MarshalIndent(env, "", "  ")
+		if marshalErr != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to marshal CodeAnalysisBundle"})
 			return
 		}
 		c.Data(http.StatusOK, "application/json", data)

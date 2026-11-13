@@ -3,7 +3,7 @@ module github.com/Armur-Ai/Trishul
 go 1.25.0
 
 require (
-	github.com/Armur-Ai/armur-contracts v0.0.0-20261103021840-33e88e578202
+	github.com/Armur-Ai/armur-contracts v0.0.0-20261113094007-e1e2a77cb5ac
 	github.com/alicebob/miniredis/v2 v2.37.0
 	github.com/gin-gonic/gin v1.10.0
 	github.com/go-git/go-git/v5 v5.12.0
