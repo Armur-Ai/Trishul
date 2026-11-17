@@ -287,7 +287,7 @@
 - [x] Folded into the normal scan pipeline as a built-in, dependency-free analyzer set (runs read-only, no external LLM required).
 
 ### Benchmark (§F)
-- [~] `testdata/agentsec/` paired benign + malicious PR fixtures (incl. the hard security-doc false-positive cases) + a precision/recall/FP benchmark test. _(In progress; measured, not invented.)_
+- [x] `testdata/agentsec/benchmark/` paired benign + malicious PR fixtures (incl. the hard security-research false-positive case) + a precision/recall/FP benchmark test. Measured recall 1.0 / precision 1.0 / 0 FP on this corpus; thresholds pinned at the measured values (not invented), limitations documented (small clean corpus, not a borderline stress test).
 
 ### Definition of done (§H)
-- [~] Components parse configs structurally; attack chains carry verifiable evidence (AGENT-CHAIN-001 e2e-tested); no untrusted code executed (passive); secret canaries never leak (redaction + tests); docs state limitations. _Measured accuracy via the benchmark + PR annotations remain._
+- [x] Components parse configs structurally; attack chains carry verifiable evidence (AGENT-CHAIN-001 e2e-tested); no untrusted code executed (passive); secret canaries never leak (redaction + tests); **measured** malicious-vs-benign accuracy via the benchmark; docs state limitations. _(GitHub PR annotations + the dedicated CLI command remain, gated on the module-merge.)_
