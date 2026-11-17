@@ -372,6 +372,11 @@ func RunSimpleScan(dirPath string, language string) (map[string]interface{}, []S
 	} else {
 		out[utils.AGENT_SECURITY] = []interface{}{}
 	}
+	if v := newCatResult[utils.VIBE_SECURITY]; v != nil {
+		out[utils.VIBE_SECURITY] = v
+	} else {
+		out[utils.VIBE_SECURITY] = []interface{}{}
+	}
 	return out, scanErrors, nil
 }
 
@@ -395,6 +400,11 @@ func RunSimpleScanLocal(dirPath string, language string) (map[string]interface{}
 		out[utils.AGENT_SECURITY] = v
 	} else {
 		out[utils.AGENT_SECURITY] = []interface{}{}
+	}
+	if v := newCatResult[utils.VIBE_SECURITY]; v != nil {
+		out[utils.VIBE_SECURITY] = v
+	} else {
+		out[utils.VIBE_SECURITY] = []interface{}{}
 	}
 	return out, scanErrors, nil
 }

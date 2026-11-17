@@ -36,6 +36,7 @@ const (
 	ANTIPATTERNS_BUGS = "antipatterns_bugs"
 	SECURITY_ISSUES   = "security_issues"
 	AGENT_SECURITY    = "agent_security"
+	VIBE_SECURITY     = "vibe_security"
 	UNKNOWN           = "unknown"
 )
 
