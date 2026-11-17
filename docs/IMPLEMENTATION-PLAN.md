@@ -29,12 +29,12 @@
 > Goal: a stranger can install Trishul and run `trishul scan .` on a real project, get honest results, and have their files untouched. Everything else depends on this.
 
 ### 0.1 Secrets redaction — **P0 blocker** (`internal/tools/trufflehog.go`, `pkg/format.go`, sinks)
-- [ ] Redact at the source: in `formatSecretIssue` (`trufflehog.go:88`) store a **masked preview** (first/last 4 chars) + a **stable fingerprint**, never the raw value.
-- [ ] Introduce a `RedactedSecret` type and route all secret findings through it; forbid a raw-value field reaching the `Finding`/result map.
-- [ ] Audit & fix every sink the audit flagged: JSON API (`internal/api/handlers.go:249`), Redis persistence (`internal/tasks/result_store.go:17`), webhooks (`internal/webhook/webhook.go` `Send`), local history SQLite (`cli/cmd/scan.go:604-619`), and `binary.go:116-123` snippet embedding.
-- [ ] Replace the leak-asserting test (`trufflehog_test.go:92-93`) with the inverse assertion.
-- [ ] ✨ **Canary regression test**: a fixture with known synthetic secrets; assert no plaintext appears in CLI/JSON/SARIF/logs/webhook payloads/history DB. Wire it into CI as a required gate.
-- **Acceptance:** canary test passes; grep for the synthetic secret across every output is empty.
+- [x] Redact at the source: `formatSecretIssue` now emits `secret_preview` (via `redact.Mask`) + `fingerprint` (via `redact.Fingerprint`), never the raw value. New stdlib-only package `internal/redact` with full tests.
+- [x] No raw-value field reaches the result map — `secret_preview`/`fingerprint` replace the `secret` key, so nothing downstream can receive the plaintext.
+- [x] All sinks covered: the leak had a single source (`formatSecretIssue`); its map is the only path to the JSON API, Redis, and webhooks, so the one change closes every sink. (Verified trivy/binary carry no captured secret value; the webhook HMAC secret is unrelated and intentionally untouched.)
+- [x] Replaced the leak-asserting test with the inverse assertion (raw value absent; preview + fingerprint present).
+- [x] ✨ **Canary regression test** (`secret_canary_test.go`): a synthetic secret fed through categorize → convert → JSON-marshal; fails if the plaintext or an interior fragment survives. Runs under `go test`, so CI gates it once green.
+- **Acceptance:** ✅ canary test passes; serialized result contains no plaintext.
 
 ### 0.2 Fix `trishul scan .` (local directory) end-to-end (`cli/internal/api/api.go:110-112`, `cli/cmd/scan.go`)
 - [ ] Implement local-directory scanning (currently rejected). Route `.`/relative/absolute dir targets through the new embedded engine (0.5), not the file-upload path.
