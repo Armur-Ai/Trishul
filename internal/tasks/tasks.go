@@ -372,7 +372,13 @@ func RunSimpleScanLocal(dirPath string, language string) (map[string]interface{}
 	categorized, scanErrors := runParallel(dirPath, runners)
 
 	newCatResult := utils.ConvertCategorizedResults(categorized)
-	return utils.ReformatScanResults(newCatResult), scanErrors, nil
+	out := utils.ReformatScanResults(newCatResult)
+	// Surface the built-in, dependency-free analyzers (Supabase RLS -> infra,
+	// client secrets -> secrets) whose categories the standard formatter omits.
+	adv := utils.ReformatAdvancedScanResults(newCatResult)
+	out[utils.INFRA_SECURITY] = adv[utils.INFRA_SECURITY]
+	out[utils.SECRET_DETECTION] = adv[utils.SECRET_DETECTION]
+	return out, scanErrors, nil
 }
 
 // buildSimpleScanRunners returns the set of tool runners for a standard scan.
