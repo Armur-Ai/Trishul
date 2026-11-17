@@ -1,8 +1,8 @@
 package cmd
 
 import (
-	"github.com/Armur-Ai/Trishul/cli/internal/tui"
 	"fmt"
+	"github.com/Armur-Ai/Trishul/cli/internal/tui"
 	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -35,7 +35,7 @@ func runInteractiveMenu() {
 		fmt.Print("\n")
 		fmt.Print(lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("39")).PaddingLeft(2).Render("Enter PR URL: "))
 		var prURL string
-		fmt.Scanln(&prURL)
+		_, _ = fmt.Scanln(&prURL)
 		if prURL != "" {
 			reviewCmd.Run(reviewCmd, []string{prURL})
 		}
@@ -47,7 +47,7 @@ func runInteractiveMenu() {
 		fmt.Print("\n")
 		fmt.Print(lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("39")).PaddingLeft(2).Render("Enter finding ID: "))
 		var findingID string
-		fmt.Scanln(&findingID)
+		_, _ = fmt.Scanln(&findingID)
 		if findingID != "" {
 			explainCmd.Run(explainCmd, []string{findingID})
 		}
@@ -55,7 +55,7 @@ func runInteractiveMenu() {
 		fmt.Print("\n")
 		fmt.Print(lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("39")).PaddingLeft(2).Render("Enter finding ID: "))
 		var findingID string
-		fmt.Scanln(&findingID)
+		_, _ = fmt.Scanln(&findingID)
 		if findingID != "" {
 			fixCmd.Run(fixCmd, []string{findingID})
 		}
@@ -91,10 +91,10 @@ func runScanFlow() {
 		// Build scan args
 		args := []string{target}
 		if language != "" {
-			scanCmd.Flags().Set("language", language)
+			_ = scanCmd.Flags().Set("language", language)
 		}
 		if depth == "deep" {
-			scanCmd.Flags().Set("advanced", "true")
+			_ = scanCmd.Flags().Set("advanced", "true")
 		}
 		scanCmd.Run(scanCmd, args)
 	}

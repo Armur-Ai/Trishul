@@ -117,7 +117,7 @@ func GenerateHTML(taskID string, results map[string]interface{}) (string, error)
 
 	// Save to ~/.trishul/reports/
 	dir := filepath.Join(os.Getenv("HOME"), ".trishul", "reports")
-	os.MkdirAll(dir, 0755)
+	_ = os.MkdirAll(dir, 0755)
 	path := filepath.Join(dir, taskID+".html")
 	if err := os.WriteFile(path, []byte(report), 0644); err != nil {
 		return "", fmt.Errorf("failed to write HTML report: %w", err)
@@ -146,7 +146,7 @@ func GenerateCSV(taskID string, results map[string]interface{}, outputPath strin
 
 	if outputPath == "" {
 		dir := filepath.Join(os.Getenv("HOME"), ".trishul", "reports")
-		os.MkdirAll(dir, 0755)
+		_ = os.MkdirAll(dir, 0755)
 		outputPath = filepath.Join(dir, taskID+".csv")
 	}
 

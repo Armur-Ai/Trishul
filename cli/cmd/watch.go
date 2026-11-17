@@ -1,9 +1,9 @@
 package cmd
 
 import (
+	"fmt"
 	"github.com/Armur-Ai/Trishul/cli/internal/api"
 	"github.com/Armur-Ai/Trishul/cli/internal/config"
-	"fmt"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -123,7 +123,7 @@ func waitForScanQuiet(apiClient *api.APIClient, taskID string) map[string]interf
 
 // addDirs recursively adds directories to the watcher, skipping common ignore patterns.
 func addDirs(watcher *fsnotify.Watcher, root string) {
-	filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+	_ = filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return nil
 		}
@@ -136,7 +136,7 @@ func addDirs(watcher *fsnotify.Watcher, root string) {
 			base == "__pycache__" || base == "target" || base == "build" || base == "dist" {
 			return filepath.SkipDir
 		}
-		watcher.Add(path)
+		_ = watcher.Add(path)
 		return nil
 	})
 }

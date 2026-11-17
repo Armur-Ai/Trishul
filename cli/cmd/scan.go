@@ -1,12 +1,12 @@
 package cmd
 
 import (
+	"encoding/json"
+	"fmt"
 	"github.com/Armur-Ai/Trishul/cli/internal/api"
 	"github.com/Armur-Ai/Trishul/cli/internal/config"
 	"github.com/Armur-Ai/Trishul/cli/internal/history"
 	"github.com/Armur-Ai/Trishul/cli/internal/utils"
-	"encoding/json"
-	"fmt"
 	"os"
 	"strings"
 	"time"
@@ -18,9 +18,9 @@ import (
 )
 
 var scanInteractiveCmd = &cobra.Command{
-	Use:   "scan-i",
-	Short: "Enter interactive scanning mode (alias: trishul scan --interactive)",
-	Long:  "Launches a terminal UI to configure and start a scan interactively.",
+	Use:        "scan-i",
+	Short:      "Enter interactive scanning mode (alias: trishul scan --interactive)",
+	Long:       "Launches a terminal UI to configure and start a scan interactively.",
 	Deprecated: "Use 'trishul scan --interactive' instead.",
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg, err := config.LoadConfig()
@@ -746,7 +746,7 @@ func saveToHistory(taskID, target, language string, isAdvanced bool, results map
 
 	resultsJSON, _ := json.Marshal(results)
 
-	db.Save(&history.ScanRecord{
+	_ = db.Save(&history.ScanRecord{
 		TaskID:    taskID,
 		Target:    target,
 		Language:  language,

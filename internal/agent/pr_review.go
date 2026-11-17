@@ -390,7 +390,7 @@ func parsePRURL(url string) (owner, repo string, prNum int, err error) {
 		if part == "pull" && i+1 < len(parts) {
 			owner = parts[i-2]
 			repo = parts[i-1]
-			fmt.Sscanf(parts[i+1], "%d", &prNum)
+			_, _ = fmt.Sscanf(parts[i+1], "%d", &prNum)
 			return
 		}
 	}

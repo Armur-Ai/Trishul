@@ -1,8 +1,8 @@
 package cmd
 
 import (
-	"github.com/Armur-Ai/Trishul/cli/internal/history"
 	"fmt"
+	"github.com/Armur-Ai/Trishul/cli/internal/history"
 	"os"
 
 	"github.com/fatih/color"

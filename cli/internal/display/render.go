@@ -22,13 +22,13 @@ type Finding struct {
 
 // ScanMeta holds scan metadata for the summary card.
 type ScanMeta struct {
-	Target   string
-	Language string
-	Mode     string
-	Duration string
-	ToolsOK  int
+	Target      string
+	Language    string
+	Mode        string
+	Duration    string
+	ToolsOK     int
 	ToolsFailed int
-	TaskID   string
+	TaskID      string
 }
 
 // SeverityCounts for the summary card.
@@ -211,7 +211,7 @@ func severityBadge(sev string) string {
 
 func formatCategoryName(cat string) string {
 	name := strings.ReplaceAll(cat, "_", " ")
-	name = strings.Title(name)
+	name = strings.Title(name) //nolint:staticcheck // ASCII category labels; Unicode-aware casing not needed
 	return name
 }
 

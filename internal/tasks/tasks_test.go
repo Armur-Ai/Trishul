@@ -387,7 +387,7 @@ func TestRunScanTaskLocal_JSTestdata(t *testing.T) {
 func TestRunSimpleScanLocal_DoesNotPanic(t *testing.T) {
 	// Use a temp dir — tools will fail but should not panic.
 	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "main.go"), []byte("package main\nfunc main() {}"), 0644)
+	_ = os.WriteFile(filepath.Join(dir, "main.go"), []byte("package main\nfunc main() {}"), 0644)
 
 	results, scanErrors, err := RunSimpleScanLocal(dir, "go")
 	_ = scanErrors

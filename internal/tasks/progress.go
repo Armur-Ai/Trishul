@@ -76,7 +76,7 @@ func InitProgress(taskID string, tools []string) *ScanProgress {
 		Tools:      toolProgress,
 	}
 
-	SaveScanProgress(taskID, progress)
+	_ = SaveScanProgress(taskID, progress)
 	return progress
 }
 
@@ -101,5 +101,5 @@ func UpdateToolStatus(progress *ScanProgress, tool, status string, findings int,
 			break
 		}
 	}
-	SaveScanProgress(progress.TaskID, progress)
+	_ = SaveScanProgress(progress.TaskID, progress)
 }

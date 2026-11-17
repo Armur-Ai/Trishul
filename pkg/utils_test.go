@@ -36,7 +36,7 @@ func TestDetectRepoLanguage(t *testing.T) {
 	for _, name := range []string{"a.go", "b.go", "c.go"} {
 		_ = os.WriteFile(filepath.Join(dir, name), []byte("package main"), 0644)
 	}
-	os.WriteFile(filepath.Join(dir, "script.py"), []byte("pass"), 0644)
+	_ = os.WriteFile(filepath.Join(dir, "script.py"), []byte("pass"), 0644)
 
 	lang := DetectRepoLanguage(dir)
 	if lang != "go" {
@@ -169,9 +169,9 @@ func TestRemoveNonRelevantFiles(t *testing.T) {
 	dir := t.TempDir()
 
 	// Create a mix of file types
-	os.WriteFile(filepath.Join(dir, "main.go"), []byte("package main"), 0644)
-	os.WriteFile(filepath.Join(dir, "script.py"), []byte("pass"), 0644)
-	os.WriteFile(filepath.Join(dir, "notes.txt"), []byte("notes"), 0644)
+	_ = os.WriteFile(filepath.Join(dir, "main.go"), []byte("package main"), 0644)
+	_ = os.WriteFile(filepath.Join(dir, "script.py"), []byte("pass"), 0644)
+	_ = os.WriteFile(filepath.Join(dir, "notes.txt"), []byte("notes"), 0644)
 
 	if err := RemoveNonRelevantFiles(dir, "go"); err != nil {
 		t.Fatalf("RemoveNonRelevantFiles error: %v", err)

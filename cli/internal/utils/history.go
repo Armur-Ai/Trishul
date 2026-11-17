@@ -30,6 +30,6 @@ func LoadHistory() ([]string, error) {
 		return nil, err
 	}
 	var history []string
-	json.Unmarshal(data, &history)
+	_ = json.Unmarshal(data, &history)
 	return history, nil
 }

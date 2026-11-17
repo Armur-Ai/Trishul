@@ -1,8 +1,8 @@
 package cmd
 
 import (
-	"github.com/Armur-Ai/Trishul/cli/internal/config"
 	"fmt"
+	"github.com/Armur-Ai/Trishul/cli/internal/config"
 	"os"
 
 	"github.com/charmbracelet/huh"

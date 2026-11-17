@@ -3,7 +3,6 @@ package cmd
 import (
 	"fmt"
 	"net"
-	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -30,18 +29,6 @@ func isServerRunning(addr string) bool {
 		return false
 	}
 	conn.Close()
-	return true
-}
-
-// isServerHealthy checks if the server at the given base URL responds to a basic request.
-func isServerHealthy(baseURL string) bool {
-	client := &http.Client{Timeout: 2 * time.Second}
-	resp, err := client.Get(strings.TrimRight(baseURL, "/") + "/api/v1/status/health-check")
-	if err != nil {
-		return false
-	}
-	defer resp.Body.Close()
-	// Any response (even 400/404) means the server is alive and routing.
 	return true
 }
 

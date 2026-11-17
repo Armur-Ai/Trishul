@@ -1,10 +1,10 @@
 package cmd
 
 import (
+	"fmt"
 	"github.com/Armur-Ai/Trishul/cli/internal/api"
 	"github.com/Armur-Ai/Trishul/cli/internal/config"
 	"github.com/Armur-Ai/Trishul/cli/internal/reports"
-	"fmt"
 	"os"
 	"strings"
 

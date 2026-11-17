@@ -151,7 +151,7 @@ func generateDFD(model *ThreatModel) string {
 func detectPatterns(dirPath string, patterns []*regexp.Regexp) []string {
 	var found []string
 
-	filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
+	_ = filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil || info.IsDir() || !isSourceFile(path) {
 			return nil
 		}

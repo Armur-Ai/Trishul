@@ -12,15 +12,15 @@ import (
 
 // Category descriptions
 var categoryDescriptions = map[string]string{
-	"security_issues":    "Potential security vulnerabilities.",
-	"dead_code":          "Unused or unreachable code.",
-	"duplicate_code":     "Duplicated code blocks.",
-	"secret_detection":   "Possible hardcoded secrets.",
-	"infra_security":     "Infrastructure-related security issues.",
-	"sca":                "Software Composition Analysis: Vulnerabilities in dependencies.",
-	"complex_functions":  "Functions with high cyclomatic complexity.",
-	"docstring_absent":   "Missing docstrings in functions, classes, or modules.",
-	"antipatterns_bugs":  "Code patterns that are considered bad practices or likely to cause bugs.",
+	"security_issues":   "Potential security vulnerabilities.",
+	"dead_code":         "Unused or unreachable code.",
+	"duplicate_code":    "Duplicated code blocks.",
+	"secret_detection":  "Possible hardcoded secrets.",
+	"infra_security":    "Infrastructure-related security issues.",
+	"sca":               "Software Composition Analysis: Vulnerabilities in dependencies.",
+	"complex_functions": "Functions with high cyclomatic complexity.",
+	"docstring_absent":  "Missing docstrings in functions, classes, or modules.",
+	"antipatterns_bugs": "Code patterns that are considered bad practices or likely to cause bugs.",
 }
 
 // PrintResultsText prints the scan results in a tabular format.

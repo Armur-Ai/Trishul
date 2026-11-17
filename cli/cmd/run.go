@@ -1,16 +1,16 @@
 package cmd
 
 import (
+	"fmt"
 	"github.com/Armur-Ai/Trishul/cli/internal/api"
 	"github.com/Armur-Ai/Trishul/cli/internal/config"
 	"github.com/Armur-Ai/Trishul/cli/internal/tui"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
-	"github.com/charmbracelet/huh"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
@@ -182,7 +182,7 @@ If no target is specified, scans the current directory.`,
 			resultsBrowser := tui.NewResults(items)
 			resultsBrowser.Skipped = buildSkippedTools(scanResult)
 			p2 := tea.NewProgram(resultsBrowser, tea.WithAltScreen())
-			p2.Run()
+			_, _ = p2.Run()
 		}
 
 		// --- Summary Card ---
@@ -201,14 +201,14 @@ func detectLanguage(target string) string {
 	}
 
 	extensions := map[string]string{
-		"go.mod":       "go",
-		"Cargo.toml":   "rust",
-		"package.json": "js",
-		"pom.xml":      "java",
-		"build.gradle": "java",
-		"Gemfile":      "ruby",
+		"go.mod":        "go",
+		"Cargo.toml":    "rust",
+		"package.json":  "js",
+		"pom.xml":       "java",
+		"build.gradle":  "java",
+		"Gemfile":       "ruby",
 		"composer.json": "php",
-		"Makefile":     "",
+		"Makefile":      "",
 	}
 
 	for file, lang := range extensions {
@@ -219,7 +219,7 @@ func detectLanguage(target string) string {
 
 	// Count file extensions
 	counts := map[string]int{}
-	filepath.Walk(target, func(path string, info os.FileInfo, err error) error {
+	_ = filepath.Walk(target, func(path string, info os.FileInfo, err error) error {
 		if err != nil || info.IsDir() {
 			return nil
 		}

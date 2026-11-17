@@ -17,7 +17,7 @@ var initCmd = &cobra.Command{
 		// Check if .trishul.yml already exists
 		if _, err := os.Stat(".trishul.yml"); err == nil {
 			var overwrite bool
-			huh.NewConfirm().
+			_ = huh.NewConfirm().
 				Title(".trishul.yml already exists. Overwrite?").
 				Value(&overwrite).
 				Run()
