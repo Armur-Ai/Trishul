@@ -151,7 +151,11 @@ func getInt(m map[string]interface{}, key string) int {
 	return 0
 }
 
-func normalizeSev(raw string) Severity {
+// NormalizeSeverityString maps a raw severity label from any tool to the
+// canonical Severity. This is the single generic mapper for the whole codebase;
+// tool-specific severity logic lives in internal/tools and delegates here for
+// the generic cases, so there is one source of truth.
+func NormalizeSeverityString(raw string) Severity {
 	switch strings.ToUpper(strings.TrimSpace(raw)) {
 	case "CRITICAL":
 		return SeverityCritical
@@ -161,9 +165,11 @@ func normalizeSev(raw string) Severity {
 		return SeverityMedium
 	case "LOW", "MINOR":
 		return SeverityLow
-	case "INFO", "INFORMATIONAL", "NOTE":
+	case "INFO", "INFORMATIONAL", "NOTE", "STYLE":
 		return SeverityInfo
 	default:
 		return SeverityInfo
 	}
 }
+
+func normalizeSev(raw string) Severity { return NormalizeSeverityString(raw) }
