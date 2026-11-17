@@ -30,8 +30,16 @@ func TestBuiltInAnalyzers_Deterministic(t *testing.T) {
 	if a != b {
 		t.Errorf("built-in analyzer output is not deterministic across runs:\n run1: %s\n run2: %s", a, b)
 	}
-	// Sanity: the reference app must actually produce some built-in findings.
-	if len(a) < 20 {
-		t.Errorf("expected non-trivial built-in findings on the reference app, got: %s", a)
+	// Sanity: each non-agent built-in category must actually be populated on the
+	// reference app, so a category silently emptied by the sort can't pass.
+	res, _, err := RunSimpleScanLocal(dir, "")
+	if err != nil {
+		t.Fatalf("scan: %v", err)
+	}
+	for _, c := range []string{utils.VIBE_SECURITY, utils.INFRA_SECURITY, utils.SECRET_DETECTION} {
+		items, _ := res[c].([]interface{})
+		if len(items) == 0 {
+			t.Errorf("expected %s findings on the reference app, got none", c)
+		}
 	}
 }

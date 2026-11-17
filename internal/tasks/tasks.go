@@ -379,8 +379,17 @@ func RunSimpleScan(dirPath string, language string) (map[string]interface{}, []S
 // non-deterministic — which would churn SARIF/CLI diffs run to run. Always
 // returns a non-nil slice.
 func sortFlatFindings(v interface{}) []interface{} {
-	items, ok := v.([]interface{})
-	if !ok {
+	var items []interface{}
+	switch s := v.(type) {
+	case []interface{}:
+		items = s
+	case []map[string]interface{}:
+		// The advanced formatter returns some categories as []map; normalize.
+		items = make([]interface{}, len(s))
+		for i := range s {
+			items[i] = s[i]
+		}
+	default:
 		return []interface{}{}
 	}
 	// key unwraps a grouped entry ({issues:[...], message}) to its first issue so
