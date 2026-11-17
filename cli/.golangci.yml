@@ -1,5 +1,0 @@
-# golangci-lint's "latest" binary is built with go1.24 and refuses to analyze a
-# go1.25 *target* (go.mod says 1.25). Pin the analysis language version to 1.24
-# so linting runs; the code still builds and tests against 1.25 elsewhere.
-run:
-  go: "1.24"
