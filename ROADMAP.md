@@ -161,6 +161,27 @@ first draft; it should be validated against the benchmark corpus in Phase 4 and 
 
 Every rule we ship maps to one of these plus a CWE. Reports lead with the Vibe Top 10 view.
 
+### AI Agent Supply-Chain Security (V10, deepened)
+
+AI coding agents — Claude Code, Cursor, Codex, Copilot — now read your repo, check
+out pull requests, follow repository instructions, install dependencies, and run
+tools. That makes the repository itself an attack surface: a malicious PR can plant
+instructions in `CLAUDE.md`, a code comment, a README, an MCP config, a CI workflow,
+or an install hook to redirect the agent — override its instructions, induce
+unauthorized tool calls, disclose credentials, add network destinations, weaken
+sandboxing, or register an untrusted MCP server.
+
+Trishul treats this as a seventh, first-class capability. It analyzes changed files
+*and* relevant context, parses agent/MCP/CI configuration structurally, detects
+prompt-injection and encoded/obfuscated instructions, and correlates
+individually-innocent changes into a single evidence-backed **attack chain**:
+untrusted entry point → agent consumption → requested action → trust boundary
+crossed. Analysis is **passive by default** — Trishul never executes untrusted
+instructions, hooks, install scripts, or MCP servers, and treats all scanned text as
+data, never as instructions to its own analysis. Exposed via
+`trishul agent-security scan .` and `trishul agent-security pr --base main`, and
+folded into the normal scan pipeline without making an external LLM mandatory.
+
 ---
 
 ## 6. Product pillars
