@@ -459,8 +459,12 @@ func buildSimpleScanRunnersNamed(dirPath, language string) ([]func() toolResult,
 			r, err := tools.RunRouteAuth(dirPath)
 			return toolResult{"route-authorization", r, err}
 		}),
+		withTimeout("dependency-provenance", func() toolResult {
+			r, err := tools.RunDependencyProvenance(dirPath)
+			return toolResult{"dependency-provenance", r, err}
+		}),
 	}
-	names := []string{"semgrep", "supabase-rls", "client-secrets", "agent-security", "placeholder-security", "abuse-controls", "webhook-verification", "llm-integration", "route-authorization"}
+	names := []string{"semgrep", "supabase-rls", "client-secrets", "agent-security", "placeholder-security", "abuse-controls", "webhook-verification", "llm-integration", "route-authorization", "dependency-provenance"}
 
 	switch language {
 	case "go":
