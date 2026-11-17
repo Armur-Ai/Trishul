@@ -49,6 +49,16 @@ func toolTimeout() time.Duration {
 	return 300 * time.Second
 }
 
+// qualityProfileEnabled reports whether code-quality tools should run. They are
+// off in the default 'security' profile and on under 'quality' or 'all'.
+func qualityProfileEnabled() bool {
+	switch strings.ToLower(os.Getenv("TRISHUL_PROFILE")) {
+	case "quality", "all":
+		return true
+	}
+	return false
+}
+
 // web3Enabled reports whether the opt-in smart-contract (web3) profile is on.
 // Slither/Mythril are out of scope for the default code scanner and run only
 // when explicitly requested via TRISHUL_PROFILE=web3|all or TRISHUL_WEB3=1.
@@ -68,6 +78,11 @@ func web3Enabled() bool {
 // per-tool timeout. If the context expires the runner returns a ScanError.
 func withTimeout(name string, run func() toolResult) func() toolResult {
 	return func() toolResult {
+		// Profile gating: code-quality tools are omitted from the default
+		// 'security' profile. This is an intentional omission, not an error.
+		if tools.IsQualityTool(name) && !qualityProfileEnabled() {
+			return toolResult{name: name, result: map[string]interface{}{}}
+		}
 		// Honest status: if a tool's required binary is known-missing, record it
 		// as skipped rather than running it to an empty (false "clean") result.
 		if tools.IsToolSkippable(name) {
