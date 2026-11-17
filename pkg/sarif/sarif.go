@@ -4,8 +4,11 @@
 package sarif
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 )
@@ -50,10 +53,19 @@ type Rule struct {
 
 // Result represents a single finding.
 type Result struct {
-	RuleID    string     `json:"ruleId"`
-	Level     string     `json:"level"` // error, warning, note, none
-	Message   Message    `json:"message"`
-	Locations []Location `json:"locations,omitempty"`
+	RuleID              string            `json:"ruleId"`
+	Level               string            `json:"level"` // error, warning, note, none
+	Message             Message           `json:"message"`
+	Locations           []Location        `json:"locations,omitempty"`
+	PartialFingerprints map[string]string `json:"partialFingerprints,omitempty"`
+}
+
+// fingerprint computes a stable, line-insensitive identity for a finding so
+// GitHub Code Scanning can track it across runs. Deliberately excludes the line
+// number so an unrelated edit above the finding does not churn its identity.
+func fingerprint(ruleID, filePath, message string) string {
+	sum := sha256.Sum256([]byte(ruleID + "|" + filePath + "|" + message))
+	return hex.EncodeToString(sum[:])[:16]
 }
 
 // Location pinpoints where a finding was observed.
@@ -165,6 +177,9 @@ func FromScanResults(results map[string]interface{}, toolVersion string) *Log {
 						RuleID:  ruleID,
 						Level:   severityToLevel(sev),
 						Message: Message{Text: msg},
+						PartialFingerprints: map[string]string{
+							"trishul/v1": fingerprint(ruleID, filePath, msg),
+						},
 					}
 
 					if filePath != "" {
@@ -188,11 +203,13 @@ func FromScanResults(results map[string]interface{}, toolVersion string) *Log {
 		}
 	}
 
-	// Build the ordered rules list.
+	// Build the rules list in a deterministic order (map iteration is random,
+	// which otherwise churns the SARIF output and its diffs run to run).
 	var rules []Rule
 	for _, r := range rulesSeen {
 		rules = append(rules, r)
 	}
+	sort.Slice(rules, func(i, j int) bool { return rules[i].ID < rules[j].ID })
 
 	log := &Log{
 		Version: "2.1.0",
