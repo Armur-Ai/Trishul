@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -66,6 +67,101 @@ type Result struct {
 func fingerprint(ruleID, filePath, message string) string {
 	sum := sha256.Sum256([]byte(ruleID + "|" + filePath + "|" + message))
 	return hex.EncodeToString(sum[:])[:16]
+}
+
+// stableRuleID derives a deterministic rule id from whatever identifying
+// fields are available, so findings that lack a canonical id (CVE/CWE/check)
+// still get a stable, per-rule identity rather than all collapsing onto one
+// generic bucket. Empty parts are skipped so the id only reflects real data.
+func stableRuleID(prefix string, parts ...string) string {
+	var nonEmpty []string
+	for _, p := range parts {
+		if p != "" {
+			nonEmpty = append(nonEmpty, p)
+		}
+	}
+	if len(nonEmpty) == 0 {
+		return prefix
+	}
+	sum := sha256.Sum256([]byte(strings.Join(nonEmpty, "|")))
+	return prefix + "-" + hex.EncodeToString(sum[:])[:10]
+}
+
+// registerCWERule registers a CWE-backed security rule once, linking to the
+// MITRE CWE definition.
+func registerCWERule(rulesSeen map[string]Rule, cwe string) {
+	if _, seen := rulesSeen[cwe]; seen {
+		return
+	}
+	rulesSeen[cwe] = Rule{
+		ID:   cwe,
+		Name: cwe,
+		ShortDescription: &MultiformatMessageString{
+			Text: fmt.Sprintf("Security issue: %s", cwe),
+		},
+		HelpURI: fmt.Sprintf("https://cwe.mitre.org/data/definitions/%s.html",
+			strings.TrimPrefix(cwe, "CWE-")),
+	}
+}
+
+// flattenIssues normalizes a category value into a flat list of issue maps.
+// Reformatted categories nest the real issues under an "issues" key (grouped
+// by path, message, etc.); raw categories are already flat. Supporting both
+// keeps the SARIF generator robust to either shape.
+func flattenIssues(raw interface{}) []map[string]interface{} {
+	list, ok := raw.([]interface{})
+	if !ok {
+		return nil
+	}
+	var out []map[string]interface{}
+	for _, item := range list {
+		m, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if nested, ok := m["issues"].([]interface{}); ok {
+			for _, ni := range nested {
+				if nm, ok := ni.(map[string]interface{}); ok {
+					out = append(out, nm)
+				}
+			}
+			continue
+		}
+		out = append(out, m)
+	}
+	return out
+}
+
+// getSeverity extracts a severity string, tolerating scanners (e.g. osv-scanner)
+// that emit severity as a list rather than a scalar.
+func getSeverity(m map[string]interface{}, key string) string {
+	switch v := m[key].(type) {
+	case string:
+		return v
+	case []interface{}:
+		for _, e := range v {
+			if s, ok := e.(string); ok && s != "" {
+				return s
+			}
+		}
+	case []string:
+		for _, s := range v {
+			if s != "" {
+				return s
+			}
+		}
+	}
+	return ""
+}
+
+// firstString returns the first non-empty string among the given keys.
+func firstString(m map[string]interface{}, keys ...string) string {
+	for _, k := range keys {
+		if s := getString(m, k); s != "" {
+			return s
+		}
+	}
+	return ""
 }
 
 // Location pinpoints where a finding was observed.
@@ -133,23 +229,16 @@ func FromScanResults(results map[string]interface{}, toolVersion string) *Log {
 				continue
 			}
 
+			// A real CWE drives a shared, well-described rule. When it is
+			// missing (empty or the "unknown" placeholder the reformatter
+			// uses), we derive a stable per-finding rule id from the
+			// finding's own fields instead of collapsing every CWE-less
+			// finding into a single "UNKNOWN" bucket.
 			cwe := getString(group, "cwe")
-			if cwe == "" {
-				cwe = "UNKNOWN"
-			}
-			ruleID := cwe
-
-			// Ensure the rule is registered.
-			if _, seen := rulesSeen[ruleID]; !seen {
-				rulesSeen[ruleID] = Rule{
-					ID:   ruleID,
-					Name: ruleID,
-					ShortDescription: &MultiformatMessageString{
-						Text: fmt.Sprintf("Security issue: %s", ruleID),
-					},
-					HelpURI: fmt.Sprintf("https://cwe.mitre.org/data/definitions/%s.html",
-						strings.TrimPrefix(ruleID, "CWE-")),
-				}
+			hasCWE := cwe != "" && !strings.EqualFold(cwe, "unknown")
+			groupRuleID := cwe
+			if hasCWE {
+				registerCWERule(rulesSeen, cwe)
 			}
 
 			// Iterate over file groups.
@@ -172,6 +261,20 @@ func FromScanResults(results map[string]interface{}, toolVersion string) *Log {
 					col := getInt(issue, "column")
 					msg := getString(issue, "message")
 					sev := getString(issue, "severity")
+
+					ruleID := groupRuleID
+					if !hasCWE {
+						ruleID = stableRuleID("ARMUR", getString(issue, "check_id"), msg)
+						if _, seen := rulesSeen[ruleID]; !seen {
+							rulesSeen[ruleID] = Rule{
+								ID:   ruleID,
+								Name: ruleID,
+								ShortDescription: &MultiformatMessageString{
+									Text: fmt.Sprintf("Security issue: %s", ruleID),
+								},
+							}
+						}
+					}
 
 					result := Result{
 						RuleID:  ruleID,
@@ -251,6 +354,132 @@ func FromScanResults(results map[string]interface{}, toolVersion string) *Log {
 				sarifResults = append(sarifResults, res)
 			}
 		}
+	}
+
+	// Dependency / SCA findings — vulnerable third-party packages reported by
+	// osv-scanner, trivy, and friends. The reformatter groups these by manifest
+	// path; flattenIssues descends into those groups to the individual advisories.
+	for _, issue := range flattenIssues(results["sca"]) {
+		// Prefer the advisory/CVE id as the rule id so Code Scanning can dedupe
+		// and link out; otherwise fall back to a single stable DEPENDENCY rule.
+		adv := getString(issue, "check_id")
+		ruleID := adv
+		if ruleID == "" {
+			ruleID = "DEPENDENCY"
+		}
+		if _, seen := rulesSeen[ruleID]; !seen {
+			rule := Rule{
+				ID:               ruleID,
+				Name:             ruleID,
+				ShortDescription: &MultiformatMessageString{Text: fmt.Sprintf("Vulnerable dependency: %s", ruleID)},
+			}
+			if strings.HasPrefix(adv, "CVE-") {
+				rule.HelpURI = "https://nvd.nist.gov/vuln/detail/" + adv
+			} else if strings.HasPrefix(adv, "GHSA-") {
+				rule.HelpURI = "https://github.com/advisories/" + adv
+			}
+			rulesSeen[ruleID] = rule
+		}
+
+		filePath := getString(issue, "path")
+		pkg := getString(issue, "package")
+		version := firstString(issue, "version", "installed_version")
+
+		// Build a human-readable message from whatever fields are present.
+		msg := getString(issue, "message")
+		pkgRef := pkg
+		if pkg != "" && version != "" {
+			pkgRef = pkg + "@" + version
+		}
+		switch {
+		case msg != "" && pkgRef != "":
+			msg = msg + " (" + pkgRef + ")"
+		case msg == "" && pkgRef != "":
+			msg = "Vulnerable dependency " + pkgRef
+		case msg == "":
+			msg = "Vulnerable dependency"
+		}
+		if adv != "" {
+			msg = adv + ": " + msg
+		}
+
+		res := Result{
+			RuleID:              ruleID,
+			Level:               severityToLevel(getSeverity(issue, "severity")),
+			Message:             Message{Text: msg},
+			PartialFingerprints: map[string]string{"trishul/v1": fingerprint(ruleID, filePath, msg)},
+		}
+		if filePath != "" {
+			loc := Location{PhysicalLocation: PhysicalLocation{ArtifactLocation: ArtifactLocation{URI: filePath}}}
+			if line := getInt(issue, "line"); line > 0 {
+				loc.PhysicalLocation.Region = &Region{StartLine: line}
+			}
+			res.Locations = []Location{loc}
+		}
+		sarifResults = append(sarifResults, res)
+	}
+
+	// Infrastructure-as-Code / infra security findings — misconfigurations
+	// reported by checkov, tfsec, trivy, etc. The reformatter groups these by
+	// message; flattenIssues descends to the individual checks, each of which
+	// carries its own file path.
+	for _, issue := range flattenIssues(results["infra_security"]) {
+		// Prefer the scanner's check id (e.g. CKV_AWS_..., AVD-...); otherwise a
+		// CWE if the scanner attached one; otherwise a stable IAC rule.
+		checkID := getString(issue, "check_id")
+		cwe := getSeverity(issue, "cwe") // tolerant of string / list cwe values
+		ruleID := checkID
+		if ruleID == "" {
+			ruleID = cwe
+		}
+		if ruleID == "" {
+			ruleID = "IAC"
+		}
+		if _, seen := rulesSeen[ruleID]; !seen {
+			rule := Rule{
+				ID:               ruleID,
+				Name:             ruleID,
+				ShortDescription: &MultiformatMessageString{Text: fmt.Sprintf("Infrastructure misconfiguration: %s", ruleID)},
+			}
+			if strings.HasPrefix(ruleID, "CWE-") {
+				rule.HelpURI = "https://cwe.mitre.org/data/definitions/" + strings.TrimPrefix(ruleID, "CWE-") + ".html"
+			}
+			rulesSeen[ruleID] = rule
+		}
+
+		filePath := getString(issue, "path")
+		msg := getString(issue, "message")
+		if msg == "" {
+			msg = "Infrastructure misconfiguration"
+		}
+		if checkID != "" {
+			msg = checkID + ": " + msg
+		}
+
+		res := Result{
+			RuleID:              ruleID,
+			Level:               severityToLevel(getSeverity(issue, "severity")),
+			Message:             Message{Text: msg},
+			PartialFingerprints: map[string]string{"trishul/v1": fingerprint(ruleID, filePath, msg)},
+		}
+		if filePath != "" {
+			loc := Location{PhysicalLocation: PhysicalLocation{ArtifactLocation: ArtifactLocation{URI: filePath}}}
+			// Line may come as an int ("line") or as the start of a
+			// "start:end" range string ("file_line_range", from checkov).
+			line := getInt(issue, "line")
+			if line == 0 {
+				if lr := getString(issue, "file_line_range"); lr != "" {
+					if start, err := strconv.Atoi(strings.SplitN(lr, ":", 2)[0]); err == nil {
+						line = start
+					}
+				}
+			}
+			if line > 0 {
+				loc.PhysicalLocation.Region = &Region{StartLine: line}
+			}
+			res.Locations = []Location{loc}
+		}
+		sarifResults = append(sarifResults, res)
 	}
 
 	// Build the rules list in a deterministic order (map iteration is random,
