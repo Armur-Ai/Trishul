@@ -1,10 +1,10 @@
 package agent
 
 import (
-	"github.com/Armur-Ai/Trishul/internal/tasks"
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/Armur-Ai/Trishul/internal/tasks"
 	"io"
 	"net/http"
 	"os"
@@ -32,8 +32,8 @@ type PRReview struct {
 	// AI Agent Supply-Chain Security + Vibe analyzer results, surfaced
 	// prominently because a PR is exactly where an attacker plants content that
 	// targets the reviewer's AI coding agent.
-	AgentFindings  int      `json:"agent_findings"`
-	VibeFindings   int      `json:"vibe_findings"`
+	AgentFindings   int      `json:"agent_findings"`
+	VibeFindings    int      `json:"vibe_findings"`
 	AgentHighlights []string `json:"agent_highlights,omitempty"`
 }
 

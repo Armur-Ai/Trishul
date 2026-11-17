@@ -79,23 +79,23 @@ var (
 	// toward NOT flagging (fewer false positives): a verify call, an HMAC
 	// comparison, or even reading a provider signature header all count.
 	reVerifyOrSig = regexp.MustCompile(`(?i)` + strings.Join([]string{
-		`constructEvent`,                 // stripe.webhooks.constructEvent
-		`verifyWebhookSignature`,         // paypal / generic
-		`verifyWebhook\b`,                // clerk helper
-		`\.verify\s*\(`,                  // svix: new Webhook(secret).verify(...)
-		`createHmac`,                     // node crypto HMAC compare
-		`timingSafeEqual`,                // node constant-time compare
-		`hmac\.new`,                      // python hmac
-		`compare_digest`,                 // python constant-time compare
-		`stripe-signature`,               // signature headers
+		`constructEvent`,         // stripe.webhooks.constructEvent
+		`verifyWebhookSignature`, // paypal / generic
+		`verifyWebhook\b`,        // clerk helper
+		`\.verify\s*\(`,          // svix: new Webhook(secret).verify(...)
+		`createHmac`,             // node crypto HMAC compare
+		`timingSafeEqual`,        // node constant-time compare
+		`hmac\.new`,              // python hmac
+		`compare_digest`,         // python constant-time compare
+		`stripe-signature`,       // signature headers
 		`svix-signature`,
 		`svix-id`,
-		`x-hub-signature`,                // github
-		`x-shopify-hmac-sha256`,          // shopify
+		`x-hub-signature`,       // github
+		`x-shopify-hmac-sha256`, // shopify
 		`x-webhook-signature`,
 		`x-signature`,
 		`clerk-signature`,
-		`paypal-transmission`,            // x-paypal-transmission-sig
+		`paypal-transmission`, // x-paypal-transmission-sig
 	}, "|"))
 
 	// Client-trusted field read from the request body (JS/TS): req.body.<field>.

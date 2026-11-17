@@ -143,7 +143,7 @@ func scanLLMFile(relPath, ext, content string) []map[string]interface{} {
 	isJSTS := lowerExt != ".py"
 
 	tainted := collectTaintedVars(lines) // request-derived variables (001)
-	llmVars := collectLLMVars(lines)      // model-output variables (002)
+	llmVars := collectLLMVars(lines)     // model-output variables (002)
 
 	for i, raw := range lines {
 		if llmIsCommentLine(raw) {

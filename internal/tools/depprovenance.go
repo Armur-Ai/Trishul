@@ -82,7 +82,7 @@ var depSkipDirs = map[string]bool{
 // depLockfiles are the lockfile basenames whose presence anywhere in the
 // project means the dependency tree is pinned (suppresses VIBE-DEP-002).
 var depLockfiles = map[string]bool{
-	"package-lock.json": true,
+	"package-lock.json":   true,
 	"npm-shrinkwrap.json": true,
 	"yarn.lock":           true,
 	"pnpm-lock.yaml":      true,
