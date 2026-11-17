@@ -1,0 +1,78 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 420" width="1200" height="420" role="img" aria-label="AI agent attack chain: an untrusted pull request plants an entry point (a poisoned instruction or injected prompt). An AI coding agent reads it as an instruction. That enables an action — an install hook, MCP server or permission change — which crosses the trust boundary onto the developer's host. Trishul correlates the entry point and the enabled action into one critical attack-chain finding.">
+  <!--
+    Agent attack-chain mini-diagram. Shared palette tokens:
+      bg #0a0f1c  surface #111b2e  surface2 #16243c  border #2a3e5c
+      ink #e8eef7  muted #8fa1bd  saffron #f5a524  rose #fb6a84  teal #2dd4bf
+  -->
+  <defs>
+    <marker id="aArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#f5a524"/>
+    </marker>
+    <marker id="aArrowR" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#fb6a84"/>
+    </marker>
+    <linearGradient id="bgGrad3" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b1222"/>
+      <stop offset="1" stop-color="#0a0f1c"/>
+    </linearGradient>
+  </defs>
+  <style>
+    .lbl  { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  </style>
+
+  <rect width="1200" height="420" rx="16" fill="url(#bgGrad3)"/>
+  <rect x="1" y="1" width="1198" height="418" rx="15" fill="none" stroke="#2a3e5c"/>
+
+  <text x="40" y="48" class="mono" font-size="20" font-weight="700" fill="#e8eef7">anatomy of an agent attack chain</text>
+  <text x="40" y="72" class="lbl" font-size="14" fill="#8fa1bd">What Trishul's AI Agent Supply-Chain Security capability reconstructs from an untrusted PR.</text>
+
+  <!-- Trust boundary (dashed vertical) -->
+  <line x1="815" y1="110" x2="815" y2="360" stroke="#fb6a84" stroke-width="2" stroke-dasharray="7 6"/>
+  <text x="815" y="128" text-anchor="middle" class="lbl" font-size="12.5" font-weight="700" fill="#fb8fa3">TRUST BOUNDARY</text>
+  <text x="700" y="350" text-anchor="middle" class="lbl" font-size="12" fill="#6f84a3">untrusted repository side</text>
+  <text x="960" y="350" text-anchor="middle" class="lbl" font-size="12" fill="#6f84a3">developer host side</text>
+
+  <!-- 1. Entry point -->
+  <rect x="40" y="150" width="230" height="130" rx="12" fill="#17130a" stroke="#f5a524" stroke-width="2"/>
+  <text x="58" y="178" class="lbl" font-size="12" font-weight="700" letter-spacing="1" fill="#f5a524">① ENTRY POINT</text>
+  <text x="58" y="206" class="lbl" font-size="15" fill="#f7cd84">Poisoned instruction</text>
+  <text x="58" y="226" class="lbl" font-size="15" fill="#f7cd84">or injected prompt</text>
+  <text x="58" y="252" class="mono" font-size="11.5" fill="#c79a4f">CLAUDE.md · .cursorrules</text>
+  <text x="58" y="269" class="mono" font-size="11.5" fill="#c79a4f">README · code comment</text>
+
+  <!-- 2. Agent -->
+  <rect x="320" y="150" width="210" height="130" rx="12" fill="#101a2c" stroke="#2dd4bf" stroke-width="1.5"/>
+  <text x="338" y="178" class="lbl" font-size="12" font-weight="700" letter-spacing="1" fill="#2dd4bf">② AI AGENT</text>
+  <text x="338" y="206" class="lbl" font-size="15" fill="#cfe0f2">reads the PR and</text>
+  <text x="338" y="226" class="lbl" font-size="15" fill="#cfe0f2">treats data as an</text>
+  <text x="338" y="246" class="lbl" font-size="15" fill="#cfe0f2">instruction</text>
+  <text x="338" y="270" class="mono" font-size="11.5" fill="#8fa1bd">Claude Code · Cursor</text>
+
+  <!-- 3. Enabled action -->
+  <rect x="580" y="150" width="210" height="130" rx="12" fill="#17130a" stroke="#f5a524" stroke-width="2"/>
+  <text x="598" y="178" class="lbl" font-size="12" font-weight="700" letter-spacing="1" fill="#f5a524">③ ENABLED ACTION</text>
+  <text x="598" y="206" class="lbl" font-size="15" fill="#f7cd84">install hook, MCP</text>
+  <text x="598" y="226" class="lbl" font-size="15" fill="#f7cd84">server or permission</text>
+  <text x="598" y="246" class="lbl" font-size="15" fill="#f7cd84">change</text>
+  <text x="598" y="270" class="mono" font-size="11.5" fill="#c79a4f">postinstall · npx -y · YOLO</text>
+
+  <!-- 4. Host impact -->
+  <rect x="880" y="150" width="280" height="130" rx="12" fill="#1a0f12" stroke="#fb6a84" stroke-width="2"/>
+  <text x="898" y="178" class="lbl" font-size="12" font-weight="700" letter-spacing="1" fill="#fb6a84">④ HOST IMPACT</text>
+  <text x="898" y="206" class="lbl" font-size="15" fill="#fb8fa3">code runs on the dev's machine:</text>
+  <text x="898" y="228" class="lbl" font-size="15" fill="#fb8fa3">secret exfiltration, remote</text>
+  <text x="898" y="248" class="lbl" font-size="15" fill="#fb8fa3">fetch-and-exec, CI compromise</text>
+  <text x="898" y="270" class="mono" font-size="11.5" fill="#c98493">crosses into trusted context</text>
+
+  <!-- arrows -->
+  <path d="M270,215 L318,215" fill="none" stroke="#f5a524" stroke-width="2.5" marker-end="url(#aArrow)"/>
+  <path d="M530,215 L578,215" fill="none" stroke="#f5a524" stroke-width="2.5" marker-end="url(#aArrow)"/>
+  <path d="M790,215 L878,215" fill="none" stroke="#fb6a84" stroke-width="2.5" marker-end="url(#aArrowR)"/>
+
+  <!-- correlation banner -->
+  <rect x="40" y="316" width="1120" height="64" rx="12" fill="#101a2c" stroke="#fb6a84" stroke-width="1.5"/>
+  <circle cx="68" cy="348" r="7" fill="#fb6a84"/>
+  <text x="90" y="343" class="mono" font-size="14" font-weight="700" fill="#fb8fa3">AGENT-CHAIN-001 · CRITICAL · confidence HIGH</text>
+  <text x="90" y="366" class="lbl" font-size="13" fill="#9fb0c9">Either signal alone is low/medium confidence. Trishul correlates the untrusted entry point with the enabled action into one corroborated chain — the only step that claims HIGH confidence.</text>
+</svg>

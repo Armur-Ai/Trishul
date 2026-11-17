@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 340" width="1200" height="340" role="img" aria-label="Trishul — a local-first, open-source security scanner for AI-generated code. The three prongs of the trident represent SAST and secrets, supply-chain and IaC, and AI agent supply-chain security.">
+  <!--
+    Trishul visual identity. Palette tokens (reused across all /assets SVGs):
+      bg       #0a0f1c   deep slate / near-black navy
+      surface  #111b2e   panel
+      surface2 #16243c   raised panel
+      border   #2a3e5c   hairline
+      ink      #e8eef7   primary text
+      muted    #8fa1bd   secondary text
+      cyan     #22d3ee   primary accent (SAST / engine)
+      teal     #2dd4bf   secondary accent (SCA / IaC)
+      saffron  #f5a524   flagship accent (AI agent supply-chain security)
+      rose     #fb6a84   critical / attack
+  -->
+  <defs>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b1222"/>
+      <stop offset="1" stop-color="#0a0f1c"/>
+    </linearGradient>
+    <linearGradient id="prong" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#22d3ee"/>
+      <stop offset="1" stop-color="#2dd4bf"/>
+    </linearGradient>
+    <linearGradient id="wordmark" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#e8eef7"/>
+      <stop offset="1" stop-color="#bfe9f5"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#22d3ee" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#22d3ee" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="1200" height="340" rx="18" fill="url(#bgGrad)"/>
+  <rect x="1" y="1" width="1198" height="338" rx="17" fill="none" stroke="#2a3e5c" stroke-width="1"/>
+  <ellipse cx="185" cy="170" rx="210" ry="180" fill="url(#glow)"/>
+
+  <!-- Trident glyph: three prongs = three defense fronts -->
+  <g stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <!-- shaft -->
+    <path d="M185,112 L185,250" stroke="#2dd4bf" stroke-width="9"/>
+    <!-- crossbar -->
+    <path d="M139,128 L231,128" stroke="url(#prong)" stroke-width="9"/>
+    <!-- left prong (cyan) -->
+    <path d="M139,128 L139,78" stroke="#22d3ee" stroke-width="9"/>
+    <path d="M139,66 L131,84 L147,84 Z" fill="#22d3ee" stroke="none"/>
+    <!-- right prong (teal) -->
+    <path d="M231,128 L231,78" stroke="#2dd4bf" stroke-width="9"/>
+    <path d="M231,66 L223,84 L239,84 Z" fill="#2dd4bf" stroke="none"/>
+    <!-- centre prong (saffron — the flagship) -->
+    <path d="M185,112 L185,62" stroke="#f5a524" stroke-width="9"/>
+    <path d="M185,46 L175,68 L195,68 Z" fill="#f5a524" stroke="none"/>
+    <!-- handle pommel -->
+    <path d="M185,250 l14,14 l-14,14 l-14,-14 Z" fill="#16243c" stroke="#2a3e5c" stroke-width="2"/>
+  </g>
+
+  <!-- Wordmark -->
+  <text x="320" y="158" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="92" font-weight="700" letter-spacing="2" fill="url(#wordmark)">trishul</text>
+  <text x="322" y="205" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="25" fill="#8fa1bd">Security scanner for AI-generated code</text>
+
+  <!-- feature chips -->
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="15">
+    <rect x="322" y="236" width="118" height="34" rx="17" fill="#111b2e" stroke="#2a3e5c"/>
+    <circle cx="343" cy="253" r="4.5" fill="#22d3ee"/>
+    <text x="356" y="258" fill="#cfe0f2">SAST · SCA</text>
+
+    <rect x="452" y="236" width="118" height="34" rx="17" fill="#111b2e" stroke="#2a3e5c"/>
+    <circle cx="473" cy="253" r="4.5" fill="#2dd4bf"/>
+    <text x="486" y="258" fill="#cfe0f2">Secrets · IaC</text>
+
+    <rect x="582" y="236" width="300" height="34" rx="17" fill="#1a1608" stroke="#f5a524"/>
+    <circle cx="603" cy="253" r="4.5" fill="#f5a524"/>
+    <text x="616" y="258" fill="#f7cd84">AI Agent Supply-Chain Security</text>
+  </g>
+
+  <!-- local-first badge -->
+  <g font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+    <text x="1158" y="300" text-anchor="end" font-size="14" fill="#8fa1bd">local-first · open source · passive analysis</text>
+  </g>
+</svg>
