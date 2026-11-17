@@ -1,14 +1,14 @@
 {
   "name": "trishul",
   "displayName": "trishul — Security Scanner for Vibe-Coded Software",
-  "description": "Security scanner for AI-generated code — SAST, DAST, exploit simulation, attack path analysis",
+  "description": "Security scanner for AI-generated code — SAST, SCA, secrets, and IaC",
   "version": "0.0.1",
   "publisher": "trishul",
   "engines": {
     "vscode": "^1.85.0"
   },
   "categories": ["Linters", "Other"],
-  "keywords": ["security", "scanner", "SAST", "DAST", "DevSecOps", "vibecoding", "ai-code"],
+  "keywords": ["security", "scanner", "SAST", "DevSecOps", "vibecoding", "ai-code"],
   "activationEvents": [
     "workspaceContains:.trishul.yml",
     "onCommand:trishul.scanWorkspace"

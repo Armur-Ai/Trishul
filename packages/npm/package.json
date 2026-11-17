@@ -1,7 +1,7 @@
 {
   "name": "@trishul/cli",
   "version": "0.0.1",
-  "description": "trishul — Security Scanner for Vibe-Coded Software. SAST + DAST + exploit simulation + attack path analysis.",
+  "description": "trishul — Security Scanner for Vibe-Coded Software. SAST, SCA, secrets, and IaC scanning for AI-generated code.",
   "bin": {
     "trishul": "bin/trishul.js"
   },
@@ -11,7 +11,6 @@
   "keywords": [
     "security",
     "sast",
-    "dast",
     "scanner",
     "vulnerability",
     "devsecops",

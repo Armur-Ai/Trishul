@@ -1,6 +1,6 @@
 # trishul
 
-Security Scanner for Vibe-Coded Software — SAST + DAST + exploit simulation + attack path analysis.
+Security Scanner for Vibe-Coded Software — SAST, SCA, secrets, and IaC scanning for AI-generated code.
 
 ## Install
 

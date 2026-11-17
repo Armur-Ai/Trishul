@@ -10,7 +10,7 @@ readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.8"
 authors = [{name = "Armur AI", email = "hello@trishul.dev"}]
-keywords = ["security", "sast", "dast", "scanner", "vulnerability", "devsecops"]
+keywords = ["security", "sast", "sca", "secrets", "scanner", "vulnerability", "devsecops"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Environment :: Console",
