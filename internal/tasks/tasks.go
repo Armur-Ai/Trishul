@@ -303,7 +303,7 @@ func RunSimpleScan(dirPath string, language string) (map[string]interface{}, []S
 	}
 	categorized, scanErrors := runParallel(dirPath, runners)
 
-	if err := os.RemoveAll(dirPath); err != nil {
+	if err := utils.SafeRemoveAll(dirPath); err != nil {
 		return nil, scanErrors, fmt.Errorf("failed to remove directory: %v", err)
 	}
 	newCatResult := utils.ConvertCategorizedResults(categorized)
@@ -547,7 +547,7 @@ func RunAdvancedScans(dirPath string, language string) (map[string]interface{}, 
 
 	categorized, scanErrors := runParallelAdvanced(dirPath, runners)
 
-	if err := os.RemoveAll(dirPath); err != nil {
+	if err := utils.SafeRemoveAll(dirPath); err != nil {
 		return nil, scanErrors, fmt.Errorf("failed to remove directory: %v", err)
 	}
 	newCatResult := utils.ConvertCategorizedResults(categorized)
@@ -587,7 +587,7 @@ func ScanFileTask(filePath string) (map[string]interface{}, error) {
 	dirPath := filepath.Dir(filePath)
 
 	defer func() {
-		if err := os.RemoveAll(dirPath); err != nil {
+		if err := utils.SafeRemoveAll(dirPath); err != nil {
 			logger.Error().Str("dir", dirPath).Err(err).Msg("failed to clean up scan directory")
 		} else {
 			logger.Debug().Str("dir", dirPath).Msg("cleaned up scan directory")
