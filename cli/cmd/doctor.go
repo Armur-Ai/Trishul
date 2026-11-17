@@ -63,6 +63,13 @@ var doctorCmd = &cobra.Command{
 		fmt.Println(color.CyanString("trishul doctor"))
 		fmt.Println(strings.Repeat("─", 50))
 
+		profile := os.Getenv("TRISHUL_PROFILE")
+		if profile == "" {
+			profile = "security (default)"
+		}
+		fmt.Printf("Active scan profile: %s\n", profile)
+		fmt.Println(strings.Repeat("─", 50))
+
 		exitCode := 0
 
 		// Check API server
