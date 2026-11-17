@@ -41,11 +41,11 @@ Or add to ~/.claude/settings.json:
 		fmt.Println(color.GreenString("  claude mcp add armur -- trishul mcp"))
 		fmt.Println()
 		fmt.Println("Available MCP tools:")
-		fmt.Println("  armur_scan_path         — Scan a local file or directory")
-		fmt.Println("  armur_scan_code         — Scan a code snippet inline")
-		fmt.Println("  armur_check_dependency  — Check package for vulnerabilities")
-		fmt.Println("  armur_explain_finding   — AI explanation of a finding")
-		fmt.Println("  armur_get_history       — Get recent scan history")
+		fmt.Println("  trishul_scan_path         — Scan a local file or directory")
+		fmt.Println("  trishul_scan_code         — Scan a code snippet inline")
+		fmt.Println("  trishul_check_dependency  — Check package for vulnerabilities")
+		fmt.Println("  trishul_explain_finding   — AI explanation of a finding")
+		fmt.Println("  trishul_get_history       — Get recent scan history")
 
 		// In production: mcp.StartMCPServer()
 	},

@@ -100,7 +100,7 @@ var normalizeLanguage = map[string]string{
 }
 
 func registerScanPathTool(s *server.MCPServer) {
-	tool := mcp.NewTool("armur_scan_path",
+	tool := mcp.NewTool("trishul_scan_path",
 		mcp.WithDescription("Scan a local file or directory for security vulnerabilities"),
 		mcp.WithString("path", mcp.Required(), mcp.Description("Path to scan")),
 		mcp.WithString("depth", mcp.Description("Scan depth: quick or deep (default: quick)")),
@@ -159,7 +159,7 @@ func registerScanPathTool(s *server.MCPServer) {
 }
 
 func registerScanCodeTool(s *server.MCPServer) {
-	tool := mcp.NewTool("armur_scan_code",
+	tool := mcp.NewTool("trishul_scan_code",
 		mcp.WithDescription("Scan a code snippet for security vulnerabilities"),
 		mcp.WithString("code", mcp.Required(), mcp.Description("The code to scan")),
 		mcp.WithString("language", mcp.Required(), mcp.Description("Programming language")),
@@ -276,7 +276,7 @@ type osvVuln struct {
 }
 
 func registerCheckDependencyTool(s *server.MCPServer) {
-	tool := mcp.NewTool("armur_check_dependency",
+	tool := mcp.NewTool("trishul_check_dependency",
 		mcp.WithDescription("Check if a specific package version has known vulnerabilities"),
 		mcp.WithString("package", mcp.Required(), mcp.Description("Package name")),
 		mcp.WithString("version", mcp.Required(), mcp.Description("Package version")),
@@ -404,7 +404,7 @@ var commonCWEDescriptions = map[string]string{
 }
 
 func registerExplainFindingTool(s *server.MCPServer) {
-	tool := mcp.NewTool("armur_explain_finding",
+	tool := mcp.NewTool("trishul_explain_finding",
 		mcp.WithDescription("Explain a security finding in plain English"),
 		mcp.WithString("cwe", mcp.Description("CWE ID (e.g., CWE-79)")),
 		mcp.WithString("message", mcp.Description("Finding message")),
@@ -479,7 +479,7 @@ func registerExplainFindingTool(s *server.MCPServer) {
 }
 
 func registerGetHistoryTool(s *server.MCPServer) {
-	tool := mcp.NewTool("armur_get_history",
+	tool := mcp.NewTool("trishul_get_history",
 		mcp.WithDescription("Get recent scan history"),
 		mcp.WithString("limit", mcp.Description("Number of recent scans to return (default: 20)")),
 		mcp.WithString("path", mcp.Description("Filter by scan target path (optional)")),
@@ -590,7 +590,7 @@ func registerGetHistoryTool(s *server.MCPServer) {
 
 func registerResources(s *server.MCPServer) {
 	s.AddResource(mcp.NewResource(
-		"armur://findings/latest",
+		"trishul://findings/latest",
 		"Latest scan findings",
 		mcp.WithResourceDescription("Findings from the most recent scan"),
 		mcp.WithMIMEType("application/json"),
