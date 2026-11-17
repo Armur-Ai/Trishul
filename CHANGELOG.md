@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **SARIF** — stable `partialFingerprints` (cross-run tracking) + deterministic rule ordering.
 - **Scope** — smart-contract tools (Slither/Mythril) gated behind an opt-in `TRISHUL_PROFILE=web3`.
 - **Fixes** — BatchScan scan-type mismatch; CI aligned to Go 1.25 (was red); removed a committed 14 MB binary; corrected DAST/exploit-simulation overclaims in packaging and docs; `armur` → `trishul` rename across MCP tools, the Action, pre-commit hooks, and docs.
+- **Normalization** — one canonical severity mapper (no divergent copy); a **stable, line-insensitive finding fingerprint** with an aligned dedup key; SARIF now emits **all categories** (security, redacted secrets, SCA, IaC) with stable per-rule ids and `partialFingerprints`.
+- **Profiles** — `--profile security|quality|web3|all`; the default `security` profile omits code-quality tools and keeps smart-contract tools opt-in.
+- **Embedded engine (foundation)** — `engine.ScanLocal` runs a scan in-process (no server/Redis, read-only); the MCP server now uses it. (CLI `scan .` via a module-merge is a separate step.)
+- **Tests** — parse-level coverage for the six previously-untested adapters (gitleaks, govulncheck, grype, sbom, sca, terrascan).
 
 ### Phase 1: Foundation (Sprints 1-4)
 - Test suite, error propagation, input validation, structured logging, API authentication
