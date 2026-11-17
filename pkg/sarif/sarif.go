@@ -355,6 +355,69 @@ func FromScanResults(results map[string]interface{}, toolVersion string) *Log {
 		}
 	}
 
+	// Dependency / SCA findings — vulnerable third-party packages reported by
+	// osv-scanner, trivy, and friends. The reformatter groups these by manifest
+	// path; flattenIssues descends into those groups to the individual advisories.
+	for _, issue := range flattenIssues(results["sca"]) {
+		// Prefer the advisory/CVE id as the rule id so Code Scanning can dedupe
+		// and link out; otherwise fall back to a single stable DEPENDENCY rule.
+		adv := getString(issue, "check_id")
+		ruleID := adv
+		if ruleID == "" {
+			ruleID = "DEPENDENCY"
+		}
+		if _, seen := rulesSeen[ruleID]; !seen {
+			rule := Rule{
+				ID:               ruleID,
+				Name:             ruleID,
+				ShortDescription: &MultiformatMessageString{Text: fmt.Sprintf("Vulnerable dependency: %s", ruleID)},
+			}
+			if strings.HasPrefix(adv, "CVE-") {
+				rule.HelpURI = "https://nvd.nist.gov/vuln/detail/" + adv
+			} else if strings.HasPrefix(adv, "GHSA-") {
+				rule.HelpURI = "https://github.com/advisories/" + adv
+			}
+			rulesSeen[ruleID] = rule
+		}
+
+		filePath := getString(issue, "path")
+		pkg := getString(issue, "package")
+		version := firstString(issue, "version", "installed_version")
+
+		// Build a human-readable message from whatever fields are present.
+		msg := getString(issue, "message")
+		pkgRef := pkg
+		if pkg != "" && version != "" {
+			pkgRef = pkg + "@" + version
+		}
+		switch {
+		case msg != "" && pkgRef != "":
+			msg = msg + " (" + pkgRef + ")"
+		case msg == "" && pkgRef != "":
+			msg = "Vulnerable dependency " + pkgRef
+		case msg == "":
+			msg = "Vulnerable dependency"
+		}
+		if adv != "" {
+			msg = adv + ": " + msg
+		}
+
+		res := Result{
+			RuleID:              ruleID,
+			Level:               severityToLevel(getSeverity(issue, "severity")),
+			Message:             Message{Text: msg},
+			PartialFingerprints: map[string]string{"trishul/v1": fingerprint(ruleID, filePath, msg)},
+		}
+		if filePath != "" {
+			loc := Location{PhysicalLocation: PhysicalLocation{ArtifactLocation: ArtifactLocation{URI: filePath}}}
+			if line := getInt(issue, "line"); line > 0 {
+				loc.PhysicalLocation.Region = &Region{StartLine: line}
+			}
+			res.Locations = []Location{loc}
+		}
+		sarifResults = append(sarifResults, res)
+	}
+
 	// Build the rules list in a deterministic order (map iteration is random,
 	// which otherwise churns the SARIF output and its diffs run to run).
 	var rules []Rule
