@@ -247,47 +247,47 @@
 - [ ] For each workflow, enumerate the **trust boundary** (untrusted repo content → agent action) the analysis reasons about.
 
 ### Component 1 — Agent instruction analysis
-- [ ] Structural parse of `CLAUDE.md`, `AGENTS.md`, `.cursorrules`, `.cursor/rules/*`, `.github/copilot-instructions.md`, Claude/Cursor skills, hooks config.
-- [ ] Detect instruction-override / system-or-developer-message impersonation / authority-escalation language (e.g. "ignore previous", "you are now", fake "SYSTEM:"/"DEVELOPER:" framing) — reported as *suspicious instruction*, never "agent compromised".
+- [x] Structural parse of `CLAUDE.md`, `AGENTS.md`, `.cursorrules`, `.cursor/rules/*`, `.github/copilot-instructions.md`, Claude/Cursor skills, hooks config.
+- [x] Detect instruction-override / system-or-developer-message impersonation / authority-escalation language (e.g. "ignore previous", "you are now", fake "SYSTEM:"/"DEVELOPER:" framing) — reported as *suspicious instruction*, never "agent compromised".
 - **Acceptance:** malicious instruction-file fixtures flagged with file/line + trust-boundary; benign instruction files clean.
 
 ### Component 2 — Prompt-injection detection (semantic layer)
-- [ ] Heuristic + optional-LLM detection of injection in comments, README/Markdown, test fixtures, tool-output-laundered text. The semantic layer is **never the sole basis for a high-confidence claim** (must be corroborated by a deterministic/correlation signal).
-- [ ] Treat all scanned text as data; Trishul's own analysis must not follow it.
+- [x] Heuristic + optional-LLM detection of injection in comments, README/Markdown, test fixtures, tool-output-laundered text. The semantic layer is **never the sole basis for a high-confidence claim** (must be corroborated by a deterministic/correlation signal).
+- [x] Treat all scanned text as data; Trishul's own analysis must not follow it.
 - **Acceptance:** source-comment and doc injection fixtures flagged; a security-research doc *describing* injection is not a false positive.
 
 ### Component 3 — Command & execution-path analysis
-- [ ] Parse `package.json` scripts (pre/post-install), `Makefile`, shell scripts, build files, and `.github/workflows/*` for install-/build-time code execution, suspicious `curl|sh`, new network destinations, credential access.
+- [x] Parse `package.json` scripts (pre/post-install), `Makefile`, shell scripts, build files, and `.github/workflows/*` for install-/build-time code execution, suspicious `curl|sh`, new network destinations, credential access.
 - **Acceptance:** unsafe install/build hook + suspicious CI fixtures flagged with the executable path and the destination.
 
 ### Component 4 — MCP server & tool trust analysis
-- [ ] Parse MCP config (`.mcp.json`, `.cursor/mcp.json`, `mcp.json`, client configs): flag newly-registered/untrusted MCP servers, unpinned `npx -y`/`uvx` launchers, servers fetching remote code, and secrets embedded in MCP config.
+- [x] Parse MCP config (`.mcp.json`, `.cursor/mcp.json`, `mcp.json`, client configs): flag newly-registered/untrusted MCP servers, unpinned `npx -y`/`uvx` launchers, servers fetching remote code, and secrets embedded in MCP config.
 - **Acceptance:** malicious MCP-config-change fixtures flagged; a pinned, known server is clean.
 
 ### Component 5 — Permission & sandbox configuration analysis
-- [ ] Detect permission-policy widening / sandbox weakening in agent configs (blanket allow-lists, disabled approvals, `--dangerously-*` flags, expanded tool scopes, disabled security checks).
+- [x] Detect permission-policy widening / sandbox weakening in agent configs (blanket allow-lists, disabled approvals, `--dangerously-*` flags, expanded tool scopes, disabled security checks).
 - **Acceptance:** permission-escalation fixtures flagged with the before→after delta.
 
 ### Component 6 — Encoded-content & obfuscation analysis
-- [ ] Detect concealed instructions: hidden/bidirectional Unicode, zero-width chars, base64/hex/rot blobs that decode to instruction-like text, HTML/Markdown comment hiding, homoglyphs.
+- [x] Detect concealed instructions: hidden/bidirectional Unicode, zero-width chars, base64/hex/rot blobs that decode to instruction-like text, HTML/Markdown comment hiding, homoglyphs.
 - **Acceptance:** encoded-instruction fixtures flagged (decoded conceptually, not executed); ordinary base64 assets not over-flagged.
 
 ### Component 7 — Cross-file PR attack-chain correlation
-- [ ] Build a graph linking: untrusted content → agent-consumption entry point → requested action → executable script → tool permission → sensitive resource → network destination → security control.
-- [ ] Emit **attack-chain findings** combining individually-low-risk changes; each finding states entry point, suspicious change, affected workflow, trust boundary, enabled action, file/line refs, confidence + **limitations**, remediation.
+- [x] Build a graph linking: untrusted content → agent-consumption entry point → requested action → executable script → tool permission → sensitive resource → network destination → security control.
+- [x] Emit **attack-chain findings** combining individually-low-risk changes; each finding states entry point, suspicious change, affected workflow, trust boundary, enabled action, file/line refs, confidence + **limitations**, remediation.
 - **Acceptance:** a multi-file chain fixture (e.g. README injection → new npm postinstall → exfil URL) produces one correlated finding with the full path; unrelated benign changes do not chain.
 
 ### Safe analysis invariants (§D)
-- [ ] Passive by default: never execute untrusted instructions/hooks/install scripts/MCP servers. Any dynamic validation is opt-in, in a disposable sandbox with no prod creds, restricted FS/network, explicit authorization.
-- [ ] Secret canaries never appear in reports or external-model requests (reuse `internal/redact` + the canary test).
+- [x] Passive by default: never execute untrusted instructions/hooks/install scripts/MCP servers. Any dynamic validation is opt-in, in a disposable sandbox with no prod creds, restricted FS/network, explicit authorization.
+- [x] Secret canaries never appear in reports or external-model requests (reuse `internal/redact` + the canary test).
 
 ### CLI, reporting & integration (§G)
-- [ ] `trishul agent-security scan .` and `trishul agent-security pr --base main`.
-- [ ] Findings via CLI / JSON / SARIF / GitHub PR annotations / MCP tools; mapped to the shared schema + CWE (CWE-77/CWE-94/CWE-829/CWE-506).
-- [ ] Folded into the normal scan pipeline as a built-in, dependency-free analyzer set (runs read-only, no external LLM required).
+- [ ] Dedicated `trishul agent-security scan .` / `pr --base main` commands. _(Deferred: the CLI is a separate Go module that can't import `internal/agentsec`; lands with the CLI↔engine module-merge. Agent-security already runs inside every `trishul scan`.)_
+- [x] Findings via CLI (rendered) + JSON + **SARIF** (check_id rule + trust-boundary + partialFingerprint); mapped to CWE-77/94/829/506/798. _(GitHub PR annotations + MCP tools: with PR mode / the module-merge.)_
+- [x] Folded into the normal scan pipeline as a built-in, dependency-free analyzer set (runs read-only, no external LLM required).
 
 ### Benchmark (§F)
-- [ ] `testdata/agentsec/` with paired benign + malicious PR fixtures for each component above, plus benign security-doc/research examples (the hard false-positive cases). Measure precision/recall/FP/latency/evidence-quality. **No invented results.**
+- [~] `testdata/agentsec/` paired benign + malicious PR fixtures (incl. the hard security-doc false-positive cases) + a precision/recall/FP benchmark test. _(In progress; measured, not invented.)_
 
 ### Definition of done (§H)
-- [ ] Malicious vs benign fixtures distinguished at a *measured* accuracy; configs parsed structurally; attack chains carry verifiable evidence; no untrusted code executed; secret canaries never leak; PR annotations name actionable risks; docs state detection limitations honestly.
+- [~] Components parse configs structurally; attack chains carry verifiable evidence (AGENT-CHAIN-001 e2e-tested); no untrusted code executed (passive); secret canaries never leak (redaction + tests); docs state limitations. _Measured accuracy via the benchmark + PR annotations remain._
