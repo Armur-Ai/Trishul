@@ -65,6 +65,11 @@ brews:
   - name: trishul
     ids:
       - cli-archive
+    # Generate the formula, but only push it to the tap when a token is
+    # present. Until Armur-Ai/homebrew-tap + HOMEBREW_TAP_GITHUB_TOKEN exist,
+    # this keeps the release green (binaries still publish) instead of failing
+    # goreleaser on a 401.
+    skip_upload: '{{ eq .Env.HOMEBREW_TAP_GITHUB_TOKEN "" }}'
     repository:
       owner: Armur-Ai
       name: homebrew-tap
