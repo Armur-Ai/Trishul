@@ -52,6 +52,13 @@ func toolTimeout() time.Duration {
 // per-tool timeout. If the context expires the runner returns a ScanError.
 func withTimeout(name string, run func() toolResult) func() toolResult {
 	return func() toolResult {
+		// Honest status: if a tool's required binary is known-missing, record it
+		// as skipped rather than running it to an empty (false "clean") result.
+		if tools.IsToolSkippable(name) {
+			bin, _ := tools.RequiredBinary(name)
+			logger.Info().Str("tool", name).Str("binary", bin).Msg("skipped: required tool not installed")
+			return toolResult{name: name, err: fmt.Errorf("%s: %w (binary %q not found on PATH)", name, tools.ErrToolUnavailable, bin)}
+		}
 		ctx, cancel := context.WithTimeout(context.Background(), toolTimeout())
 		defer cancel()
 
