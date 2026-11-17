@@ -16,11 +16,11 @@
 
 name: Trishul Security Scan
 
+# NOTE: this reusable scanner workflow depends on a published Trishul image
+# (armurscanner/armur) that does not exist yet, so it is intentionally
+# manual-only (workflow_dispatch) until Trishul is published — it must not run
+# on every push and fail. See the Project status table in the README.
 on:
-  push:
-    branches: ["main", "master"]
-  pull_request:
-    branches: ["main", "master"]
   workflow_dispatch:
     inputs:
       language:
