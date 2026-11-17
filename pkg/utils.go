@@ -200,6 +200,14 @@ func DetectFileLanguage(file string) string {
 }
 
 func RemoveNonRelevantFiles(dirPath string, language string) error {
+	// Read-only safety: only ever prune files inside one of Trishul's managed
+	// working copies. If this is ever called on a real target path (e.g. a
+	// local-directory scan), do nothing rather than delete the user's files.
+	if !IsManagedPath(dirPath) {
+		fmt.Fprintf(os.Stderr, "trishul: skipping file pruning in %q (not a managed working copy; scan target is read-only)\n", dirPath)
+		return nil
+	}
+
 	// Get extensions for the specified language
 	extensions, ok := pkg.LanguageFileExtensions[strings.ToLower(language)]
 	if !ok {
