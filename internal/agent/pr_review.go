@@ -363,7 +363,7 @@ func determineVerdict(review *PRReview, failOnSeverity string) string {
 func generateSummary(review *PRReview) string {
 	var b strings.Builder
 
-	b.WriteString("## Armur Security Review\n\n")
+	b.WriteString("## Trishul Security Review\n\n")
 
 	switch review.Verdict {
 	case "approve":
@@ -384,7 +384,7 @@ func generateSummary(review *PRReview) string {
 	b.WriteString(fmt.Sprintf("| Review Time | %s |\n", review.Duration.Truncate(time.Second)))
 
 	b.WriteString("\n---\n")
-	b.WriteString("Reviewed by [Armur Security Agent](https://armur.ai)\n")
+	b.WriteString("Reviewed by [Trishul](https://github.com/Armur-Ai/Trishul)\n")
 
 	return b.String()
 }

@@ -31,7 +31,7 @@ Here is the finding:
 	return provider.Complete(ctx, prompt, CompletionOpts{
 		MaxTokens:   1024,
 		Temperature: 0.3,
-		SystemPrompt: "You are Armur, a personal security agent. Explain vulnerabilities clearly and concisely for developers.",
+		SystemPrompt: "You are Trishul, a security scanner for AI-generated code. Explain vulnerabilities clearly and concisely for developers.",
 	})
 }
 
@@ -59,6 +59,6 @@ Generate ONLY the diff patch, nothing else.`,
 	return provider.Complete(ctx, prompt, CompletionOpts{
 		MaxTokens:   2048,
 		Temperature: 0.2,
-		SystemPrompt: "You are Armur, a personal security agent. Generate minimal, safe code patches.",
+		SystemPrompt: "You are Trishul, a security scanner for AI-generated code. Generate minimal, safe code patches.",
 	})
 }

@@ -153,7 +153,7 @@ var scanCmd = &cobra.Command{
 	Use:   "scan [target]",
 	Short: "Scan a repository or file",
 	Long: `Scan a Git repository (by providing the URL) or a local file/directory (by providing the path)
-for security vulnerabilities using the Armur Code Scanner service.`,
+for security vulnerabilities using Trishul.`,
 	Args: cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		interactive, _ := cmd.Flags().GetBool("interactive")
