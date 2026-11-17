@@ -115,8 +115,8 @@
 - **Acceptance:** a cross-file SQLi fixture yields a finding whose evidence shows the real source→sink path.
 
 ### 1.4 Vibe-native analyzers (build-ourselves moat — maps to Vibe Top 10)
-- [ ] **V01 client-secret exposure:** secret-shaped values behind `NEXT_PUBLIC_`/`VITE_`/`EXPO_PUBLIC_`; Supabase service-role JWT reachable from `"use client"`/browser bundles; committed `.env` / `.env` not gitignored.
-- [ ] **V03 open data layer:** Supabase migration analyzer (RLS off, `using (true)`, `anon` grants, `security definer` w/o `search_path`, public buckets); Firebase rules analyzer (`if true`, missing `request.auth`).
+- [x] **V01 client-secret exposure** (`internal/tools/clientsecrets.go`): secret-shaped values behind `NEXT_PUBLIC_`/`VITE_`/`EXPO_PUBLIC_`/`REACT_APP_`; service-role JWT / private key in client-side files; committed `.env` secrets. Emits only redacted previews (no-leak test). Wired on every scan; e2e-tested through the engine. _(Early in Phase 0 as a built-in, dependency-free analyzer.)_
+- [x] **V03 open data layer — Supabase** (`internal/tools/supabase.go`): RLS off, `using (true)`, `anon` grants, `security definer` w/o `search_path`, public buckets (SUPABASE-RLS-001..005). Wired + e2e-tested. _(Firebase rules analyzer still to do.)_
 - [ ] **V02 missing authorization:** route inventory for Next.js (`app/**/route.ts`, `pages/api/**`, server actions), Express, FastAPI, Flask, Hono, Supabase Edge Functions; flag data handlers with no session/token check; IDOR heuristic.
 - [ ] **V04 dependency intelligence:** ✨ hallucinated/typosquat/dependency-confusion scoring (registry existence, age <30 days, download volume, edit-distance to popular names); OSV `MAL-` + GuardDog heuristics; offline snapshot of popular names.
 - [ ] **V06/V07/V08 placeholder & abuse:** hardcoded JWT/session secrets, default creds, `verify=False`, `cors({origin:"*"})` with credentials, debug flags, security `TODO`s; unverified Stripe/Clerk/Svix webhooks; prices/roles trusted from request body; missing rate-limit on auth/LLM routes.
