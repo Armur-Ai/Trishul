@@ -143,10 +143,10 @@ We organize findings around the **Vibe Top 10**, the failure modes that show up 
 | **V03** | Open data layer | Supabase tables without RLS; Firebase rules of `if true` | **Yes** (Supabase): built-in RLS analyzer — missing RLS, `using (true)`, public buckets. Firebase planned. |
 | **V04** | Hallucinated and risky dependencies | Packages that do not exist, are brand new, or are malicious | Partial: known CVEs, in the deep pass |
 | **V05** | String-built injection | SQL, shell, SSRF and XSS built by concatenating user input | **Yes**: command injection, XSS, `eval`; SQL injection in Python |
-| **V06** | Placeholder security | `JWT_SECRET = "secret"`, `admin`/`admin`, wildcard CORS | Partial: hardcoded credentials |
-| **V07** | Unverified webhooks and payments | Stripe webhook without signature check | Planned |
-| **V08** | Missing abuse controls | No rate limiting on login or LLM endpoints | Planned |
-| **V09** | Unsafe LLM integration | User input in system prompts; model output passed to `eval` | Partial: `eval` of request-derived data |
+| **V06** | Placeholder security | `JWT_SECRET = "secret"`, `admin`/`admin`, wildcard CORS | **Yes**: built-in placeholder-security analyzer — placeholder secrets (redacted), default creds, disabled TLS verification, wildcard CORS + credentials, debug-on, security TODOs |
+| **V07** | Unverified webhooks and payments | Stripe webhook without signature check | **Yes**: built-in webhook analyzer — provider webhooks (Stripe/Svix/Clerk/GitHub/Shopify/PayPal) without signature verification, and amount/price/plan/role trusted from the request body |
+| **V08** | Missing abuse controls | No rate limiting on login or LLM endpoints | **Yes**: built-in abuse-controls analyzer — auth/LLM routes with no rate limiting, unbounded uploads, unvalidated mutating routes |
+| **V09** | Unsafe LLM integration | User input in system prompts; model output passed to `eval` | **Yes**: built-in unsafe-LLM analyzer — untrusted input concatenated into prompts, model output into `eval`/exec/SQL/`innerHTML`, provider keys in client code |
 | **V10** | Poisoned agent context | Hidden instructions in `.cursorrules` or `CLAUDE.md`; unpinned MCP servers | **Yes**: the AI Agent Supply-Chain Security capability — instruction poisoning, prompt injection, unsafe install/CI hooks, MCP/permission changes, encoded instructions, and cross-file attack chains |
 
 Against our own reference target, [`examples/vibe-coded-app`](examples/vibe-coded-app), today's scan reports the command injection, the XSS, the `eval`, and the hardcoded credentials. It does not yet report the SQL injection in the JavaScript, the SSRF, the missing authorization, the exposed Supabase key, or the table without row-level security. Closing that gap is what the [roadmap](ROADMAP.md) is about.
