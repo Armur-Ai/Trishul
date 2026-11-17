@@ -484,6 +484,45 @@ func FromScanResults(results map[string]interface{}, toolVersion string) *Log {
 		sarifResults = append(sarifResults, res)
 	}
 
+	// Agent supply-chain security findings — suspicious agent instructions,
+	// MCP/permission changes, install hooks, encoded instructions, and cross-file
+	// attack chains. The check_id is the rule.
+	for _, issue := range flattenIssues(results["agent_security"]) {
+		ruleID := getString(issue, "check_id")
+		if ruleID == "" {
+			ruleID = "AGENT-SECURITY"
+		}
+		if _, seen := rulesSeen[ruleID]; !seen {
+			rulesSeen[ruleID] = Rule{
+				ID:               ruleID,
+				Name:             ruleID,
+				ShortDescription: &MultiformatMessageString{Text: "AI agent supply-chain risk: " + ruleID},
+			}
+		}
+		filePath := getString(issue, "path")
+		msg := getString(issue, "message")
+		if tb := getString(issue, "trust_boundary"); tb != "" {
+			msg = msg + " [trust boundary: " + tb + "]"
+		}
+		if conf := getString(issue, "confidence"); conf != "" {
+			msg = msg + " (confidence: " + conf + ")"
+		}
+		res := Result{
+			RuleID:              ruleID,
+			Level:               severityToLevel(getSeverity(issue, "severity")),
+			Message:             Message{Text: msg},
+			PartialFingerprints: map[string]string{"trishul/v1": fingerprint(ruleID, filePath, msg)},
+		}
+		if filePath != "" {
+			loc := Location{PhysicalLocation: PhysicalLocation{ArtifactLocation: ArtifactLocation{URI: filePath}}}
+			if line := getInt(issue, "line"); line > 0 {
+				loc.PhysicalLocation.Region = &Region{StartLine: line}
+			}
+			res.Locations = []Location{loc}
+		}
+		sarifResults = append(sarifResults, res)
+	}
+
 	// Build the rules list in a deterministic order (map iteration is random,
 	// which otherwise churns the SARIF output and its diffs run to run).
 	var rules []Rule
