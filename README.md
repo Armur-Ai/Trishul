@@ -139,7 +139,7 @@ We organize findings around the **Vibe Top 10**, the failure modes that show up 
 | | Failure mode | Typical AI-generated form | Today |
 |---|---|---|---|
 | **V01** | Secrets shipped to the client | Service-role key behind `NEXT_PUBLIC_`; API keys in the bundle | **Yes**: built-in client-secret analyzer (redacted), plus hardcoded credentials in source |
-| **V02** | Missing or client-only authorization | API routes and server actions with no session check; IDOR | Planned |
+| **V02** | Missing or client-only authorization | API routes and server actions with no session check; IDOR | **Yes**: built-in route-authorization analyzer — data routes with no auth guard (Next.js/Express/FastAPI/Flask) and an authenticated-IDOR heuristic |
 | **V03** | Open data layer | Supabase tables without RLS; Firebase rules of `if true` | **Yes** (Supabase): built-in RLS analyzer — missing RLS, `using (true)`, public buckets. Firebase planned. |
 | **V04** | Hallucinated and risky dependencies | Packages that do not exist, are brand new, or are malicious | Partial: known CVEs, in the deep pass |
 | **V05** | String-built injection | SQL, shell, SSRF and XSS built by concatenating user input | **Yes**: command injection, XSS, `eval`; SQL injection in Python |

@@ -25,7 +25,7 @@ func vibeFindings(t *testing.T, res map[string]interface{}) []map[string]interfa
 	t.Helper()
 	raw, ok := res[utils.VIBE_SECURITY]
 	if !ok {
-		t.Fatalf("result missing %q key; got keys %v", utils.VIBE_SECURITY, keysOf(res))
+		t.Fatalf("result missing %q key; got keys %v", utils.VIBE_SECURITY, webhookKeysOf(res))
 	}
 	list, ok := raw.([]interface{})
 	if !ok {
@@ -42,7 +42,7 @@ func vibeFindings(t *testing.T, res map[string]interface{}) []map[string]interfa
 	return out
 }
 
-func keysOf(m map[string]interface{}) []string {
+func webhookKeysOf(m map[string]interface{}) []string {
 	var ks []string
 	for k := range m {
 		ks = append(ks, k)

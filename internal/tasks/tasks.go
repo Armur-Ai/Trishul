@@ -455,8 +455,12 @@ func buildSimpleScanRunnersNamed(dirPath, language string) ([]func() toolResult,
 			r, err := tools.RunUnsafeLLMIntegration(dirPath)
 			return toolResult{"llm-integration", r, err}
 		}),
+		withTimeout("route-authorization", func() toolResult {
+			r, err := tools.RunRouteAuth(dirPath)
+			return toolResult{"route-authorization", r, err}
+		}),
 	}
-	names := []string{"semgrep", "supabase-rls", "client-secrets", "agent-security", "placeholder-security", "abuse-controls", "webhook-verification", "llm-integration"}
+	names := []string{"semgrep", "supabase-rls", "client-secrets", "agent-security", "placeholder-security", "abuse-controls", "webhook-verification", "llm-integration", "route-authorization"}
 
 	switch language {
 	case "go":

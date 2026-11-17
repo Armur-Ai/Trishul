@@ -646,7 +646,7 @@ func raDedup(findings []map[string]interface{}) []map[string]interface{} {
 		path, _ := f["path"].(string)
 		line, _ := f["line"].(int)
 		id, _ := f["check_id"].(string)
-		key := path + "\x00" + id + "\x00" + itoa(line)
+		key := path + "\x00" + id + "\x00" + routeItoa(line)
 		if seen[key] {
 			continue
 		}
@@ -656,7 +656,7 @@ func raDedup(findings []map[string]interface{}) []map[string]interface{} {
 	return out
 }
 
-func itoa(n int) string {
+func routeItoa(n int) string {
 	if n == 0 {
 		return "0"
 	}
