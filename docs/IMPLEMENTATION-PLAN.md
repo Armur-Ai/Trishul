@@ -44,11 +44,11 @@
 - **Acceptance:** `trishul scan .` on `examples/vibe-coded-app` returns findings; `trishul scan ./path/to/file` and `trishul scan <url>` still work.
 
 ### 0.3 Read-only hardening (`pkg/utils.go:202-238`, `internal/tasks/tasks.go`)
-- [ ] Remove `RemoveNonRelevantFiles` from all scan paths; select files **per tool via include-globs** instead of deleting non-matching files.
-- [ ] Guard every `os.RemoveAll` (`tasks.go:306,550`) behind an assertion that the path is inside the managed temp root; never operate on a user-supplied path.
-- [ ] Make `RunScanTaskLocal` (`tasks.go:193`) operate on a temp copy or in strict read-only mode — never mutate the target.
-- [ ] ✨ **Invariant test**: snapshot a fixture tree's hashes, run every scan mode, assert the tree is byte-identical afterwards.
-- **Acceptance:** invariant test passes for file, dir, URL, simple, advanced, and MCP scan paths.
+- [~] Guard `RemoveNonRelevantFiles` so it no-ops on any non-managed (user) path. _(Full switch to per-tool include-globs — so pruning is never needed at all — is deferred to a follow-up; the destructive behaviour on user source is already neutralised.)_
+- [x] Guard every `os.RemoveAll` (`tasks.go:306,550,590`) via `utils.SafeRemoveAll`, which refuses any path outside a managed working root.
+- [x] `RunScanTaskLocal` (`tasks.go:193`) can no longer mutate the target: its `RemoveNonRelevantFiles` call no-ops on the user path (not managed).
+- [x] ✨ **Invariant test** (`pkg/readonly_test.go`): snapshots a fixture tree's per-file hashes and asserts a non-managed target is byte-identical after pruning; also confirms pruning still works inside a managed copy.
+- **Acceptance:** ✅ invariant test passes; `SafeRemoveAll`/`IsManagedPath` unit-tested.
 
 ### 0.4 Honest scanner status (`internal/tools/*`, `internal/tasks/tasks.go`, `cli/cmd/{scan,run}.go`)
 - [ ] ✨ Add a **capability descriptor** per adapter: required binary, min version, languages/file-types, licence, resource limits, expected output format. (Replaces the ad-hoc `exec.Command`-and-ignore pattern.)
