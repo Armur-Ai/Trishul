@@ -393,7 +393,40 @@ func printFormattedResults(results map[string]interface{}) {
 			printCategoryData(category, categoryData)
 		}
 	}
+	printScanErrors(results)
 	fmt.Println(color.GreenString("\nScan completed. Results displayed."))
+}
+
+// printScanErrors makes skipped/failed tools visible. A tool that was not
+// installed or that crashed did NOT run, so its findings are absent — that is
+// not the same as a clean result, and hiding it (as the CLI previously did)
+// turns a partial scan into a false "all clear".
+func printScanErrors(results map[string]interface{}) {
+	raw, ok := results["scan_errors"]
+	if !ok {
+		return
+	}
+	var errs []map[string]interface{}
+	switch v := raw.(type) {
+	case []interface{}:
+		for _, e := range v {
+			if m, ok := e.(map[string]interface{}); ok {
+				errs = append(errs, m)
+			}
+		}
+	case []map[string]interface{}:
+		errs = v
+	}
+	if len(errs) == 0 {
+		return
+	}
+	fmt.Printf("\n%s\n", color.YellowString("Tools skipped or failed (%d) — they did not run, so their findings are absent:", len(errs)))
+	for _, e := range errs {
+		tool := getStringValue(e, "tool", "unknown")
+		msg := getStringValue(e, "message", "")
+		fmt.Printf("  %s %s — %s\n", color.YellowString("•"), tool, msg)
+	}
+	fmt.Println(color.YellowString("A skipped tool is not a clean result. Run 'trishul doctor' to check tool availability."))
 }
 
 func printCategoryData(category string, data interface{}) {
