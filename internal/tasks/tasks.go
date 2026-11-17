@@ -92,10 +92,12 @@ func withTimeout(name string, run func() toolResult) func() toolResult {
 }
 
 // countFindings totals the findings across every category of a tool result.
-func countFindings(result map[string][]interface{}) int {
+func countFindings(result map[string]interface{}) int {
 	n := 0
 	for _, v := range result {
-		n += len(v)
+		if list, ok := v.([]interface{}); ok {
+			n += len(list)
+		}
 	}
 	return n
 }
