@@ -267,6 +267,8 @@ Trishul is honest about what works. If something here does not work as written, 
 | Continuous integration (build, test, lint) on `main` | **Working** |
 | Built-in client-secret exposure analyzer (no external tool) | **Working** — flags service-role keys and secrets reachable from the client |
 | Built-in Supabase RLS misconfiguration analyzer (no external tool) | **Working** — missing RLS, `using (true)`, public buckets, unsafe `security definer` |
+| Built-in Vibe Top 10 analyzers (missing authz + IDOR, placeholder/insecure defaults, unverified webhooks, missing abuse controls, unsafe LLM integration, dependency provenance, Firebase/Firestore/Storage rules) | **Working** — run on every scan, no external tool, emit to SARIF/CLI; deterministic output (see [docs/vibe-top-10.md](docs/vibe-top-10.md)) |
+| Deterministic scan output (stable SARIF/CLI diffs across runs) | **Working** — enforced by a determinism test over the reference app |
 | **AI Agent Supply-Chain Security** — 6 component analyzers + cross-file correlation | **Working as built-in analyzers** in the engine; run on repository scans and the in-process engine (MCP). Covered by component and end-to-end tests. |
 | In-process scan engine (`engine.ScanLocal`, no server/Redis) | **Working** — used by the MCP tool; CLI `scan .` wiring is a follow-up |
 | Scanning a local directory from the CLI | **Not yet.** Scan a repository URL or a file. |
