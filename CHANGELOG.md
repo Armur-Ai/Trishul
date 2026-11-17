@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Pull-request review & pipeline
+- **PR reviews surface the agent-supply-chain findings prominently** — the review comment now counts `agent_security`/`vibe_security` findings and renders a dedicated "🔱 AI Agent Supply-Chain Security" section (attack chains first), with the passive-analysis assurance.
+- **Deterministic output** — the built-in analyzer categories (`vibe_security` aggregated from concurrent analyzers, and the map-grouped `infra_security`/`secret_detection`) are now sorted by `(path, line, check_id)`, so SARIF/CLI diffs are stable run to run. Pinned by a determinism test.
+- **Reference app** — `examples/vibe-coded-app` now reports missing authorization, the exposed Supabase service-role key (masked), the table without RLS, placeholder CORS, missing rate limiting, and the unsafe LLM prompt; pinned by an integration test.
+- Added the **route-authorization (V02)** analyzer (unauthenticated data routes + an authenticated-IDOR heuristic across Next.js/Express/FastAPI/Flask) and the **dependency-provenance (V04)** analyzer.
+- New guides: [docs/vibe-top-10.md](docs/vibe-top-10.md), [docs/authoring-an-analyzer.md](docs/authoring-an-analyzer.md).
+
 ### Vibe Top 10 — built-in analyzers (new)
 - New `vibe_security` finding category and five built-in, dependency-free, read-only analyzers that run on every scan and emit to SARIF/CLI:
   - **placeholder-security** (V06) — hardcoded placeholder secrets (redacted), default credentials, disabled TLS verification, wildcard CORS + credentials, debug-on, security TODOs (`VIBE-PLACEHOLDER-001..006`).
