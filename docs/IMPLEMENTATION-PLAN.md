@@ -88,6 +88,8 @@
 
 **Phase 0 exit test:** on clean macOS and Ubuntu, `trishul scan .` against `examples/vibe-coded-app` finishes <60 s, reports the planted findings, leaves the directory byte-identical, surfaces any skipped tools, leaks no plaintext secret, and makes no network calls beyond opt-in tool/DB updates.
 
+> **Exit-test status (this run):** leaves the directory **byte-identical** ✅ (invariant test), **leaks no plaintext secret** ✅ (canary test), **surfaces skipped tools** ✅, **green build/test/CI** ✅. **Still required:** `trishul scan .` must actually run (needs the embedded engine, 0.2/0.5) — the one remaining blocker before the full exit test can pass end-to-end.
+
 ---
 
 ## Phase 1 — Reliable core + vibe-native detection (v0.2–v0.3)
