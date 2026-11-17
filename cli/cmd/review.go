@@ -8,8 +8,11 @@ import (
 )
 
 var reviewCmd = &cobra.Command{
-	Use:   "review <pr-url>",
-	Short: "Review a pull request for security issues",
+	Use: "review <pr-url>",
+	// Hidden until the PR-review backend is wired (currently a stub). Keeping it
+	// out of help avoids advertising a command that does not yet work.
+	Hidden: true,
+	Short:  "Review a pull request for security issues",
 	Long: `Run a full security review on a GitHub or GitLab pull/merge request.
 Analyzes changed files with SAST, checks for new vulnerable dependencies,
 scans for leaked secrets, and optionally runs DAST in a sandbox.
