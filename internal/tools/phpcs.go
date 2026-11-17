@@ -3,9 +3,7 @@ package internal
 import (
 	"github.com/Armur-Ai/Trishul/internal/logger"
 	utils "github.com/Armur-Ai/Trishul/pkg"
-	"bytes"
 	"encoding/json"
-	"os/exec"
 	"strings"
 )
 
@@ -13,18 +11,14 @@ import (
 func RunPHPCS(directory string) (map[string]interface{}, error) {
 	logger.Info().Str("tool", "phpcs").Str("dir", directory).Msg("running")
 
-	cmd := exec.Command("phpcs",
+	stdout, _ := RunToolCommandStdout("phpcs",
 		"--standard=Generic,Security",
 		"--report=json",
 		"--extensions=php",
 		directory,
 	)
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	cmd.Run()
 
-	output := stdout.String()
+	output := string(stdout)
 	if strings.TrimSpace(output) == "" {
 		logger.Debug().Str("tool", "phpcs").Msg("no output")
 		return utils.ConvertCategorizedResults(utils.InitCategorizedResults()), nil

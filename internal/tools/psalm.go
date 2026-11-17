@@ -3,9 +3,7 @@ package internal
 import (
 	"github.com/Armur-Ai/Trishul/internal/logger"
 	utils "github.com/Armur-Ai/Trishul/pkg"
-	"bytes"
 	"encoding/json"
-	"os/exec"
 	"strings"
 )
 
@@ -13,18 +11,13 @@ import (
 func RunPsalm(directory string) (map[string]interface{}, error) {
 	logger.Info().Str("tool", "psalm").Str("dir", directory).Msg("running")
 
-	cmd := exec.Command("psalm",
+	stdout, _ := RunToolCommandStdoutInDir(directory, "psalm",
 		"--output-format=json",
 		"--no-progress",
 		directory,
 	)
-	cmd.Dir = directory
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	cmd.Run()
 
-	output := stdout.String()
+	output := string(stdout)
 	if strings.TrimSpace(output) == "" {
 		logger.Debug().Str("tool", "psalm").Msg("no output")
 		return utils.ConvertCategorizedResults(utils.InitCategorizedResults()), nil

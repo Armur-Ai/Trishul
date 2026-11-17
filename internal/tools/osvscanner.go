@@ -4,7 +4,6 @@ import (
 	"github.com/Armur-Ai/Trishul/internal/logger"
 	utils "github.com/Armur-Ai/Trishul/pkg"
 	"encoding/json"
-	"os/exec"
 	"strings"
 )
 
@@ -20,8 +19,7 @@ func RunOSVScanner(directory string) (map[string]interface{}, error) {
 }
 
 func runOSVScannerOnRepo(directory string) (string, error) {
-	cmd := exec.Command("osv-scanner", "--format", "json", directory)
-	output, err := cmd.Output()
+	output, err := RunToolCommandStdout("osv-scanner", "--format", "json", directory)
 	if err != nil {
 		// osv-scanner exits non-zero when vulnerabilities are found
 		logger.Debug().Str("tool", "osv-scanner").Err(err).Msg("non-zero exit (may still have results)")

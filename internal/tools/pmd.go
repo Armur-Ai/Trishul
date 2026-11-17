@@ -3,9 +3,7 @@ package internal
 import (
 	"github.com/Armur-Ai/Trishul/internal/logger"
 	utils "github.com/Armur-Ai/Trishul/pkg"
-	"bytes"
 	"encoding/json"
-	"os/exec"
 	"strings"
 )
 
@@ -13,20 +11,14 @@ import (
 func RunPMD(directory string) (map[string]interface{}, error) {
 	logger.Info().Str("tool", "pmd").Str("dir", directory).Msg("running")
 
-	cmd := exec.Command("pmd", "check",
+	stdout, _ := RunToolCommandStdoutInDir(directory, "pmd", "check",
 		"-d", directory,
 		"-R", "rulesets/java/quickstart.xml",
 		"-f", "json",
 		"--no-cache",
 	)
-	cmd.Dir = directory
 
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	cmd.Run()
-
-	output := stdout.String()
+	output := string(stdout)
 	if strings.TrimSpace(output) == "" {
 		logger.Debug().Str("tool", "pmd").Msg("no output")
 		return utils.ConvertCategorizedResults(utils.InitCategorizedResults()), nil
