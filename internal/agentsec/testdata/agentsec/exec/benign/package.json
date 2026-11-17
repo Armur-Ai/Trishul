@@ -1,0 +1,9 @@
+{
+  "name": "good-pkg",
+  "version": "2.3.1",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "postinstall": "node-gyp rebuild",
+    "test": "jest"
+  }
+}
