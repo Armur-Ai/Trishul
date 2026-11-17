@@ -1,20 +1,20 @@
-# Armur Code Scanner — Reusable GitHub Actions workflow
+# Trishul Code Scanner — Reusable GitHub Actions workflow
 # ----------------------------------------------------------
-# This workflow runs the Armur scanner against the repository
+# This workflow runs the Trishul scanner against the repository
 # and (optionally) uploads results to GitHub Code Scanning.
 #
 # Usage in your repository:
 #
 #   jobs:
 #     security:
-#       uses: armur-ai/armur-code-scanner/.github/workflows/armur-scan.yml@main
+#       uses: trishul-ai/trishul-code-scanner/.github/workflows/armur-scan.yml@main
 #       with:
 #         language: go
 #         fail-on-severity: high
 #
 # Alternatively, copy the steps below into your own workflow.
 
-name: Armur Security Scan
+name: Trishul Security Scan
 
 on:
   push:
@@ -37,11 +37,11 @@ on:
         default: "sarif"
 
 env:
-  ARMUR_VERSION: "latest"
+  TRISHUL_VERSION: "latest"
 
 jobs:
-  armur-scan:
-    name: Armur Code Scanner
+  trishul-scan:
+    name: Trishul Code Scanner
     runs-on: ubuntu-latest
     permissions:
       # Required for uploading SARIF to GitHub Security tab
@@ -55,21 +55,23 @@ jobs:
       - name: Set up Docker
         uses: docker/setup-buildx-action@v3
 
-      - name: Pull Armur scanner image
-        run: docker pull armurscanner/armur:${{ env.ARMUR_VERSION }} || true
+      - name: Pull Trishul scanner image
+        # TODO: publish trishul image — armurscanner/armur is an external
+        # registry name we don't control yet; swap once trishul is published.
+        run: docker pull armurscanner/armur:${{ env.TRISHUL_VERSION }} || true
 
-      - name: Start Armur server
+      - name: Start Trishul server
         run: |
           docker run -d \
-            --name armur-server \
+            --name trishul-server \
             -p 4500:4500 \
             -e ARMUR_API_KEY="${{ secrets.ARMUR_API_KEY }}" \
             -v "${{ github.workspace }}:/workspace:ro" \
-            armurscanner/armur:${{ env.ARMUR_VERSION }}
+            armurscanner/armur:${{ env.TRISHUL_VERSION }}
           # Wait for server to become ready
           for i in $(seq 1 30); do
             if curl -sf http://localhost:4500/health >/dev/null 2>&1; then
-              echo "Armur server is ready"
+              echo "Trishul server is ready"
               break
             fi
             echo "Waiting for server... ($i/30)"
@@ -104,7 +106,7 @@ jobs:
               curl -sf \
                 -H "Authorization: Bearer ${{ secrets.ARMUR_API_KEY }}" \
                 "http://localhost:4500/api/v1/status/${TASK_ID}?format=sarif" \
-                -o armur-results.sarif
+                -o trishul-results.sarif
               break
             fi
             echo "Scan status: $STATUS (poll $i/60)"
@@ -112,21 +114,21 @@ jobs:
           done
 
       - name: Upload SARIF to GitHub Security tab
-        if: always() && hashFiles('armur-results.sarif') != ''
+        if: always() && hashFiles('trishul-results.sarif') != ''
         uses: github/codeql-action/upload-sarif@v3
         with:
-          sarif_file: armur-results.sarif
-          category: armur-code-scanner
+          sarif_file: trishul-results.sarif
+          category: trishul-code-scanner
 
-      - name: Stop Armur server
+      - name: Stop Trishul server
         if: always()
-        run: docker stop armur-server || true
+        run: docker stop trishul-server || true
 
       - name: Check for findings
         if: github.event.inputs.fail-on-severity != '' || github.event_name != 'workflow_dispatch'
         run: |
           SEVERITY="${{ github.event.inputs.fail-on-severity || 'high' }}"
-          SARIF_FILE="armur-results.sarif"
+          SARIF_FILE="trishul-results.sarif"
 
           if [ ! -f "$SARIF_FILE" ]; then
             echo "No SARIF file found, skipping severity check"
@@ -156,6 +158,6 @@ print(count)
 
           echo "Findings at severity '$SEVERITY' or above: $COUNT"
           if [ "$COUNT" -gt 0 ]; then
-            echo "::error::Armur found $COUNT security finding(s) at severity '$SEVERITY' or above"
+            echo "::error::Trishul found $COUNT security finding(s) at severity '$SEVERITY' or above"
             exit 1
           fi
