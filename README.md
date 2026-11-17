@@ -158,6 +158,10 @@ Coming next, in order: Gitleaks and validated secret detection, hallucinated-dep
 | Honest tool status — uninstalled/failed scanners are reported as skipped, not hidden | Working |
 | Per-tool hard timeout that actually kills the process | Working |
 | Continuous integration (build, test, lint) on `main` | Working |
+| Scan profiles (`--profile security\|quality\|web3\|all`) | Working — security is the default |
+| SARIF output across all categories (SAST, SCA, IaC, redacted secrets) with stable fingerprints | Working |
+| Supabase RLS misconfiguration detection (built-in, no external tool) | Working — flags missing RLS, `using (true)`, public buckets, unsafe `security definer` |
+| In-process scan engine (`engine.ScanLocal`, no server/Redis) | Working — used by the MCP tool; CLI `scan .` wiring is a follow-up |
 | Scanning a local directory from the CLI | Not yet. Scan a repository URL or a file. |
 | Published packages (Homebrew, npm, install script) | Not yet. Build from source. |
 | GitHub Action and pre-commit hook | Not yet. The files in this repo predate the rename and do not work. |
