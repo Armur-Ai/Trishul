@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/Armur-Ai/Trishul/internal/redact"
 )
 
 // RunChecksec runs checksec on a binary to check security hardening.
@@ -114,7 +116,7 @@ func RunStringScan(binaryPath string) (map[string]interface{}, error) {
 					"path":     binaryPath,
 					"line":     0,
 					"severity": p.severity,
-					"message":  fmt.Sprintf("%s: \"%s\"", p.message, truncateStr(line, 80)),
+					"message":  fmt.Sprintf("%s (%s)", p.message, redact.Mask(strings.TrimSpace(line))),
 					"tool":     "string-scan",
 				})
 				break
