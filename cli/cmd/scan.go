@@ -405,8 +405,70 @@ func printFormattedResults(results map[string]interface{}) {
 			printCategoryData(category, categoryData)
 		}
 	}
+	printAgentSecurity(results)
 	printScanErrors(results)
 	fmt.Println(color.GreenString("\nScan completed. Results displayed."))
+}
+
+// printAgentSecurity renders AI Agent Supply-Chain Security findings: suspicious
+// agent instructions, MCP/permission changes, install hooks, encoded content,
+// and cross-file attack chains. Each names the trust boundary being crossed.
+func printAgentSecurity(results map[string]interface{}) {
+	raw, ok := results["agent_security"]
+	if !ok {
+		return
+	}
+	var items []map[string]interface{}
+	switch v := raw.(type) {
+	case []interface{}:
+		for _, e := range v {
+			if m, ok := e.(map[string]interface{}); ok {
+				items = append(items, m)
+			}
+		}
+	case []map[string]interface{}:
+		items = v
+	}
+	if len(items) == 0 {
+		return
+	}
+	fmt.Printf("\n%s\n", color.MagentaString("Agent Supply-Chain Security (%d) — risks to AI coding agents reviewing this repo/PR:", len(items)))
+	for _, m := range items {
+		sev := getStringValue(m, "severity", "INFO")
+		title := getStringValue(m, "message", "")
+		id := getStringValue(m, "check_id", "")
+		file := getStringValue(m, "path", "-")
+		line := getIntValue(m, "line")
+		conf := getStringValue(m, "confidence", "")
+		tb := getStringValue(m, "trust_boundary", "")
+		fmt.Printf("  %s %s  %s:%d  [%s", severityTag(sev), color.New(color.Bold).Sprint(title), file, line, id)
+		if conf != "" {
+			fmt.Printf(" · confidence %s", conf)
+		}
+		fmt.Println("]")
+		if tb != "" {
+			fmt.Printf("      trust boundary: %s\n", tb)
+		}
+		if rem := getStringValue(m, "remediation", ""); rem != "" {
+			fmt.Printf("      fix: %s\n", rem)
+		}
+	}
+}
+
+// severityTag returns a short coloured severity marker.
+func severityTag(sev string) string {
+	switch sev {
+	case "CRITICAL":
+		return color.New(color.FgHiRed, color.Bold).Sprint("[CRIT]")
+	case "HIGH":
+		return color.RedString("[HIGH]")
+	case "MEDIUM":
+		return color.YellowString("[MED ]")
+	case "LOW":
+		return color.CyanString("[LOW ]")
+	default:
+		return color.New(color.Faint).Sprint("[INFO]")
+	}
 }
 
 // printScanErrors makes skipped/failed tools visible. A tool that was not
