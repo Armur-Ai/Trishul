@@ -15,6 +15,7 @@ import (
 
 	"github.com/Armur-Ai/Trishul/internal/ai"
 	"github.com/Armur-Ai/Trishul/internal/models"
+	"github.com/Armur-Ai/Trishul/engine"
 	"github.com/Armur-Ai/Trishul/internal/tasks"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -124,20 +125,15 @@ func registerScanPathTool(s *server.MCPServer) {
 			scanPath = filepath.Dir(path)
 		}
 
-		// Run the scan (auto-detects language)
-		results := tasks.RunScanTaskLocal(scanPath, "")
-
-		// Check for scan failure
-		if status, ok := results["status"].(string); ok && status == "failed" {
-			errMsg := "scan failed"
-			if e, ok := results["error"].(string); ok {
-				errMsg = e
-			}
-			return mcp.NewToolResultError(errMsg), nil
+		// Run the scan in-process via the engine (no server/Redis; read-only;
+		// auto-detects language).
+		res, err := engine.ScanLocal(scanPath, "")
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("scan failed: %s", err)), nil
 		}
 
 		// Convert to typed findings for cleaner output
-		findings := models.ConvertFromLegacy(results)
+		findings := models.ConvertFromLegacy(res.Findings)
 
 		output := struct {
 			Path         string           `json:"path"`
