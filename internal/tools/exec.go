@@ -36,7 +36,7 @@ func ToolAvailable(name string) bool {
 	return err == nil
 }
 
-func runWithTimeout(dir, name string, args ...string) ([]byte, error) {
+func runWithTimeout(dir, name string, combined bool, args ...string) ([]byte, error) {
 	if !ToolAvailable(name) {
 		return nil, fmt.Errorf("%s: %w", name, ErrToolUnavailable)
 	}
@@ -46,7 +46,13 @@ func runWithTimeout(dir, name string, args ...string) ([]byte, error) {
 	if dir != "" {
 		cmd.Dir = dir
 	}
-	out, err := cmd.CombinedOutput()
+	var out []byte
+	var err error
+	if combined {
+		out, err = cmd.CombinedOutput()
+	} else {
+		out, err = cmd.Output()
+	}
 	if ctx.Err() == context.DeadlineExceeded {
 		return out, fmt.Errorf("%s: %w after %s", name, ErrToolTimeout, toolTimeout())
 	}
@@ -56,13 +62,26 @@ func runWithTimeout(dir, name string, args ...string) ([]byte, error) {
 // RunToolCommand runs an external scanner with a hard timeout that actually
 // kills the process on expiry. It first checks the executable exists, returning
 // ErrToolUnavailable if not — so a missing tool is reported as unavailable
-// rather than silently yielding empty output. Returns combined stdout+stderr.
+// rather than silently yielding empty output. Returns combined stdout+stderr
+// (use the Stdout variant when the caller parses machine-readable stdout).
 func RunToolCommand(name string, args ...string) ([]byte, error) {
-	return runWithTimeout("", name, args...)
+	return runWithTimeout("", name, true, args...)
 }
 
 // RunToolCommandInDir is RunToolCommand with a working directory, for scanners
 // that must be invoked from inside the target tree.
 func RunToolCommandInDir(dir, name string, args ...string) ([]byte, error) {
-	return runWithTimeout(dir, name, args...)
+	return runWithTimeout(dir, name, true, args...)
+}
+
+// RunToolCommandStdout is like RunToolCommand but returns stdout only, for
+// scanners whose stdout is machine-readable (JSON/SARIF) and must not be mixed
+// with stderr diagnostics.
+func RunToolCommandStdout(name string, args ...string) ([]byte, error) {
+	return runWithTimeout("", name, false, args...)
+}
+
+// RunToolCommandStdoutInDir is RunToolCommandStdout with a working directory.
+func RunToolCommandStdoutInDir(dir, name string, args ...string) ([]byte, error) {
+	return runWithTimeout(dir, name, false, args...)
 }
