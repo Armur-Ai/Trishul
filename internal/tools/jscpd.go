@@ -5,7 +5,6 @@ import (
 	utils "github.com/Armur-Ai/Trishul/pkg"
 	"encoding/json"
 	"os"
-	"os/exec"
 	"strings"
 )
 
@@ -25,8 +24,7 @@ func RunJSCPD(directory string) (map[string]interface{}, error) {
 }
 
 func RunJSCPDOnRepo(directory string) ([]map[string]interface{}, error) {
-	cmd := exec.Command("jscpd", directory, "-r", "json", "-o", ".")
-	output, err := cmd.CombinedOutput()
+	output, err := RunToolCommand("jscpd", directory, "-r", "json", "-o", ".")
 	if err != nil {
 		logger.Warn().Str("tool", "jscpd").Err(err).Str("output", string(output)).Msg("tool exited with error")
 		return nil, err

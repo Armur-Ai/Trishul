@@ -3,9 +3,7 @@ package internal
 import (
 	"github.com/Armur-Ai/Trishul/internal/logger"
 	utils "github.com/Armur-Ai/Trishul/pkg"
-	"bytes"
 	"encoding/json"
-	"os/exec"
 	"strings"
 )
 
@@ -17,14 +15,9 @@ func RunPylint(directory string) (map[string]interface{}, error) {
 }
 
 func RunPylintOnRepo(directory string) string {
-	cmd := exec.Command("pylint", "--recursive=y", directory, "-f", "json")
-	var out, stderr bytes.Buffer
-	cmd.Stdout = &out
-	cmd.Stderr = &stderr
+	out, _ := RunToolCommandStdout("pylint", "--recursive=y", directory, "-f", "json")
 
-	cmd.Run()
-
-	return out.String()
+	return string(out)
 }
 
 func CategorizePylintResults(results string, directory string) map[string][]interface{} {

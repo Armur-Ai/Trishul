@@ -3,13 +3,11 @@ package internal
 import (
 	"encoding/json"
 	"fmt"
-	"os/exec"
 )
 
 // RunSecurityCodeScan runs the Roslyn-based C# security scanner.
 func RunSecurityCodeScan(dirPath string) (map[string]interface{}, error) {
-	cmd := exec.Command("dotnet-scs", "--project", dirPath, "--export-sarif-file", "/dev/stdout")
-	output, err := cmd.Output()
+	output, err := RunToolCommandStdout("dotnet-scs", "--project", dirPath, "--export-sarif-file", "/dev/stdout")
 	if err != nil {
 		return nil, fmt.Errorf("security code scan error: %w", err)
 	}
@@ -24,8 +22,7 @@ func RunSecurityCodeScan(dirPath string) (map[string]interface{}, error) {
 
 // RunRoslynator runs the Roslynator code quality analyzer.
 func RunRoslynator(dirPath string) (map[string]interface{}, error) {
-	cmd := exec.Command("roslynator", "analyze", dirPath, "--output", "/dev/stdout", "--format", "json")
-	output, err := cmd.Output()
+	output, err := RunToolCommandStdout("roslynator", "analyze", dirPath, "--output", "/dev/stdout", "--format", "json")
 	if err != nil {
 		return nil, fmt.Errorf("roslynator error: %w", err)
 	}

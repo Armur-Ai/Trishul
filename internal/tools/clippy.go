@@ -3,9 +3,7 @@ package internal
 import (
 	"github.com/Armur-Ai/Trishul/internal/logger"
 	utils "github.com/Armur-Ai/Trishul/pkg"
-	"bytes"
 	"encoding/json"
-	"os/exec"
 	"strings"
 )
 
@@ -14,15 +12,9 @@ func RunClippy(directory string) (map[string]interface{}, error) {
 	logger.Info().Str("tool", "clippy").Str("dir", directory).Msg("running")
 
 	// --message-format=json emits one JSON object per line
-	cmd := exec.Command("cargo", "clippy", "--message-format=json", "--", "-D", "warnings")
-	cmd.Dir = directory
+	stdout, _ := RunToolCommandStdoutInDir(directory, "cargo", "clippy", "--message-format=json", "--", "-D", "warnings")
 
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	cmd.Run()
-
-	output := stdout.String()
+	output := string(stdout)
 	if strings.TrimSpace(output) == "" {
 		logger.Debug().Str("tool", "clippy").Msg("no output")
 		return utils.ConvertCategorizedResults(utils.InitCategorizedResults()), nil

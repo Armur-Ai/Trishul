@@ -8,8 +8,7 @@ import (
 
 // RunCdxgen generates a CycloneDX SBOM using cdxgen.
 func RunCdxgen(dirPath, outputPath string) error {
-	cmd := exec.Command("cdxgen", "-o", outputPath, dirPath)
-	output, err := cmd.CombinedOutput()
+	output, err := RunToolCommand("cdxgen", "-o", outputPath, dirPath)
 	if err != nil {
 		return fmt.Errorf("cdxgen error: %w\n%s", err, string(output))
 	}
@@ -18,8 +17,7 @@ func RunCdxgen(dirPath, outputPath string) error {
 
 // RunTrivySBOM generates a CycloneDX SBOM using Trivy.
 func RunTrivySBOM(dirPath, outputPath string) error {
-	cmd := exec.Command("trivy", "fs", "--format", "cyclonedx", "--output", outputPath, dirPath)
-	output, err := cmd.CombinedOutput()
+	output, err := RunToolCommand("trivy", "fs", "--format", "cyclonedx", "--output", outputPath, dirPath)
 	if err != nil {
 		return fmt.Errorf("trivy sbom error: %w\n%s", err, string(output))
 	}
@@ -28,8 +26,7 @@ func RunTrivySBOM(dirPath, outputPath string) error {
 
 // RunTrivySPDX generates an SPDX SBOM using Trivy.
 func RunTrivySPDX(dirPath, outputPath string) error {
-	cmd := exec.Command("trivy", "fs", "--format", "spdx-json", "--output", outputPath, dirPath)
-	output, err := cmd.CombinedOutput()
+	output, err := RunToolCommand("trivy", "fs", "--format", "spdx-json", "--output", outputPath, dirPath)
 	if err != nil {
 		return fmt.Errorf("trivy spdx error: %w\n%s", err, string(output))
 	}

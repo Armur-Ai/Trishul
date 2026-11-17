@@ -3,10 +3,8 @@ package internal
 import (
 	"github.com/Armur-Ai/Trishul/internal/logger"
 	utils "github.com/Armur-Ai/Trishul/pkg"
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"os/exec"
 	"strings"
 )
 
@@ -14,14 +12,9 @@ import (
 func RunSlither(directory string) (map[string]interface{}, error) {
 	logger.Info().Str("tool", "slither").Str("dir", directory).Msg("running")
 
-	cmd := exec.Command("slither", ".", "--json", "-")
-	cmd.Dir = directory
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	cmd.Run()
+	stdout, _ := RunToolCommandStdoutInDir(directory, "slither", ".", "--json", "-")
 
-	output := stdout.String()
+	output := string(stdout)
 	if strings.TrimSpace(output) == "" {
 		logger.Debug().Str("tool", "slither").Msg("no output")
 		return utils.ConvertCategorizedResults(utils.InitCategorizedResults()), nil

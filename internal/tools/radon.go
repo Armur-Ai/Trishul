@@ -3,9 +3,7 @@ package internal
 import (
 	"github.com/Armur-Ai/Trishul/internal/logger"
 	utils "github.com/Armur-Ai/Trishul/pkg"
-	"bytes"
 	"encoding/json"
-	"os/exec"
 	"strings"
 )
 
@@ -17,18 +15,13 @@ func RunRadon(directory string) (map[string]interface{}, error) {
 }
 
 func RunRadonOnRepo(directory string) string {
-	cmd := exec.Command("radon", "cc", "-j", directory)
-	var out, stderr bytes.Buffer
-	cmd.Stdout = &out
-	cmd.Stderr = &stderr
-
-	err := cmd.Run()
+	out, err := RunToolCommandStdout("radon", "cc", "-j", directory)
 	if err != nil {
-		logger.Warn().Str("tool", "radon").Err(err).Str("stderr", stderr.String()).Msg("tool exited with error")
+		logger.Warn().Str("tool", "radon").Err(err).Str("stderr", string(out)).Msg("tool exited with error")
 		return ""
 	}
 
-	return out.String()
+	return string(out)
 }
 
 func CategorizeRadonResults(results string, directory string) map[string][]interface{} {

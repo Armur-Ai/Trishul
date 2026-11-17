@@ -5,7 +5,6 @@ import (
 	utils "github.com/Armur-Ai/Trishul/pkg"
 	"encoding/json"
 	"fmt"
-	"os/exec"
 	"strings"
 )
 
@@ -17,8 +16,7 @@ func RunCheckov(directory string) (map[string]interface{}, error) {
 }
 
 func runCheckovOnRepo(directory string) string {
-	cmd := exec.Command("checkov", "-d", directory, "--quiet", "--compact", "-o", "json")
-	result, _ := cmd.CombinedOutput()
+	result, _ := RunToolCommand("checkov", "-d", directory, "--quiet", "--compact", "-o", "json")
 	return string(result)
 }
 

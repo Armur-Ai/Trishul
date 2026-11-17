@@ -3,10 +3,8 @@ package internal
 import (
 	"github.com/Armur-Ai/Trishul/internal/logger"
 	utils "github.com/Armur-Ai/Trishul/pkg"
-	"bytes"
 	"encoding/csv"
 	"fmt"
-	"os/exec"
 	"strconv"
 	"strings"
 )
@@ -16,17 +14,13 @@ import (
 func RunFlawfinder(directory string) (map[string]interface{}, error) {
 	logger.Info().Str("tool", "flawfinder").Str("dir", directory).Msg("running")
 
-	cmd := exec.Command("flawfinder",
+	stdout, _ := RunToolCommandStdout("flawfinder",
 		"--csv",
 		"--quiet",
 		directory,
 	)
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	cmd.Run()
 
-	output := stdout.String()
+	output := string(stdout)
 	if strings.TrimSpace(output) == "" {
 		logger.Debug().Str("tool", "flawfinder").Msg("no output")
 		return utils.ConvertCategorizedResults(utils.InitCategorizedResults()), nil

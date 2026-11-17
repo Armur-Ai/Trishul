@@ -3,11 +3,9 @@ package internal
 import (
 	"github.com/Armur-Ai/Trishul/internal/logger"
 	utils "github.com/Armur-Ai/Trishul/pkg"
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 )
@@ -22,16 +20,12 @@ func RunKICS(directory string) (map[string]interface{}, error) {
 	}
 	defer os.RemoveAll(outDir)
 
-	cmd := exec.Command("kics", "scan",
+	RunToolCommandStdout("kics", "scan",
 		"-p", directory,
 		"-o", outDir,
 		"--report-formats", "json",
 		"--no-progress",
 	)
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	cmd.Run()
 
 	reportPath := filepath.Join(outDir, "results.json")
 	data, err := os.ReadFile(reportPath)

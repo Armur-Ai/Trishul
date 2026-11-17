@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 )
@@ -48,9 +47,8 @@ func DetectPackageEcosystem(dirPath string) []string {
 
 // RunNpmAudit runs npm audit and returns parsed findings.
 func RunNpmAudit(dirPath string) (map[string]interface{}, error) {
-	cmd := exec.Command("npm", "audit", "--json")
-	cmd.Dir = dirPath
-	out, _ := cmd.Output() // npm audit exits non-zero when vulns found
+	// npm audit exits non-zero when vulns found
+	out, _ := RunToolCommandStdoutInDir(dirPath, "npm", "audit", "--json")
 
 	var result map[string]interface{}
 	if err := json.Unmarshal(out, &result); err != nil {
@@ -103,9 +101,7 @@ func formatNpmAudit(raw map[string]interface{}) map[string]interface{} {
 
 // RunPipAudit runs pip-audit for Python dependency checking.
 func RunPipAudit(dirPath string) (map[string]interface{}, error) {
-	cmd := exec.Command("pip-audit", "--format", "json", "--desc")
-	cmd.Dir = dirPath
-	out, err := cmd.Output()
+	out, err := RunToolCommandStdoutInDir(dirPath, "pip-audit", "--format", "json", "--desc")
 	if err != nil {
 		// pip-audit may not be installed
 		return nil, fmt.Errorf("pip-audit not available: %w", err)
@@ -154,9 +150,7 @@ func RunBundleAuditSCA(dirPath string) (map[string]interface{}, error) {
 
 // RunComposerAudit runs the PHP security checker for Composer dependencies.
 func RunComposerAudit(dirPath string) (map[string]interface{}, error) {
-	cmd := exec.Command("local-php-security-checker", "--format=json")
-	cmd.Dir = dirPath
-	out, err := cmd.Output()
+	out, err := RunToolCommandStdoutInDir(dirPath, "local-php-security-checker", "--format=json")
 	if err != nil {
 		return nil, fmt.Errorf("php security checker error: %w", err)
 	}

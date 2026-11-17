@@ -3,10 +3,8 @@ package internal
 import (
 	"github.com/Armur-Ai/Trishul/internal/logger"
 	utils "github.com/Armur-Ai/Trishul/pkg"
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"os/exec"
 	"strings"
 )
 
@@ -14,15 +12,10 @@ import (
 func RunCargoAudit(directory string) (map[string]interface{}, error) {
 	logger.Info().Str("tool", "cargo-audit").Str("dir", directory).Msg("running")
 
-	cmd := exec.Command("cargo", "audit", "--json")
-	cmd.Dir = directory
+	// cargo-audit exits non-zero when vulnerabilities found — ignore exit code
+	stdout, _ := RunToolCommandStdoutInDir(directory, "cargo", "audit", "--json")
 
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	cmd.Run() // cargo-audit exits non-zero when vulnerabilities found — ignore exit code
-
-	output := stdout.String()
+	output := string(stdout)
 	if strings.TrimSpace(output) == "" {
 		logger.Debug().Str("tool", "cargo-audit").Msg("no output")
 		return utils.ConvertCategorizedResults(utils.InitCategorizedResults()), nil

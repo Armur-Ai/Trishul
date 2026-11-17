@@ -3,9 +3,7 @@ package internal
 import (
 	"github.com/Armur-Ai/Trishul/internal/logger"
 	utils "github.com/Armur-Ai/Trishul/pkg"
-	"bytes"
 	"encoding/json"
-	"os/exec"
 	"strings"
 )
 
@@ -14,15 +12,11 @@ func RunKubeScore(directory string) (map[string]interface{}, error) {
 	logger.Info().Str("tool", "kube-score").Str("dir", directory).Msg("running")
 
 	// kube-score reads from stdin or files; find all yaml files first
-	cmd := exec.Command("sh", "-c",
+	stdout, _ := RunToolCommandStdout("sh", "-c",
 		"find "+directory+" -name '*.yaml' -o -name '*.yml' | xargs kube-score score --output-format json 2>/dev/null",
 	)
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	cmd.Run()
 
-	output := stdout.String()
+	output := string(stdout)
 	if strings.TrimSpace(output) == "" {
 		logger.Debug().Str("tool", "kube-score").Msg("no output")
 		return utils.ConvertCategorizedResults(utils.InitCategorizedResults()), nil

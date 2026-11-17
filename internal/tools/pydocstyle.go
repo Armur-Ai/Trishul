@@ -3,8 +3,6 @@ package internal
 import (
 	"github.com/Armur-Ai/Trishul/internal/logger"
 	utils "github.com/Armur-Ai/Trishul/pkg"
-	"bytes"
-	"os/exec"
 	"regexp"
 	"strings"
 )
@@ -17,12 +15,8 @@ func RunPydocstyle(directory string) (map[string]interface{}, error) {
 }
 
 func RunPydocstyleOnRepo(directory string) string {
-	cmd := exec.Command("pydocstyle", directory)
-	var out, stderr bytes.Buffer
-	cmd.Stdout = &out
-	cmd.Stderr = &stderr
-	cmd.Run()
-	return out.String()
+	out, _ := RunToolCommandStdout("pydocstyle", directory)
+	return string(out)
 }
 
 func CategorizePydocstyleResults(pydocstyleResults string, directory string) map[string][]interface{} {

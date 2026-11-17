@@ -3,11 +3,9 @@ package internal
 import (
 	"github.com/Armur-Ai/Trishul/internal/logger"
 	utils "github.com/Armur-Ai/Trishul/pkg"
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 )
@@ -23,19 +21,13 @@ func RunDependencyCheck(directory string) (map[string]interface{}, error) {
 	}
 	defer os.RemoveAll(outDir)
 
-	cmd := exec.Command("dependency-check",
+	RunToolCommandStdoutInDir(directory, "dependency-check",
 		"--scan", directory,
 		"--format", "JSON",
 		"--out", outDir,
 		"--project", "armur-scan",
 		"--noupdate",
 	)
-	cmd.Dir = directory
-
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	cmd.Run()
 
 	// Read the generated report.
 	reportPath := filepath.Join(outDir, "dependency-check-report.json")

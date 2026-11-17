@@ -5,7 +5,6 @@ import (
 	utils "github.com/Armur-Ai/Trishul/pkg"
 	"encoding/json"
 	"fmt"
-	"os/exec"
 	"strings"
 )
 
@@ -22,8 +21,7 @@ func RunSemgrep(directory string, rules string) (map[string]interface{}, error) 
 }
 
 func runSemgrepOnRepo(directory string, rules string) (string, error) {
-	cmd := exec.Command("semgrep", rules, directory, "--json")
-	output, err := cmd.Output()
+	output, err := RunToolCommandStdout("semgrep", rules, directory, "--json")
 	if err != nil {
 		// semgrep exits non-zero when it finds issues; treat stdout as valid output
 		logger.Debug().Str("tool", "semgrep").Err(err).Msg("non-zero exit (may still have results)")

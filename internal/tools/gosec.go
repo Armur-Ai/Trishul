@@ -3,11 +3,9 @@ package internal
 import (
 	"github.com/Armur-Ai/Trishul/internal/logger"
 	utils "github.com/Armur-Ai/Trishul/pkg"
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"strings"
 )
 
@@ -46,15 +44,9 @@ func RunGosec(directory string) (map[string]interface{}, error) {
 }
 
 func RunGosecOnRepo(directory string) (string, error) {
-	cmd := exec.Command("gosec", "-fmt=json", "./...")
-	cmd.Dir = directory
-
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	cmd.Run()
-	logger.Debug().Str("tool", "gosec").Int("output_bytes", stdout.Len()).Msg("raw output received")
-	return stdout.String(), nil
+	output, _ := RunToolCommandStdoutInDir(directory, "gosec", "-fmt=json", "./...")
+	logger.Debug().Str("tool", "gosec").Int("output_bytes", len(output)).Msg("raw output received")
+	return string(output), nil
 }
 
 func CategorizeGosecResults(results string, directory string) map[string][]interface{} {

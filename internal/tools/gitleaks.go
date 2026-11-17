@@ -8,14 +8,12 @@ import (
 
 // RunGitleaks runs the gitleaks secret scanner on the given directory.
 func RunGitleaks(dirPath string) (map[string]interface{}, error) {
-	cmd := exec.Command("gitleaks", "detect",
+	output, err := RunToolCommandStdout("gitleaks", "detect",
 		"--source", dirPath,
 		"--report-format", "json",
 		"--report-path", "/dev/stdout",
 		"--no-banner",
 	)
-
-	output, err := cmd.Output()
 	if err != nil {
 		// Gitleaks exits 1 when findings are found
 		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
@@ -30,15 +28,13 @@ func RunGitleaks(dirPath string) (map[string]interface{}, error) {
 
 // RunGitleaksHistory runs gitleaks against the full git history.
 func RunGitleaksHistory(dirPath string) (map[string]interface{}, error) {
-	cmd := exec.Command("gitleaks", "detect",
+	output, err := RunToolCommandStdout("gitleaks", "detect",
 		"--source", dirPath,
 		"--report-format", "json",
 		"--report-path", "/dev/stdout",
 		"--no-banner",
 		"--log-opts=--all",
 	)
-
-	output, err := cmd.Output()
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
 			// Findings found

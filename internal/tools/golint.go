@@ -3,9 +3,7 @@ package internal
 import (
 	"github.com/Armur-Ai/Trishul/internal/logger"
 	utils "github.com/Armur-Ai/Trishul/pkg"
-	"bytes"
 	"fmt"
-	"os/exec"
 	"strings"
 )
 
@@ -21,18 +19,11 @@ func RunGolint(directory string) (map[string]interface{}, error) {
 }
 
 func runGolintOnRepo(directory string) (string, error) {
-	cmd := exec.Command("golint", "./...")
-	cmd.Dir = directory
-
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	err := cmd.Run()
+	output, err := RunToolCommandStdoutInDir(directory, "golint", "./...")
 	if err != nil {
-		return "", fmt.Errorf("failed to run golint: %v\nstderr: %s", err, stderr.String())
+		return "", fmt.Errorf("failed to run golint: %v\nstderr: %s", err, string(output))
 	}
-	return strings.TrimSpace(stdout.String()), nil
+	return strings.TrimSpace(string(output)), nil
 }
 
 func CategorizeGolintResults(results, directory string) map[string][]interface{} {

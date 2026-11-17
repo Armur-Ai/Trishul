@@ -3,10 +3,8 @@ package internal
 import (
 	"github.com/Armur-Ai/Trishul/internal/logger"
 	utils "github.com/Armur-Ai/Trishul/pkg"
-	"bytes"
 	"encoding/json"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 )
@@ -23,11 +21,10 @@ func RunStaticCheck(directory string) (map[string]interface{}, error) {
 }
 
 func RunStaticcheckOnRepo(directory string) (string, error) {
-	var cmd *exec.Cmd
+	var args []string
 
 	if _, err := os.Stat(filepath.Join(directory, "go.mod")); err == nil {
-		cmd = exec.Command("staticcheck", "-f", "json", "./...")
-		cmd.Dir = directory
+		args = []string{"-f", "json", "./..."}
 	} else {
 		files := []string{}
 		err := filepath.Walk(directory, func(path string, info os.FileInfo, err error) error {
@@ -42,17 +39,11 @@ func RunStaticcheckOnRepo(directory string) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		cmd = exec.Command("staticcheck", "-f", "json")
-		cmd.Args = append(cmd.Args, files...)
-		cmd.Dir = directory
+		args = append([]string{"-f", "json"}, files...)
 	}
 
-	var out bytes.Buffer
-	cmd.Stdout = &out
-	cmd.Stderr = &out
-
-	cmd.Run()
-	return strings.TrimSpace(out.String()), nil
+	out, _ := RunToolCommandInDir(directory, "staticcheck", args...)
+	return strings.TrimSpace(string(out)), nil
 }
 
 func CategorizeStaticcheckResults(results string, directory string) map[string][]interface{} {

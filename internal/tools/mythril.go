@@ -35,17 +35,13 @@ func RunMythril(directory string) (map[string]interface{}, error) {
 			continue
 		}
 
-		cmd := exec.Command("myth", "analyze", solFile,
+		stdout, _ := RunToolCommandStdout("myth", "analyze", solFile,
 			"--solv", "0.8.0",
 			"-o", "json",
 			"--execution-timeout", "60",
 		)
-		var stdout, stderr bytes.Buffer
-		cmd.Stdout = &stdout
-		cmd.Stderr = &stderr
-		cmd.Run()
 
-		output := stdout.String()
+		output := string(stdout)
 		if strings.TrimSpace(output) == "" {
 			continue
 		}

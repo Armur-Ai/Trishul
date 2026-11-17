@@ -3,8 +3,6 @@ package internal
 import (
 	"github.com/Armur-Ai/Trishul/internal/logger"
 	utils "github.com/Armur-Ai/Trishul/pkg"
-	"bytes"
-	"os/exec"
 	"regexp"
 	"strings"
 )
@@ -13,15 +11,9 @@ import (
 func RunCargoGeiger(directory string) (map[string]interface{}, error) {
 	logger.Info().Str("tool", "cargo-geiger").Str("dir", directory).Msg("running")
 
-	cmd := exec.Command("cargo", "geiger", "--output-format", "GitHubMarkdown", "--quiet")
-	cmd.Dir = directory
+	stdout, _ := RunToolCommandStdoutInDir(directory, "cargo", "geiger", "--output-format", "GitHubMarkdown", "--quiet")
 
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	cmd.Run()
-
-	output := stdout.String()
+	output := string(stdout)
 	if strings.TrimSpace(output) == "" {
 		logger.Debug().Str("tool", "cargo-geiger").Msg("no output")
 		return utils.ConvertCategorizedResults(utils.InitCategorizedResults()), nil
