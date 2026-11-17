@@ -27,29 +27,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Language expansion: Rust, Java/Kotlin, Ruby, PHP, C/C++, IaC (Terraform, Docker, K8s), Solidity
 
 ### Phase 2: Core Product (Sprints 5-14)
-- `armur serve` embedded server with auto-start, SSE progress streaming, severity summary card
-- SQLite scan history, `armur init`, `armur doctor`, shell completions, `--watch` mode
-- `armur run` — multi-step wizard, live Bubbletea TUI dashboard, interactive results browser
+- `trishul serve` embedded server with auto-start, SSE progress streaming, severity summary card
+- SQLite scan history, `trishul init`, `trishul doctor`, shell completions, `--watch` mode
+- `trishul run` — multi-step wizard, live Bubbletea TUI dashboard, interactive results browser
 - Unified `Finding` type with severity normalization, deduplication, and fingerprinting
-- Smart scanning — auto-detect language, `.armur.yml` project config, diff scanning
+- Smart scanning — auto-detect language, `.trishul.yml` project config, diff scanning
 - Lipgloss-styled display, HTML/CSV reports, embedded miniredis for zero-infrastructure mode
-- CI/CD workflows, goreleaser, issue templates, SECURITY.md, `armur version`
+- CI/CD workflows, goreleaser, issue templates, SECURITY.md, `trishul version`
 - Documentation site skeleton, CLI reference, config reference, tool reference
 - Multi-ecosystem SCA: npm-audit, pip-audit, composer-audit, ecosystem detection
 
 ### Phase 3: The Agent Edge (Sprints 15-21)
-- **Rebrand** to "Armur — Personal Security Agent" with agent pipeline orchestrator
-- **AI Intelligence Layer**: Claude API + Ollama providers, tech stack detection, `armur explain`, `armur fix`
+- **Rebrand** to "Trishul — Personal Security Agent" with agent pipeline orchestrator
+- **AI Intelligence Layer**: Claude API + Ollama providers, tech stack detection, `trishul explain`, `trishul fix`
 - **Sandboxed DAST**: Docker isolation, auto-Dockerfile generation, health detection, passive checks, Nuclei integration
 - **Exploit Simulation**: PoC generator (SQLi, XSS, cmd injection, path traversal, SSRF), safe sandbox runner
 - **Attack Path Analysis**: Graph construction, 8 chain rules, scoring, Mermaid visualization
-- **PR Security Agent**: `armur review <pr-url>`, review pipeline, GitHub integration, AI narrative
+- **PR Security Agent**: `trishul review <pr-url>`, review pipeline, GitHub integration, AI narrative
 - **MCP Server**: 5 MCP tools for Claude Code/Cursor/Windsurf integration
 
 ### Phase 4: Distribution & Community (Sprints 22-32)
 - npm package scaffold, universal install script (`curl | sh`), GitHub Action (action.yml)
 - VS Code extension scaffold, CI templates (GitLab, CircleCI, Jenkins)
-- `armur quickstart` interactive guide, security posture score (0-100, A-F grading)
+- `trishul quickstart` interactive guide, security posture score (0-100, A-F grading)
 - Community ecosystem: template registry, exploit templates, sandbox profiles, fix recipes, attack chains
 
 ### Phase 5: Scanner Breadth (Sprints 33-43)

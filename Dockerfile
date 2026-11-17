@@ -35,10 +35,10 @@ RUN pip install --no-cache-dir \
     semgrep bandit pydocstyle radon pylint checkov vulture
 
 # ============================================================
-# Runtime target: armur:go  (Go tools only)
-# docker build --target armur-go -t armur:go .
+# Runtime target: trishul:go  (Go tools only)
+# docker build --target trishul-go -t trishul:go .
 # ============================================================
-FROM debian:bookworm-slim AS armur-go
+FROM debian:bookworm-slim AS trishul-go
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git ca-certificates && rm -rf /var/lib/apt/lists/*
@@ -53,10 +53,10 @@ EXPOSE 4500
 CMD ["/usr/local/bin/armur-server"]
 
 # ============================================================
-# Runtime target: armur:python  (Python tools only)
-# docker build --target armur-py -t armur:python .
+# Runtime target: trishul:python  (Python tools only)
+# docker build --target trishul-py -t trishul:python .
 # ============================================================
-FROM python:3.12-slim AS armur-py
+FROM python:3.12-slim AS trishul-py
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git ca-certificates && rm -rf /var/lib/apt/lists/*
@@ -71,10 +71,10 @@ EXPOSE 4500
 CMD ["/usr/local/bin/armur-server"]
 
 # ============================================================
-# Runtime target: armur:js  (JavaScript/TypeScript tools only)
-# docker build --target armur-js -t armur:js .
+# Runtime target: trishul:js  (JavaScript/TypeScript tools only)
+# docker build --target trishul-js -t trishul:js .
 # ============================================================
-FROM node:22-slim AS armur-js
+FROM node:22-slim AS trishul-js
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git ca-certificates && rm -rf /var/lib/apt/lists/*
@@ -94,10 +94,10 @@ EXPOSE 4500
 CMD ["/usr/local/bin/armur-server"]
 
 # ============================================================
-# Runtime target: armur:full  (all tools — DEFAULT)
-# docker build -t armur:full .
+# Runtime target: trishul:full  (all tools — DEFAULT)
+# docker build -t trishul:full .
 # ============================================================
-FROM python:3.12-slim AS armur-full
+FROM python:3.12-slim AS trishul-full
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git ca-certificates curl build-essential gcc \

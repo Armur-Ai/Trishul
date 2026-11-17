@@ -8,8 +8,8 @@ import { themes as prismThemes } from "prism-react-renderer";
 
 /** @type {import('@docusaurus/types').Config} */
 const config = {
-  title: "Armur",
-  tagline: "Official documentation for Armur Code Scanner",
+  title: "Trishul",
+  tagline: "Official documentation for Trishul Code Scanner",
   favicon: "img/favicon.ico",
 
   // Set the production url of your site here
@@ -64,9 +64,9 @@ const config = {
     /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
     ({
       navbar: {
-        title: "Armur", // this puts the title on the left
+        title: "Trishul", // this puts the title on the left
         logo: {
-          alt: "Armur Logo",
+          alt: "Trishul Logo",
           src: "img/logo.svg", // optional, replace with your logo path
         },
         items: [
@@ -77,7 +77,7 @@ const config = {
             label: "Docs",
           },
           {
-            href: "https://github.com/Armur-Ai/Armur-Code-Scanner",
+            href: "https://github.com/Armur-Ai/Trishul",
             label: "GitHub",
             position: "right",
           },

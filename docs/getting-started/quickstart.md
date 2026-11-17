@@ -22,24 +22,24 @@ curl -fsSL https://install.armur.ai | sh
 
 ```bash
 # Interactive mode (guided wizard)
-armur run
+trishul run
 
 # Direct scan
-armur scan .
+trishul scan .
 
 # Scan a remote repository
-armur scan https://github.com/owner/repo -l go
+trishul scan https://github.com/owner/repo -l go
 ```
 
 ## What Happens
 
-1. Armur detects the language(s) in your project
+1. Trishul detects the language(s) in your project
 2. Runs security tools appropriate for that language
 3. Deduplicates and normalizes findings
 4. Shows results in a severity-sorted summary
 
 ## Next Steps
 
-- [Configure your project](../configuration/armur-yml.md) with `.armur.yml`
+- [Configure your project](../configuration/trishul-yml.md) with `.trishul.yml`
 - [Add to CI/CD](../ci/github-actions.md) for automated scanning
 - [Set up in your editor](../tools/vscode.md) for inline findings

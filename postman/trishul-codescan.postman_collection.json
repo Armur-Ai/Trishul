@@ -1,7 +1,7 @@
 {
 	"info": {
 		"_postman_id": "d8f33415-1017-40da-93f7-9742cd68a64b",
-		"name": "armur-codescan",
+		"name": "trishul-codescan",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
 		"_exporter_id": "21362031"
 	},
@@ -19,7 +19,7 @@
 				],
 				"body": {
 					"mode": "raw",
-					"raw": "{\r\n  \"repository_url\": \"https://github.com/Armur-Ai/Armur-Code-Scanner\",\r\n  \"language\": \"go\"\r\n}",
+					"raw": "{\r\n  \"repository_url\": \"https://github.com/Armur-Ai/Trishul\",\r\n  \"language\": \"go\"\r\n}",
 					"options": {
 						"raw": {
 							"language": "json"
@@ -56,7 +56,7 @@
 				],
 				"body": {
 					"mode": "raw",
-					"raw": "{\r\n  \"repository_url\": \"https://github.com/Armur-Ai/Armur-Code-Scanner\",\r\n  \"language\": \"go\"\r\n}",
+					"raw": "{\r\n  \"repository_url\": \"https://github.com/Armur-Ai/Trishul\",\r\n  \"language\": \"go\"\r\n}",
 					"options": {
 						"raw": {
 							"language": "json"
@@ -97,7 +97,7 @@
 						{
 							"key": "file",
 							"type": "file",
-							"src": "/C:/Users/admin/Desktop/Armur-Code-Scanner/internal/worker/worker.go"
+							"src": "/C:/Users/admin/Desktop/Trishul/internal/worker/worker.go"
 						}
 					]
 				},

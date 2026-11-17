@@ -10,7 +10,7 @@ pipeline {
         stage('Security Scan') {
             steps {
                 sh 'curl -fsSL https://install.armur.ai | sh'
-                sh 'armur scan . --fail-on-severity high --format sarif --output results.sarif'
+                sh 'trishul scan . --fail-on-severity high --format sarif --output results.sarif'
             }
             post {
                 always {
