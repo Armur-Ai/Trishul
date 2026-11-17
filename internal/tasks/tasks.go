@@ -395,8 +395,12 @@ func buildSimpleScanRunnersNamed(dirPath, language string) ([]func() toolResult,
 			r, err := tools.RunSupabaseRLS(dirPath)
 			return toolResult{"supabase-rls", r, err}
 		}),
+		withTimeout("client-secrets", func() toolResult {
+			r, err := tools.RunClientSecretExposure(dirPath)
+			return toolResult{"client-secrets", r, err}
+		}),
 	}
-	names := []string{"semgrep", "supabase-rls"}
+	names := []string{"semgrep", "supabase-rls", "client-secrets"}
 
 	switch language {
 	case "go":
