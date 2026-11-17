@@ -60,3 +60,10 @@ Thumbs.db
 
 # Docker files
 docker-compose.override.yml
+
+# built CLI binaries (do not commit)
+cli/armur-cli
+cli/trishul
+trishul
+trishul-server
+armur-server
