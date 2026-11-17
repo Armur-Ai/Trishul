@@ -3,7 +3,7 @@ package models
 import (
 	"crypto/sha256"
 	"fmt"
-	"strconv"
+	"strings"
 )
 
 // Severity represents the severity level of a finding.
@@ -39,15 +39,38 @@ type Finding struct {
 	DuplicateOf []string `json:"duplicate_of,omitempty"` // IDs of findings this is a duplicate of
 }
 
-// ComputeID generates a SHA256 fingerprint for the finding.
-func (f *Finding) ComputeID() {
-	data := f.Tool + "|" + f.File + "|" + strconv.Itoa(f.Line) + "|" + f.RuleID + "|"
-	if len(f.Message) > 64 {
-		data += f.Message[:64]
-	} else {
-		data += f.Message
+// fingerprintBasis returns the stable, line-insensitive tuple used to identify
+// a finding: Tool | File | RuleID | normalized-Message. The raw line number is
+// deliberately excluded (see ComputeID) and so is any field — such as Snippet
+// or Column — that moves with surrounding edits.
+func (f *Finding) fingerprintBasis() string {
+	return f.Tool + "|" + f.File + "|" + f.RuleID + "|" + normalizeMessage(f.Message)
+}
+
+// normalizeMessage canonicalizes a finding message so cosmetic differences
+// (surrounding/duplicate whitespace, letter case) don't change the fingerprint.
+// It collapses runs of whitespace to single spaces, lowercases, and truncates
+// to 64 runes to stay stable against long, variable tails.
+func normalizeMessage(msg string) string {
+	normalized := strings.ToLower(strings.Join(strings.Fields(msg), " "))
+	if r := []rune(normalized); len(r) > 64 {
+		return string(r[:64])
 	}
-	hash := sha256.Sum256([]byte(data))
+	return normalized
+}
+
+// ComputeID generates a stable SHA256 fingerprint for the finding.
+//
+// The identity is derived from a semantic location — Tool | File | RuleID |
+// normalized-Message — and intentionally EXCLUDES the raw line number. Line
+// numbers churn whenever unrelated edits above a finding shift it up or down,
+// which would otherwise give the "same" issue a brand-new ID on every such
+// edit (breaking dedup, suppression, and cross-scan tracking). The line is
+// still reported on the Finding; it simply isn't part of its identity. The
+// result is the same 32-char hex string (first 16 bytes of the digest) as the
+// prior line-sensitive scheme.
+func (f *Finding) ComputeID() {
+	hash := sha256.Sum256([]byte(f.fingerprintBasis()))
 	f.ID = fmt.Sprintf("%x", hash[:16]) // 32-char hex string
 }
 

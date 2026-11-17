@@ -5,21 +5,21 @@ import (
 	"sort"
 )
 
-// Deduplicate removes duplicate findings that share the same file + line + CWE.
-// When a duplicate is found, the finding with more populated fields is kept.
-// Returns deduplicated findings and metadata about what was removed.
+// Deduplicate removes duplicate findings that share the same semantic location.
+//
+// Findings are grouped by File + RuleID + CWE — the same line-insensitive basis
+// used by Finding.ComputeID — so the dedup key and the fingerprint stay
+// consistent and neither churns when unrelated edits shift line numbers. (The
+// group key omits Tool/Message that ComputeID carries, so the same issue
+// reported by different tools still collapses into one.) When a duplicate is
+// found, the finding with more populated fields is kept. Returns deduplicated
+// findings and metadata about what was removed.
 func Deduplicate(findings []Finding) ([]Finding, *DedupMeta) {
 	rawCount := len(findings)
 
-	type key struct {
-		File string
-		Line int
-		CWE  string
-	}
-
 	groups := map[string][]int{} // key string -> indices
 	for i, f := range findings {
-		k := fmt.Sprintf("%s:%d:%s", f.File, f.Line, f.CWE)
+		k := dedupKey(f)
 		groups[k] = append(groups[k], i)
 	}
 
@@ -83,6 +83,14 @@ func Deduplicate(findings []Finding) ([]Finding, *DedupMeta) {
 	}
 
 	return result, meta
+}
+
+// dedupKey returns the line-insensitive grouping key for a finding: File +
+// RuleID + CWE. This mirrors the fingerprint basis of Finding.ComputeID (minus
+// Tool/Message, so cross-tool reports of the same issue still collapse), and
+// deliberately excludes the raw line number so grouping survives line shifts.
+func dedupKey(f Finding) string {
+	return fmt.Sprintf("%s:%s:%s", f.File, f.RuleID, f.CWE)
 }
 
 // fieldScore returns a score for how many useful fields a finding has populated.

@@ -48,6 +48,71 @@ func TestComputeID(t *testing.T) {
 	}
 }
 
+func TestComputeIDLineInsensitive(t *testing.T) {
+	// Key property: two findings identical except for Line must share an ID,
+	// so a finding's identity survives unrelated edits that shift line numbers.
+	base := Finding{
+		Tool:    "gosec",
+		File:    "main.go",
+		Line:    42,
+		RuleID:  "G201",
+		Message: "SQL string formatting",
+	}
+	shifted := base
+	shifted.Line = 1337
+
+	base.ComputeID()
+	shifted.ComputeID()
+
+	if base.ID != shifted.ID {
+		t.Fatalf("findings differing only by line should share an ID: %s != %s", base.ID, shifted.ID)
+	}
+
+	// Cosmetic message differences (case/whitespace) must not change identity.
+	noisy := base
+	noisy.Message = "  SQL   STRING   formatting  "
+	noisy.ComputeID()
+	if noisy.ID != base.ID {
+		t.Fatalf("normalized-message difference should share an ID: %s != %s", noisy.ID, base.ID)
+	}
+
+	// Different file must produce a different ID.
+	otherFile := base
+	otherFile.File = "other.go"
+	otherFile.ComputeID()
+	if otherFile.ID == base.ID {
+		t.Fatal("different file should produce different ID")
+	}
+
+	// Different rule must produce a different ID.
+	otherRule := base
+	otherRule.RuleID = "G401"
+	otherRule.ComputeID()
+	if otherRule.ID == base.ID {
+		t.Fatal("different rule should produce different ID")
+	}
+}
+
+func TestDeduplicateLineInsensitive(t *testing.T) {
+	// Same File+RuleID+CWE but different lines must collapse into one finding.
+	findings := []Finding{
+		{Tool: "gosec", File: "main.go", Line: 42, RuleID: "G201", CWE: "CWE-89", Severity: SeverityHigh, Message: "SQL injection"},
+		{Tool: "gosec", File: "main.go", Line: 73, RuleID: "G201", CWE: "CWE-89", Severity: SeverityHigh, Message: "SQL injection", Remediation: "Use parameterized queries"},
+	}
+
+	deduped, meta := Deduplicate(findings)
+
+	if meta.DupesRemoved != 1 {
+		t.Fatalf("expected 1 dupe removed despite differing lines, got %d", meta.DupesRemoved)
+	}
+	if len(deduped) != 1 {
+		t.Fatalf("expected 1 finding after dedup, got %d", len(deduped))
+	}
+	if deduped[0].Remediation == "" {
+		t.Fatal("expected the higher-field-score duplicate to be kept")
+	}
+}
+
 func TestSeverityOrder(t *testing.T) {
 	if SeverityOrder(SeverityCritical) <= SeverityOrder(SeverityHigh) {
 		t.Fatal("CRITICAL should be higher than HIGH")
