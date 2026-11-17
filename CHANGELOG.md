@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Embedded engine (foundation)** — `engine.ScanLocal` runs a scan in-process (no server/Redis, read-only); the MCP server now uses it. (CLI `scan .` via a module-merge is a separate step.)
 - **Tests** — parse-level coverage for the six previously-untested adapters (gitleaks, govulncheck, grype, sbom, sca, terrascan).
 - **Supabase RLS analyzer** (Vibe Top 10 V03) — a built-in, dependency-free, read-only detector for open-data-layer misconfigurations (missing row-level security, `using (true)` policies, anon write grants, `security definer` without `search_path`, public storage buckets); runs on every scan.
+- **Client-exposed-secret analyzer** (Vibe Top 10 V01) — a built-in, read-only detector for secrets shipped to the client (`NEXT_PUBLIC_`/`VITE_`/etc. values, committed `.env` secrets, service-role JWTs / private keys in client-side files); emits only redacted previews, never a raw value (enforced by an end-to-end no-leak test).
+- The local-scan path now **surfaces the built-in analyzers' findings** (infra + secrets), and the in-process `engine.ScanLocal` is e2e-tested against both analyzers.
 
 ### Phase 1: Foundation (Sprints 1-4)
 - Test suite, error propagation, input validation, structured logging, API authentication
