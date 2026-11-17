@@ -422,9 +422,9 @@ func BatchScan(c *gin.Context) {
 	var taskIDs []string
 
 	for _, target := range request.Targets {
-		scanType := "SimpleScan"
+		scanType := utils.SimpleScan
 		if target.Mode == "advanced" {
-			scanType = "AdvancedScan"
+			scanType = utils.AdvancedScan
 		}
 
 		repoOrPath := target.RepoURL
