@@ -180,6 +180,7 @@ If no target is specified, scans the current directory.`,
 		items := buildResultItems(scanResult)
 		if len(items) > 0 {
 			resultsBrowser := tui.NewResults(items)
+			resultsBrowser.Skipped = buildSkippedTools(scanResult)
 			p2 := tea.NewProgram(resultsBrowser, tea.WithAltScreen())
 			p2.Run()
 		}
@@ -309,20 +310,12 @@ func buildResultItems(results map[string]interface{}) []tui.ResultItem {
 			if !ok {
 				continue
 			}
-			// Direct findings
+			// Direct findings (flat categories: agent_security, secret_detection,
+			// sca, infra_security, and any tool that reports at the top level).
 			if _, hasMsg := m["message"]; hasMsg {
-				items = append(items, tui.ResultItem{
-					Severity: getStringValue(m, "severity", "INFO"),
-					File:     getStringValue(m, "path", "-"),
-					Line:     getIntValue(m, "line"),
-					RuleID:   getStringValue(m, "rule_id", ""),
-					Message:  getStringValue(m, "message", ""),
-					Category: category,
-					CWE:      getStringValue(m, "cwe", ""),
-					Tool:     getStringValue(m, "tool", ""),
-				})
+				items = append(items, newResultItem(category, m, "-", ""))
 			}
-			// Nested files -> issues
+			// Nested files -> issues (security_issues, antipatterns_bugs, ...).
 			if files, ok := m["files"].([]interface{}); ok {
 				cwe := getStringValue(m, "cwe", "")
 				for _, file := range files {
@@ -331,16 +324,7 @@ func buildResultItems(results map[string]interface{}) []tui.ResultItem {
 						if nested, ok := fm["issues"].([]interface{}); ok {
 							for _, ni := range nested {
 								if nd, ok := ni.(map[string]interface{}); ok {
-									items = append(items, tui.ResultItem{
-										Severity: getStringValue(nd, "severity", "INFO"),
-										File:     fpath,
-										Line:     getIntValue(nd, "line"),
-										RuleID:   getStringValue(nd, "rule_id", ""),
-										Message:  getStringValue(nd, "message", ""),
-										Category: category,
-										CWE:      cwe,
-										Tool:     getStringValue(nd, "tool", ""),
-									})
+									items = append(items, newResultItem(category, nd, fpath, cwe))
 								}
 							}
 						}
@@ -350,6 +334,72 @@ func buildResultItems(results map[string]interface{}) []tui.ResultItem {
 		}
 	}
 	return items
+}
+
+// newResultItem maps a raw finding map to a tui.ResultItem, filling the
+// category-specific fields. Secrets are redacted here, at the boundary, so a
+// raw secret value never reaches the TUI model.
+func newResultItem(category string, m map[string]interface{}, fallbackPath, fallbackCWE string) tui.ResultItem {
+	path := getStringValue(m, "path", fallbackPath)
+	cwe := getStringValue(m, "cwe", fallbackCWE)
+
+	item := tui.ResultItem{
+		Severity: getStringValue(m, "severity", "INFO"),
+		File:     path,
+		Line:     getIntValue(m, "line"),
+		RuleID:   getStringValue(m, "rule_id", ""),
+		Message:  getStringValue(m, "message", ""),
+		Category: category,
+		CWE:      cwe,
+		Tool:     getStringValue(m, "tool", ""),
+	}
+
+	switch category {
+	case "agent_security":
+		item.CheckID = getStringValue(m, "check_id", "")
+		item.Confidence = getStringValue(m, "confidence", "")
+		item.TrustBoundary = getStringValue(m, "trust_boundary", "")
+		item.Remediation = getStringValue(m, "remediation", "")
+		item.IsChain = strings.HasPrefix(strings.ToUpper(item.CheckID), "AGENT-CHAIN")
+	case "secret_detection":
+		// Look for any field that might carry the raw secret and redact it.
+		raw := firstNonEmpty(m, "secret", "match", "value", "raw", "token")
+		item.Redacted = tui.Redact(raw)
+	case "sca":
+		item.Package = getStringValue(m, "package", "")
+		item.Version = getStringValue(m, "version", "")
+	}
+
+	return item
+}
+
+// firstNonEmpty returns the first non-empty string value among the given keys.
+func firstNonEmpty(m map[string]interface{}, keys ...string) string {
+	for _, k := range keys {
+		if v := getStringValue(m, k, ""); v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+// buildSkippedTools extracts analyzers that did not run from scan_errors so the
+// results browser can honestly flag that their findings are absent.
+func buildSkippedTools(results map[string]interface{}) []tui.SkippedTool {
+	raw, ok := results["scan_errors"].([]interface{})
+	if !ok {
+		return nil
+	}
+	var out []tui.SkippedTool
+	for _, e := range raw {
+		if em, ok := e.(map[string]interface{}); ok {
+			out = append(out, tui.SkippedTool{
+				Tool:   getStringValue(em, "tool", "unknown"),
+				Reason: getStringValue(em, "message", ""),
+			})
+		}
+	}
+	return out
 }
 
 func getIntValue(m map[string]interface{}, key string) int {
