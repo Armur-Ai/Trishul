@@ -67,3 +67,6 @@ cli/trishul
 trishul
 trishul-server
 armur-server
+
+# local agent worktrees / scratch
+.claude/
