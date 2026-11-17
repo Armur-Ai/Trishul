@@ -29,6 +29,12 @@ var scanInteractiveCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
+		// Scan profile: exported via env so an auto-started server inherits it.
+		// (For an already-running server, set TRISHUL_PROFILE in its environment.)
+		if profile, _ := cmd.Flags().GetString("profile"); profile != "" {
+			os.Setenv("TRISHUL_PROFILE", profile)
+		}
+
 		var targetType string
 		var targetPath string
 		var language string
@@ -771,6 +777,7 @@ func init() {
 	_ = scanCmd.Flags().MarkHidden("diff")
 	_ = scanCmd.Flags().MarkHidden("staged-only")
 	scanCmd.Flags().StringP("format", "f", "text", "Output format (text, json, sarif)")
+	scanCmd.Flags().String("profile", "", "Scan profile: security (default) | quality | web3 | all")
 	scanCmd.Flags().Bool("no-server", false, "Skip auto-starting the embedded server")
 	scanCmd.Flags().BoolP("interactive", "i", false, "Launch interactive scanning mode")
 	scanCmd.Flags().BoolP("watch", "w", false, "Watch for file changes and re-scan automatically")
