@@ -118,3 +118,26 @@
 ---
 
 *This document is the Phase-0 deliverable ("initial repository audit with evidence" + "capability matrix before implementation"). A "capability matrix after" will accompany each implemented phase.*
+
+---
+
+## Appendix: capability matrix — after Phase 0 (in progress)
+
+Tracks the deltas landed in the Phase-0 run. Items not listed are unchanged from the "before" matrix above.
+
+| Area | Before | After |
+|---|---|---|
+| Secrets redaction | **Broken** — raw secret leaked via API/Redis/webhooks; test asserted the leak | **Fixed** — `internal/redact`; masked preview + fingerprint only; canary regression test |
+| Read-only safety | Footguns, safe only by convention | **Guarded** — `SafeRemoveAll`/`IsManagedPath`; pruning no-ops on user paths; byte-identical invariant test |
+| Per-tool timeout | Soft (process leaked) | **Hard kill** via `RunToolCommand` (`exec.CommandContext`) |
+| Tool availability | None — missing tool → silent empty result | `ToolAvailable` + capability map; known-missing tools recorded as **skipped** and shown in the CLI |
+| Execution outcome | Implicit | Structured `ToolOutcome` enum (`completed/skipped/failed/timed_out/cancelled`), logged per tool |
+| Scanner adapters | Direct `exec.Command`, no timeout/availability | ~47 adapters routed through the helpers |
+| SARIF | No fingerprints, random rule order, secrets omitted | **`partialFingerprints`** + deterministic order; **redacted secrets included** (CWE-798) |
+| Smart-contract tools (out of scope) | Wired into default scan | Gated behind `TRISHUL_PROFILE=web3` |
+| CI | Red on `main` (Go 1.24 vs 1.25) | Aligned to 1.25; build/vet/tests green |
+| Repo hygiene | 14 MB binary committed | Removed; built binaries gitignored |
+| BatchScan | Broken (scan-type literals) | Fixed (uses the constants) |
+| Overclaims / brand | DAST/exploit/"30+ tools"; `armur` surfaces | Corrected across packaging/docs; MCP tools, Action, pre-commit, docs renamed to `trishul` |
+
+**Still open (next):** `trishul scan .` / embedded engine (0.2/0.5), severity-normalizer unification (0.6), full `--profile` plumbing + quality-tool gating (0.7), per-detector fixtures, docker-image rename + PyPI collision (0.8).
