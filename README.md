@@ -54,7 +54,7 @@ We organise findings around the **Vibe Top 10**, the failure modes that show up 
 | **V07** | Unverified webhooks and payments | Stripe webhook without signature check | Planned |
 | **V08** | Missing abuse controls | No rate limiting on login or LLM endpoints | Planned |
 | **V09** | Unsafe LLM integration | User input in system prompts; model output passed to `eval` | Partial: `eval` of request-derived data |
-| **V10** | Poisoned agent context | Hidden instructions in `.cursorrules` or `CLAUDE.md`; unpinned MCP servers | Planned |
+| **V10** | Poisoned agent context | Hidden instructions in `.cursorrules` or `CLAUDE.md`; unpinned MCP servers | **In progress**: the AI Agent Supply-Chain Security subsystem — instruction poisoning, prompt injection, unsafe install/CI hooks, MCP/permission changes, encoded instructions, and cross-file attack chains |
 
 Against our own reference target, [`examples/vibe-coded-app`](examples/vibe-coded-app), today's scan reports the command injection, the XSS, the `eval`, and the hardcoded credentials. It does not yet report the SQL injection in the JavaScript, the SSRF, the missing authorization, the exposed Supabase key, or the table without row-level security. Closing that gap is what the [roadmap](ROADMAP.md) is about.
 
