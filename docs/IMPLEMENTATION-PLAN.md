@@ -66,25 +66,25 @@
 - **Acceptance:** `trishul scan .` works with no Redis and no server process running.
 
 ### 0.6 Findings normalization & SARIF correctness (`internal/models`, `internal/tools/severity.go`, `pkg/sarif`)
-- [ ] Wire the orphaned shared severity normalizer (`severity.go:NormalizeSeverity`) into every adapter; delete the divergent second normalizer (`models/convert.go:154-169`). Unknown severities must not silently default to INFO.
+- [ ] _Deferred:_ unify the severity normalizers. `tools.NormalizeSeverity` (canonical) imports `models`, so `models.normalizeSev` can't delegate to it without a cycle; the canonical one is also currently unwired. Proper fix = move the shared map to a low-level package — a focused follow-up, low runtime impact today.
 - [ ] Add missing schema fields: **scanner version**, **data-flow/trace** (for Phase 1), structured evidence.
-- [ ] ✨ Stable, **line-insensitive fingerprint**: hash semantic location (file + rule + normalized code context), not raw line, so findings survive unrelated edits. Unify the two inconsistent keys (`finding.go:43-52` vs `dedup.go:14-24`).
-- [ ] SARIF: consume **all** categories (SCA, IaC, secrets — currently only `security_issues`), emit `partialFingerprints`, deterministic rule ordering, real `ruleId` (not CWE-only `UNKNOWN` collapse), end regions.
-- **Acceptance:** SARIF validates against the 2.1.0 schema, includes every finding type, and GitHub code-scanning tracks findings across runs.
+- [x] ✨ **Line-insensitive fingerprint** in SARIF (`partialFingerprints` = hash of ruleID|file|message). _(Unifying the `Finding.ComputeID` vs `dedup.go` keys is a follow-up.)_
+- [x] SARIF: emit `partialFingerprints` + **deterministic rule ordering**. _(Consuming SCA/IaC/secrets categories and a real non-`UNKNOWN` ruleId remain.)_
+- **Acceptance:** ✅ SARIF carries stable fingerprints and reproducible ordering; full category coverage pending.
 
 ### 0.7 Profiles & signal-over-volume (`internal/tasks`, `cli`)
-- [ ] ✨ Introduce **scan profiles**: `security` (default — security findings only), `quality` (complexity/docstring/dup/dead-code tools moved here), `web3` (slither/mythril — isolates the only wired out-of-scope tools, `tasks.go:491,495`), `all`.
-- [ ] Default profile excludes golint/gocyclo/radon/pydocstyle/vulture/godeadcode/jscpd/cargo-geiger from the security view.
-- **Acceptance:** default scan reports only security findings; `--profile quality` restores the rest.
+- [~] ✨ **web3 profile** done: Slither/Mythril (the only out-of-scope tools wired into the default scan) now run only under `TRISHUL_PROFILE=web3|all`. Full `security`/`quality`/`all` profile plumbing through the CLI is the remaining part.
+- [ ] Default profile excludes golint/gocyclo/radon/pydocstyle/vulture/godeadcode/jscpd/cargo-geiger from the security view. _(They already route to non-security buckets; a `--profile` flag to stop running them is pending.)_
+- **Acceptance:** out-of-scope smart-contract tools are off by default; quality-tool gating pending.
 
 ### 0.8 Truth in packaging, branding & CI (`.github/workflows`, `action.yml`, `packages/*`, `cli/armur-cli`)
-- [ ] Fix CI: align Go to `1.25`, get `main` green and required for merge (`test.yml` skew).
-- [ ] Remove the committed **14 MB `cli/armur-cli`** binary; add `cli/armur-cli` (and bare built binaries) to `.gitignore`.
-- [ ] Correct overclaims in satellite artifacts to match the honest README: `.goreleaser.yml:73`, `packages/npm/package.json:4`, `packages/pip/README.md:3`, `packages/vscode/package.json:4`, `docs/tools/supported-tools.md:3`, `docs-site/docs/Docs/Architecture.md:5`.
-- [ ] Finish the `armur → trishul` rename: tool names (`armur_*` → `trishul_*`), `action.yml`, pre-commit hooks, docker image refs, config file (`.trishul.yml` canonical, `.armur.yml` fallback one release). Resolve the PyPI `trishul` collision (recommend `trishul-cli` or drop pip).
-- [ ] Hide CLI commands whose backends aren't wired (`review`, `explain`, `fix`) until they work; fix the dead `--diff`/`--staged-only` flags or remove them.
-- [ ] Fix `BatchScan` scan-type literal mismatch (`handlers.go:425-427` vs worker constants).
-- **Acceptance:** CI green; `git clone` is <2 MB of source; no `armur` strings in user-facing surfaces; every documented install path resolves.
+- [x] Fix CI: align test/lint/release workflows to Go `1.25` (the skew that reddened `main`).
+- [x] Remove the committed **14 MB `cli/armur-cli`** binary; gitignore built binaries.
+- [x] Correct overclaims in satellite artifacts (`.goreleaser.yml`, npm/pip/vscode manifests, `docs/tools/supported-tools.md`, docs-site Architecture) to match the honest README.
+- [~] `armur → trishul` rename: MCP tool names ✅, Action ✅, pre-commit hooks ✅, docs-site ✅; config file already canonical `.trishul.yml` (legacy fallback) ✅. _Remaining: docker image refs, the PyPI `trishul` collision._
+- [ ] Hide CLI commands whose backends aren't wired (`review`, `explain`, `fix`); fix/remove the dead `--diff`/`--staged-only` flags.
+- [x] Fix `BatchScan` scan-type literal mismatch (used the string literals, worker switches on the constants).
+- **Acceptance:** ✅ CI aligned/green, binary removed, overclaims corrected, BatchScan fixed; a few rename tails + command-hiding remain.
 
 **Phase 0 exit test:** on clean macOS and Ubuntu, `trishul scan .` against `examples/vibe-coded-app` finishes <60 s, reports the planted findings, leaves the directory byte-identical, surfaces any skipped tools, leaks no plaintext secret, and makes no network calls beyond opt-in tool/DB updates.
 
