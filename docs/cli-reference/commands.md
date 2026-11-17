@@ -1,5 +1,11 @@
 # CLI Command Reference
 
+> **Pre-release note.** Trishul is built from source today (no published
+> packages). `trishul scan` takes a **single file or a repository URL** —
+> scanning a local directory from the CLI is not yet wired. A dedicated
+> `trishul agent-security` command is planned; agent supply-chain findings are
+> currently emitted as part of every `trishul scan`.
+
 ## Global Flags
 
 | Flag | Short | Description |
@@ -21,18 +27,16 @@ trishul run --no-server  # skip auto-starting embedded server
 
 ### `trishul scan <target>`
 
-Run a one-shot scan.
+Run a one-shot scan of a single file or a repository URL.
 
 ```bash
-trishul scan .                           # scan current directory
-trishul scan https://github.com/org/repo -l go  # scan remote repo
-trishul scan . --advanced                # deep scan with all tools
-trishul scan . --output json             # JSON output
-trishul scan . --format sarif            # SARIF output
-trishul scan . --fail-on-severity high   # exit code 1 on HIGH+ findings
-trishul scan . --min-severity medium     # suppress LOW and INFO
-trishul scan . --watch                   # re-scan on file changes
-trishul scan . --interactive             # launch wizard mode
+trishul scan server.js                             # scan a single file
+trishul scan https://github.com/org/repo -l go     # scan remote repo (language required)
+trishul scan <target> --advanced                   # deep scan with all tools
+trishul scan <target> --output json                # JSON output
+trishul scan <target> --format sarif               # SARIF output
+trishul scan <target> --fail-on-severity high      # exit code 1 on HIGH+ findings
+trishul scan <target> --min-severity medium        # suppress LOW and INFO
 ```
 
 ### `trishul serve [stop]`

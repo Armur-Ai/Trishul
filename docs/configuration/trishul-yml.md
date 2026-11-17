@@ -58,6 +58,14 @@ plugins:
     language: go
 ```
 
+## Built-in analyzers always run
+
+The dependency-free built-in analyzers — Supabase RLS, client-secret exposure,
+and [agent-security](../agent-security.md) — run on **every** scan, read-only,
+regardless of profile or the `tools.enabled` allowlist. There is no separate flag
+to enable agent supply-chain analysis; its findings are emitted to CLI, JSON, and
+SARIF alongside everything else.
+
 ## Precedence
 
 CLI flags > environment variables > `.trishul.yml` > defaults
