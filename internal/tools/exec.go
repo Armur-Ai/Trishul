@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -34,6 +35,27 @@ func toolTimeout() time.Duration {
 func ToolAvailable(name string) bool {
 	_, err := exec.LookPath(name)
 	return err == nil
+}
+
+// ToolVersion returns a best-effort version string for a tool by invoking it
+// with a common version flag. It is advisory only (tools differ widely) and
+// returns ("", false) when the tool is absent or prints nothing useful. A short
+// internal timeout keeps a misbehaving --version from hanging a scan.
+func ToolVersion(name string) (string, bool) {
+	if !ToolAvailable(name) {
+		return "", false
+	}
+	for _, flag := range []string{"--version", "-version", "version", "-V"} {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		out, err := exec.CommandContext(ctx, name, flag).CombinedOutput()
+		cancel()
+		if err == nil && len(out) > 0 {
+			if line := strings.TrimSpace(strings.SplitN(string(out), "\n", 2)[0]); line != "" {
+				return line, true
+			}
+		}
+	}
+	return "", false
 }
 
 func runWithTimeout(dir, name string, combined bool, args ...string) ([]byte, error) {
