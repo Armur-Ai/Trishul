@@ -35,11 +35,11 @@ func RunChecksec(binaryPath string) (map[string]interface{}, error) {
 			message  string
 			severity string
 		}{
-			"RELRO":     {"relro", "no", "No RELRO — GOT overwrite attacks possible", "HIGH"},
+			"RELRO":        {"relro", "no", "No RELRO — GOT overwrite attacks possible", "HIGH"},
 			"Stack Canary": {"canary", "no", "No stack canary — buffer overflow exploitation easier", "HIGH"},
-			"NX":        {"nx", "no", "NX disabled — code execution on stack possible", "CRITICAL"},
-			"PIE":       {"pie", "no", "No PIE — ASLR bypass easier", "MEDIUM"},
-			"FORTIFY":   {"fortify_source", "no", "FORTIFY_SOURCE not enabled", "LOW"},
+			"NX":           {"nx", "no", "NX disabled — code execution on stack possible", "CRITICAL"},
+			"PIE":          {"pie", "no", "No PIE — ASLR bypass easier", "MEDIUM"},
+			"FORTIFY":      {"fortify_source", "no", "FORTIFY_SOURCE not enabled", "LOW"},
 		}
 
 		for name, check := range checks {
@@ -130,11 +130,4 @@ func RunStringScan(binaryPath string) (map[string]interface{}, error) {
 	}
 
 	return map[string]interface{}{"binary_security": findings}, nil
-}
-
-func truncateStr(s string, n int) string {
-	if len(s) <= n {
-		return s
-	}
-	return s[:n-3] + "..."
 }

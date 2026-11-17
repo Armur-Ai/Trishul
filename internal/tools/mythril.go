@@ -1,11 +1,11 @@
 package internal
 
 import (
-	"github.com/Armur-Ai/Trishul/internal/logger"
-	utils "github.com/Armur-Ai/Trishul/pkg"
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/Armur-Ai/Trishul/internal/logger"
+	utils "github.com/Armur-Ai/Trishul/pkg"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -22,7 +22,7 @@ func RunMythril(directory string) (map[string]interface{}, error) {
 	findCmd := exec.Command("find", directory, "-name", "*.sol", "-not", "-path", "*/node_modules/*")
 	var findOut bytes.Buffer
 	findCmd.Stdout = &findOut
-	findCmd.Run()
+	_ = findCmd.Run()
 
 	solFiles := strings.Split(strings.TrimSpace(findOut.String()), "\n")
 	if len(solFiles) == 0 || (len(solFiles) == 1 && solFiles[0] == "") {
@@ -59,7 +59,7 @@ func categorizeMythrilResults(raw, directory, filename string) map[string][]inte
 	categorized := utils.InitCategorizedResults()
 
 	var report struct {
-		Success bool `json:"success"`
+		Success bool   `json:"success"`
 		Error   string `json:"error"`
 		Issues  []struct {
 			Title       string `json:"title"`

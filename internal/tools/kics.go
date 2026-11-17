@@ -1,10 +1,10 @@
 package internal
 
 import (
-	"github.com/Armur-Ai/Trishul/internal/logger"
-	utils "github.com/Armur-Ai/Trishul/pkg"
 	"encoding/json"
 	"fmt"
+	"github.com/Armur-Ai/Trishul/internal/logger"
+	utils "github.com/Armur-Ai/Trishul/pkg"
 	"os"
 	"path/filepath"
 	"strings"
@@ -20,7 +20,7 @@ func RunKICS(directory string) (map[string]interface{}, error) {
 	}
 	defer os.RemoveAll(outDir)
 
-	RunToolCommandStdout("kics", "scan",
+	_, _ = RunToolCommandStdout("kics", "scan",
 		"-p", directory,
 		"-o", outDir,
 		"--report-formats", "json",
@@ -47,13 +47,13 @@ func categorizeKICSResults(raw, directory string) map[string][]interface{} {
 			Severity  string `json:"severity"`
 			Platform  string `json:"platform"`
 			Files     []struct {
-				FileName     string `json:"file_name"`
-				Line         int    `json:"line"`
-				IssueType    string `json:"issue_type"`
-				SearchKey    string `json:"search_key"`
-				KeyExpected  string `json:"expected_value"`
-				KeyActual    string `json:"actual_value"`
-				SimID        string `json:"similarity_id"`
+				FileName    string `json:"file_name"`
+				Line        int    `json:"line"`
+				IssueType   string `json:"issue_type"`
+				SearchKey   string `json:"search_key"`
+				KeyExpected string `json:"expected_value"`
+				KeyActual   string `json:"actual_value"`
+				SimID       string `json:"similarity_id"`
 			} `json:"files"`
 			CISDescriptionID string `json:"cis_description_id"`
 		} `json:"queries"`

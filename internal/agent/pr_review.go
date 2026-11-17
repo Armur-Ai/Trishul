@@ -113,9 +113,7 @@ func ReviewPR(ctx context.Context, prURL string, opts ReviewOpts) (*PRReview, er
 	}
 
 	// 8. Exploit simulation (if enabled) — placeholder for Sprint 18
-	if opts.ExploitSim {
-		// Attempt exploits for HIGH/CRITICAL findings
-	}
+	//     (opts.ExploitSim will attempt exploits for HIGH/CRITICAL findings)
 
 	// 9. Determine verdict
 	review.Verdict = determineVerdict(review, opts.FailOnSeverity)
@@ -433,8 +431,8 @@ func generateSummary(review *PRReview) string {
 	}
 
 	b.WriteString("### Summary\n")
-	b.WriteString(fmt.Sprintf("| Metric | Count |\n"))
-	b.WriteString(fmt.Sprintf("|--------|-------|\n"))
+	b.WriteString("| Metric | Count |\n")
+	b.WriteString("|--------|-------|\n")
 	b.WriteString(fmt.Sprintf("| SAST Findings | %d |\n", review.SASTFindings))
 	b.WriteString(fmt.Sprintf("| DAST Findings | %d |\n", review.DASTFindings))
 	b.WriteString(fmt.Sprintf("| Attack Paths | %d |\n", review.AttackPaths))

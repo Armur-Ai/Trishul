@@ -32,13 +32,12 @@ const (
 // instrRule is one detection pattern. Several rules may share a CheckID; findings
 // are de-duplicated per (CheckID, line).
 type instrRule struct {
-	checkID   string
-	title     string
-	severity  string
-	enabled   string
-	cwe       string
-	re        *regexp.Regexp
-	multiline bool // match is anchored to line starts; evidence uses the matched line
+	checkID  string
+	title    string
+	severity string
+	enabled  string
+	cwe      string
+	re       *regexp.Regexp
 }
 
 // Patterns are intentionally conservative to avoid flooding ordinary instruction

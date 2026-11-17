@@ -185,7 +185,7 @@ Project files:
 		// Try extracting JSON from markdown code block
 		if idx := strings.Index(resp, "{"); idx >= 0 {
 			if end := strings.LastIndex(resp, "}"); end > idx {
-				json.Unmarshal([]byte(resp[idx:end+1]), &profile)
+				_ = json.Unmarshal([]byte(resp[idx:end+1]), &profile)
 			}
 		}
 	}

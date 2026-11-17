@@ -62,9 +62,9 @@ func queryEPSSBatch(cveIDs []string) (map[string]EPSSScore, error) {
 
 	var response struct {
 		Data []struct {
-			CVE        string  `json:"cve"`
-			EPSS       string  `json:"epss"`
-			Percentile string  `json:"percentile"`
+			CVE        string `json:"cve"`
+			EPSS       string `json:"epss"`
+			Percentile string `json:"percentile"`
 		} `json:"data"`
 	}
 
@@ -75,8 +75,8 @@ func queryEPSSBatch(cveIDs []string) (map[string]EPSSScore, error) {
 	result := make(map[string]EPSSScore)
 	for _, d := range response.Data {
 		var epss, percentile float64
-		fmt.Sscanf(d.EPSS, "%f", &epss)
-		fmt.Sscanf(d.Percentile, "%f", &percentile)
+		_, _ = fmt.Sscanf(d.EPSS, "%f", &epss)
+		_, _ = fmt.Sscanf(d.Percentile, "%f", &percentile)
 
 		result[d.CVE] = EPSSScore{
 			CVE:        d.CVE,

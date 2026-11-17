@@ -56,7 +56,8 @@ func TestMask_AtBoundary(t *testing.T) {
 
 func TestMask_Deterministic(t *testing.T) {
 	s := "AKIAIOSFODNN7EXAMPLE"
-	if Mask(s) != Mask(s) {
+	a, b := Mask(s), Mask(s)
+	if a != b {
 		t.Errorf("Mask is not deterministic for %q", s)
 	}
 }

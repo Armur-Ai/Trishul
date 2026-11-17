@@ -20,7 +20,7 @@ type AttackGraph struct {
 type AttackNode struct {
 	ID        string `json:"id"`
 	FindingID string `json:"finding_id,omitempty"`
-	Type      string `json:"type"`     // entry_point, vulnerability, privilege, asset
+	Type      string `json:"type"` // entry_point, vulnerability, privilege, asset
 	Label     string `json:"label"`
 	Severity  string `json:"severity"`
 }
@@ -143,9 +143,7 @@ func BuildGraph(findings []models.Finding) *AttackGraph {
 				graph.Nodes = append(graph.Nodes, node)
 			}
 		}
-		for _, edge := range path.edges {
-			graph.Edges = append(graph.Edges, edge)
-		}
+		graph.Edges = append(graph.Edges, path.edges...)
 		graph.Paths = append(graph.Paths, path.attackPath)
 	}
 

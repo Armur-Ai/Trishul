@@ -225,7 +225,7 @@ func detectUnverifiedWebhook(relPath, text, lower string, lines []string) []map[
 
 	msg := subject + " reads the raw request body but never verifies the provider signature, " +
 		"so any caller can forge webhook events (e.g. fake a payment or subscription change)."
-	remediation := "Verify the signature before trusting the payload"
+	var remediation string
 	if provider == "Stripe" {
 		remediation = "Verify the event with `stripe.webhooks.constructEvent(rawBody, signatureHeader, endpointSecret)` and reject anything that throws, before using the payload."
 	} else if provider == "Svix" || provider == "Clerk" {

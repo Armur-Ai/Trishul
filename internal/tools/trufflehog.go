@@ -1,12 +1,11 @@
 package internal
 
 import (
+	"encoding/json"
 	"github.com/Armur-Ai/Trishul/internal/logger"
 	"github.com/Armur-Ai/Trishul/internal/redact"
 	utils "github.com/Armur-Ai/Trishul/pkg"
-	"encoding/json"
 	"os/exec"
-	"strconv"
 	"strings"
 )
 
@@ -66,13 +65,6 @@ func categorizeTrufflehogResults(results string, directory string) map[string][]
 		}
 
 		for _, secret := range secrets {
-			line := secret.Line
-			if lineStr, ok := line.(string); ok {
-				if convertedLine, err := strconv.Atoi(lineStr); err == nil {
-					line = convertedLine
-				}
-			}
-
 			categorizedResults[utils.SECRET_DETECTION] = append(categorizedResults[utils.SECRET_DETECTION], formatSecretIssue(secret, directory))
 		}
 	}

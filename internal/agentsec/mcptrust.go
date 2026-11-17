@@ -275,9 +275,7 @@ func mcpPackageArg(tokens []string) string {
 // Floating tags (latest/next/beta/...) count as unpinned.
 func mcpIsPinned(pkg string) bool {
 	s := pkg
-	if strings.HasPrefix(s, "@") { // scoped package: skip the scope separator
-		s = s[1:]
-	}
+	s = strings.TrimPrefix(s, "@") // scoped package: skip the scope separator
 	at := strings.Index(s, "@")
 	if at < 0 {
 		return false

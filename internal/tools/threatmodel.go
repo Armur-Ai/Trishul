@@ -21,11 +21,11 @@ type RouteInfo struct {
 
 // ThreatModel represents the threat model generated from code analysis.
 type ThreatModel struct {
-	Routes       []RouteInfo            `json:"routes"`
-	EntryPoints  int                    `json:"entry_points"`
-	DataStores   []string               `json:"data_stores"`
-	ExternalAPIs []string               `json:"external_apis"`
-	Mermaid      string                 `json:"mermaid_dfd"`
+	Routes       []RouteInfo `json:"routes"`
+	EntryPoints  int         `json:"entry_points"`
+	DataStores   []string    `json:"data_stores"`
+	ExternalAPIs []string    `json:"external_apis"`
+	Mermaid      string      `json:"mermaid_dfd"`
 }
 
 // Route detection patterns per framework.
@@ -56,7 +56,7 @@ var externalAPIPatterns = []*regexp.Regexp{
 func DetectRoutes(dirPath string) []RouteInfo {
 	var routes []RouteInfo
 
-	filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
+	_ = filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil || info.IsDir() || !isSourceFile(path) {
 			return nil
 		}

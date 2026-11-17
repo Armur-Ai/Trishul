@@ -46,7 +46,7 @@ func Create(ctx context.Context, projectPath string, profile *ai.TechProfile) (*
 
 	// Create temp dir for generated Dockerfile if needed
 	s.tempDir = filepath.Join(os.TempDir(), s.ID)
-	os.MkdirAll(s.tempDir, 0755)
+	_ = os.MkdirAll(s.tempDir, 0755)
 
 	return s, nil
 }
@@ -177,11 +177,11 @@ func (s *Sandbox) Destroy(ctx context.Context) error {
 	s.Status = "destroyed"
 
 	// Stop and remove container
-	exec.CommandContext(ctx, "docker", "stop", s.ID).Run()
-	exec.CommandContext(ctx, "docker", "rm", "-f", s.ID).Run()
+	_ = exec.CommandContext(ctx, "docker", "stop", s.ID).Run()
+	_ = exec.CommandContext(ctx, "docker", "rm", "-f", s.ID).Run()
 
 	// Remove image
-	exec.CommandContext(ctx, "docker", "rmi", s.ID).Run()
+	_ = exec.CommandContext(ctx, "docker", "rmi", s.ID).Run()
 
 	// Clean up temp dir
 	if s.tempDir != "" {

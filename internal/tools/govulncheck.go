@@ -41,7 +41,7 @@ func parseGovulncheckOutput(output []byte) (map[string]interface{}, error) {
 				severity = "CRITICAL"
 			}
 
-			reachableStr := "unknown"
+			var reachableStr string
 			if reachable {
 				reachableStr = "yes (reachable in call graph)"
 			} else {

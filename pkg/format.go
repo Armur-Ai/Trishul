@@ -30,14 +30,6 @@ func ReformatScanResults(results map[string]interface{}) map[string]interface{} 
 	return reformattedResults
 }
 
-// ensureNonNull replaces nil values with empty slices
-func ensureNonNull(value interface{}) interface{} {
-	if value == nil {
-		return []interface{}{} // Return empty slice instead of nil
-	}
-	return value
-}
-
 // ReformatAdvancedScanResults reformats advanced scan results
 func ReformatAdvancedScanResults(results map[string]interface{}) map[string]interface{} {
 	reformattedResults := map[string]interface{}{

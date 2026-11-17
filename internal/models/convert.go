@@ -144,7 +144,7 @@ func getInt(m map[string]interface{}, key string) int {
 			return val
 		case string:
 			n := 0
-			fmt.Sscanf(val, "%d", &n)
+			_, _ = fmt.Sscanf(val, "%d", &n)
 			return n
 		}
 	}

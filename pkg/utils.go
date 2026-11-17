@@ -1,9 +1,9 @@
 package utils
 
 import (
-	pkg "github.com/Armur-Ai/Trishul/pkg/common"
 	"encoding/json"
 	"fmt"
+	pkg "github.com/Armur-Ai/Trishul/pkg/common"
 	"os"
 	"path/filepath"
 	"strings"
@@ -114,7 +114,7 @@ func DetectRepoLanguage(directory string) string {
 		"php": 0, "c": 0, "sol": 0,
 	}
 
-	filepath.Walk(directory, func(path string, info os.FileInfo, err error) error {
+	_ = filepath.Walk(directory, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -147,7 +147,7 @@ func DetectRepoLanguage(directory string) string {
 
 	// Prefer IaC if Dockerfile or Terraform files are present.
 	iacCount := 0
-	filepath.Walk(directory, func(path string, info os.FileInfo, err error) error {
+	_ = filepath.Walk(directory, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
