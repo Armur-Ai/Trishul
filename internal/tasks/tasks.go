@@ -447,8 +447,16 @@ func buildSimpleScanRunnersNamed(dirPath, language string) ([]func() toolResult,
 			r, err := tools.RunAbuseControls(dirPath)
 			return toolResult{"abuse-controls", r, err}
 		}),
+		withTimeout("webhook-verification", func() toolResult {
+			r, err := tools.RunWebhookVerification(dirPath)
+			return toolResult{"webhook-verification", r, err}
+		}),
+		withTimeout("llm-integration", func() toolResult {
+			r, err := tools.RunUnsafeLLMIntegration(dirPath)
+			return toolResult{"llm-integration", r, err}
+		}),
 	}
-	names := []string{"semgrep", "supabase-rls", "client-secrets", "agent-security", "placeholder-security", "abuse-controls"}
+	names := []string{"semgrep", "supabase-rls", "client-secrets", "agent-security", "placeholder-security", "abuse-controls", "webhook-verification", "llm-integration"}
 
 	switch language {
 	case "go":
