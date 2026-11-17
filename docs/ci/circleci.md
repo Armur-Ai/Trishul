@@ -12,8 +12,8 @@ jobs:
     steps:
       - checkout
       - run:
-          name: Armur Security Scan
-          command: armur scan . --fail-on-severity high --format sarif --output results.sarif
+          name: Trishul Security Scan
+          command: trishul scan . --fail-on-severity high --format sarif --output results.sarif
       - store_artifacts:
           path: results.sarif
 

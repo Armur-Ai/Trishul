@@ -3,11 +3,11 @@
 Add to your `.gitlab-ci.yml`:
 
 ```yaml
-armur-scan:
+trishul-scan:
   image: armur/agent:latest
   stage: test
   script:
-    - armur scan . --format sarif --output gl-sast-report.json --fail-on-severity high
+    - trishul scan . --format sarif --output gl-sast-report.json --fail-on-severity high
   artifacts:
     reports:
       sast: gl-sast-report.json

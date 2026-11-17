@@ -1,6 +1,9 @@
-# .armur.yml Configuration Reference
+# .trishul.yml Configuration Reference
 
-Place `.armur.yml` in your project root to configure Armur's behavior without CLI flags.
+Place `.trishul.yml` in your project root to configure Trishul's behavior without CLI flags.
+
+> The legacy filename `.armur.yml` is still read as a deprecated fallback when no
+> `.trishul.yml` is present; rename it to `.trishul.yml` to silence the deprecation warning.
 
 ## Full Schema
 
@@ -57,7 +60,7 @@ plugins:
 
 ## Precedence
 
-CLI flags > environment variables > `.armur.yml` > defaults
+CLI flags > environment variables > `.trishul.yml` > defaults
 
 ## Examples
 

@@ -1,25 +1,27 @@
-# Armur Code Scanner — GitLab CI Template
+# Trishul Code Scanner — GitLab CI Template
 # -----------------------------------------------
 # Add this to your project's .gitlab-ci.yml:
 #
 #   include:
-#     - remote: 'https://raw.githubusercontent.com/armur-ai/armur-code-scanner/main/docs/ci-templates/gitlab-ci.yml'
+#     - remote: 'https://raw.githubusercontent.com/trishul-ai/trishul-code-scanner/main/docs/ci-templates/gitlab-ci.yml'
 #
 # Or copy the job below directly into your pipeline.
 #
 # Prerequisites:
 #   - Set CI/CD variable: ARMUR_API_KEY (masked)
-#   - Armur server must be accessible from your GitLab runner
+#   - Trishul server must be accessible from your GitLab runner
 #     (or use the Docker-based job below which starts its own server)
 
 variables:
-  ARMUR_SERVER_URL: "${ARMUR_SERVER_URL:-http://localhost:4500}"
-  ARMUR_LANGUAGE: ""           # Set to go, py, or js; leave blank for auto-detect
-  ARMUR_FAIL_ON_SEVERITY: "high"  # high, medium, low, info
-  ARMUR_IMAGE: "armurscanner/armur:latest"
+  TRISHUL_SERVER_URL: "${TRISHUL_SERVER_URL:-http://localhost:4500}"
+  TRISHUL_LANGUAGE: ""           # Set to go, py, or js; leave blank for auto-detect
+  TRISHUL_FAIL_ON_SEVERITY: "high"  # high, medium, low, info
+  # TODO: publish trishul image — armurscanner/armur is an external registry
+  # name we don't control yet; swap once the trishul image is published.
+  TRISHUL_IMAGE: "armurscanner/armur:latest"
 
-# ── Job: armur-security-scan ───────────────────────────────────────────
-armur-security-scan:
+# ── Job: trishul-security-scan ───────────────────────────────────────────
+trishul-security-scan:
   stage: test
   image: docker:24
   services:
@@ -28,19 +30,19 @@ armur-security-scan:
     DOCKER_DRIVER: overlay2
     DOCKER_TLS_CERTDIR: ""
   before_script:
-    # Start the Armur server in the background
+    # Start the Trishul server in the background
     - |
       docker run -d \
-        --name armur-server \
+        --name trishul-server \
         --network host \
         -e ARMUR_API_KEY="${ARMUR_API_KEY}" \
         -v "${CI_PROJECT_DIR}:/workspace:ro" \
-        "${ARMUR_IMAGE}"
+        "${TRISHUL_IMAGE}"
     # Wait for the server to become healthy
     - |
       for i in $(seq 1 30); do
         if wget -qO- http://localhost:4500/health >/dev/null 2>&1; then
-          echo "Armur server ready"
+          echo "Trishul server ready"
           break
         fi
         echo "Waiting ($i/30)..."
@@ -52,7 +54,7 @@ armur-security-scan:
       RESPONSE=$(wget -qO- \
         --header="Content-Type: application/json" \
         --header="Authorization: Bearer ${ARMUR_API_KEY}" \
-        --post-data="{\"local_path\":\"/workspace\",\"language\":\"${ARMUR_LANGUAGE}\"}" \
+        --post-data="{\"local_path\":\"/workspace\",\"language\":\"${TRISHUL_LANGUAGE}\"}" \
         http://localhost:4500/api/v1/scan/local)
       TASK_ID=$(echo "$RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['task_id'])")
       echo "TASK_ID=$TASK_ID"
@@ -72,13 +74,13 @@ armur-security-scan:
       done
     # Fetch SARIF report
     - |
-      wget -qO armur-results.sarif \
+      wget -qO trishul-results.sarif \
         --header="Authorization: Bearer ${ARMUR_API_KEY}" \
         "http://localhost:4500/api/v1/status/${TASK_ID}?format=sarif"
     # Optionally fail on severity
     - |
-      if [ -n "${ARMUR_FAIL_ON_SEVERITY}" ]; then
-        case "${ARMUR_FAIL_ON_SEVERITY}" in
+      if [ -n "${TRISHUL_FAIL_ON_SEVERITY}" ]; then
+        case "${TRISHUL_FAIL_ON_SEVERITY}" in
           critical) LEVELS="error" ;;
           high)     LEVELS="error" ;;
           medium)   LEVELS="error warning" ;;
@@ -89,28 +91,28 @@ armur-security-scan:
         for LEVEL in $LEVELS; do
           N=$(python3 -c "
 import json
-data = json.load(open('armur-results.sarif'))
+data = json.load(open('trishul-results.sarif'))
 count = sum(1 for run in data.get('runs',[]) for r in run.get('results',[]) if r.get('level')=='$LEVEL')
 print(count)")
           COUNT=$((COUNT + N))
         done
-        echo "Findings at '${ARMUR_FAIL_ON_SEVERITY}' or above: $COUNT"
+        echo "Findings at '${TRISHUL_FAIL_ON_SEVERITY}' or above: $COUNT"
         if [ "$COUNT" -gt 0 ]; then
-          echo "ERROR: $COUNT finding(s) found at severity '${ARMUR_FAIL_ON_SEVERITY}' or above"
+          echo "ERROR: $COUNT finding(s) found at severity '${TRISHUL_FAIL_ON_SEVERITY}' or above"
           exit 1
         fi
       fi
   after_script:
-    - docker stop armur-server || true
+    - docker stop trishul-server || true
   artifacts:
-    name: armur-scan-results
+    name: trishul-scan-results
     when: always
     paths:
-      - armur-results.sarif
+      - trishul-results.sarif
     reports:
       # GitLab Security Dashboard integration (SAST report format)
       # GitLab expects SAST reports; convert SARIF if needed.
-      sast: armur-results.sarif
+      sast: trishul-results.sarif
     expire_in: 1 week
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'

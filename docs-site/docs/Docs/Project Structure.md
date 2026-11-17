@@ -1,4 +1,4 @@
-**The ArmurAI backend follows a modular design, with code organized into distinct directories and packages based on their functionalities. This approach promotes code reusability, maintainability, and separation of concerns.**
+**The Trishul backend follows a modular design, with code organized into distinct directories and packages based on their functionalities. This approach promotes code reusability, maintainability, and separation of concerns.**
 
 ## Directory Structure
 
@@ -46,7 +46,7 @@ Project Directory Structure:
 │   │   └── cwd.json
 │   └── utils.go
 ├── postman
-│   └── armur-codescan.postman_collection.json
+│   └── trishul-codescan.postman_collection.json
 ├── rule_config
 │   ├── eslint
 │   │   ├── eslint.config.js

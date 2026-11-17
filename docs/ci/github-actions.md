@@ -2,7 +2,7 @@
 
 ## Quick Setup
 
-Add this workflow to `.github/workflows/armur.yml`:
+Add this workflow to `.github/workflows/trishul.yml`:
 
 ```yaml
 name: Security Scan
@@ -14,16 +14,16 @@ on:
     branches: [main]
 
 jobs:
-  armur-scan:
+  trishul-scan:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Armur
+      - name: Install Trishul
         run: curl -fsSL https://install.armur.ai | sh
 
       - name: Run scan
-        run: armur scan . --format sarif --output results.sarif --fail-on-severity high
+        run: trishul scan . --format sarif --output results.sarif --fail-on-severity high
 
       - name: Upload SARIF
         if: always()
@@ -37,7 +37,7 @@ jobs:
 Use `--fail-on-severity` to fail the build when findings exceed a threshold:
 
 ```yaml
-- run: armur scan . --fail-on-severity high
+- run: trishul scan . --fail-on-severity high
 ```
 
 Options: `critical`, `high`, `medium`, `low`
@@ -47,7 +47,7 @@ Options: `critical`, `high`, `medium`, `low`
 Scan only changed files in a PR:
 
 ```yaml
-- run: armur scan . --diff origin/main --format sarif
+- run: trishul scan . --diff origin/main --format sarif
 ```
 
 ## Advanced: Deep Scan + Report
@@ -55,6 +55,6 @@ Scan only changed files in a PR:
 ```yaml
 - name: Deep scan
   run: |
-    armur scan . --advanced --format sarif --output results.sarif
-    armur report --task $(armur history | head -1 | awk '{print $2}') --format html
+    trishul scan . --advanced --format sarif --output results.sarif
+    trishul report --task $(trishul history | head -1 | awk '{print $2}') --format html
 ```
