@@ -2,6 +2,7 @@ package internal
 
 import (
 	"github.com/Armur-Ai/Trishul/internal/logger"
+	"github.com/Armur-Ai/Trishul/internal/redact"
 	utils "github.com/Armur-Ai/Trishul/pkg"
 	"encoding/json"
 	"os/exec"
@@ -81,10 +82,11 @@ func categorizeTrufflehogResults(results string, directory string) map[string][]
 
 func formatSecretIssue(secret Secret, directory string) map[string]interface{} {
 	return map[string]interface{}{
-		"path":     strings.Replace(secret.Path, directory, "", 1),
-		"line":     secret.Line,
-		"message":  secret.Rule.Message,
-		"severity": secret.Rule.Severity,
-		"secret":   secret.Secret,
+		"path":           strings.Replace(secret.Path, directory, "", 1),
+		"line":           secret.Line,
+		"message":        secret.Rule.Message,
+		"severity":       secret.Rule.Severity,
+		"secret_preview": redact.Mask(secret.Secret),
+		"fingerprint":    redact.Fingerprint(secret.Secret),
 	}
 }

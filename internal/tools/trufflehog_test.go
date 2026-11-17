@@ -89,7 +89,17 @@ func TestFormatSecretIssue(t *testing.T) {
 	if result["severity"] != "HIGH" {
 		t.Errorf("expected severity HIGH, got %v", result["severity"])
 	}
-	if result["secret"] != "tok-xxxxx" {
-		t.Errorf("expected secret value, got %v", result["secret"])
+	// The raw secret must never be retained in the finding map.
+	if _, present := result["secret"]; present {
+		t.Errorf("raw secret must not be present, got %v", result["secret"])
+	}
+	if result["secret_preview"] == nil {
+		t.Errorf("expected secret_preview to be present")
+	}
+	if result["secret_preview"] == "tok-xxxxx" {
+		t.Errorf("secret_preview must not equal the raw secret")
+	}
+	if result["fingerprint"] == nil || result["fingerprint"] == "" {
+		t.Errorf("expected fingerprint to be present")
 	}
 }
