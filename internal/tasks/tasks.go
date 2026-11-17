@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -46,6 +47,21 @@ func toolTimeout() time.Duration {
 		}
 	}
 	return 300 * time.Second
+}
+
+// web3Enabled reports whether the opt-in smart-contract (web3) profile is on.
+// Slither/Mythril are out of scope for the default code scanner and run only
+// when explicitly requested via TRISHUL_PROFILE=web3|all or TRISHUL_WEB3=1.
+func web3Enabled() bool {
+	switch strings.ToLower(os.Getenv("TRISHUL_PROFILE")) {
+	case "web3", "all":
+		return true
+	}
+	switch strings.ToLower(os.Getenv("TRISHUL_WEB3")) {
+	case "1", "true", "yes", "on":
+		return true
+	}
+	return false
 }
 
 // withTimeout wraps a tool runner so that it is cancelled after the configured
@@ -493,17 +509,23 @@ func buildSimpleScanRunnersNamed(dirPath, language string) ([]func() toolResult,
 		)
 		names = append(names, "hadolint", "tfsec", "kics", "kube-linter", "kube-score")
 	case "sol":
-		runners = append(runners,
-			withTimeout("slither", func() toolResult {
-				r, err := tools.RunSlither(dirPath)
-				return toolResult{"slither", r, err}
-			}),
-			withTimeout("mythril", func() toolResult {
-				r, err := tools.RunMythril(dirPath)
-				return toolResult{"mythril", r, err}
-			}),
-		)
-		names = append(names, "slither", "mythril")
+		// Smart-contract analysis (Slither/Mythril) is out of scope for the
+		// default code scanner; run it only under the opt-in web3 profile.
+		if web3Enabled() {
+			runners = append(runners,
+				withTimeout("slither", func() toolResult {
+					r, err := tools.RunSlither(dirPath)
+					return toolResult{"slither", r, err}
+				}),
+				withTimeout("mythril", func() toolResult {
+					r, err := tools.RunMythril(dirPath)
+					return toolResult{"mythril", r, err}
+				}),
+			)
+			names = append(names, "slither", "mythril")
+		} else {
+			logger.Info().Msg("smart-contract tools (slither/mythril) are off by default; set TRISHUL_PROFILE=web3 to enable")
+		}
 	}
 
 	return runners, names
