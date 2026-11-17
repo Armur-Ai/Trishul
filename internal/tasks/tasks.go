@@ -439,8 +439,16 @@ func buildSimpleScanRunnersNamed(dirPath, language string) ([]func() toolResult,
 				utils.AGENT_SECURITY: agentsec.ToFindingMaps(findings),
 			}, nil}
 		}),
+		withTimeout("placeholder-security", func() toolResult {
+			r, err := tools.RunPlaceholderSecurity(dirPath)
+			return toolResult{"placeholder-security", r, err}
+		}),
+		withTimeout("abuse-controls", func() toolResult {
+			r, err := tools.RunAbuseControls(dirPath)
+			return toolResult{"abuse-controls", r, err}
+		}),
 	}
-	names := []string{"semgrep", "supabase-rls", "client-secrets", "agent-security"}
+	names := []string{"semgrep", "supabase-rls", "client-secrets", "agent-security", "placeholder-security", "abuse-controls"}
 
 	switch language {
 	case "go":
