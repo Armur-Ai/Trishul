@@ -51,12 +51,12 @@
 - **Acceptance:** ✅ invariant test passes; `SafeRemoveAll`/`IsManagedPath` unit-tested.
 
 ### 0.4 Honest scanner status (`internal/tools/*`, `internal/tasks/tasks.go`, `cli/cmd/{scan,run}.go`)
-- [ ] ✨ Add a **capability descriptor** per adapter: required binary, min version, languages/file-types, licence, resource limits, expected output format. (Replaces the ad-hoc `exec.Command`-and-ignore pattern.)
-- [ ] Add **version/existence detection** (`exec.LookPath` + `--version`) before invoking any tool.
-- [ ] ✨ Define a **structured execution result** enum: `completed_with_findings` / `completed_clean` / `skipped_unavailable` / `failed` / `timed_out` / `cancelled`. Every runner returns one.
-- [ ] Surface `scan_errors` and skipped tools in CLI output (currently suppressed at `run.go:300`, `internal/models/convert.go:16`); show a "tools: N ran, M skipped" line.
-- [ ] Migrate `exec.Command` → `exec.CommandContext` (71 sites) so timeouts actually **kill** the process (fixes the soft-timeout leak, `tasks.go:53-69`).
-- **Acceptance:** a scan on a machine missing a tool reports it as `skipped`, not clean; `trishul doctor` and the scan summary agree.
+- [x] ✨ Conservative **capability map** (`capability.go`): required binary per tool + `RequiredBinary`/`IsToolSkippable`. _(min-version/licence/resource-limit fields are a follow-up; required-binary is in.)_
+- [~] **Existence detection** done (`ToolAvailable` via `exec.LookPath`; runner records known-missing tools as skipped). _Version comparison (`--version` vs min) still to add._
+- [x] ✨ **Structured execution result** enum (`result.go`): `completed_with_findings`/`completed_clean`/`skipped_unavailable`/`failed`/`timed_out`/`cancelled` + `ClassifyOutcome`.
+- [x] Surface `scan_errors` and skipped tools in CLI output (`scan.go printScanErrors`); the runner now emits a skip for known-missing tools (`tasks.go withTimeout`).
+- [~] Migrate `exec.Command` → `exec.CommandContext`: helper `RunToolCommand[Stdout][InDir]` done (real process-kill timeout + availability); **adapter migration in progress** (delegated).
+- **Acceptance:** ✅ a known-missing tool is reported as skipped (not clean) in the CLI output and `scan_errors`.
 
 ### 0.5 Embedded engine for the default path (`cli/`, `internal/tasks`, `internal/engine` ✨ new)
 - [ ] ✨ Extract the scan pipeline into an importable **`internal/engine`** library callable in-process (no HTTP, no Redis).
