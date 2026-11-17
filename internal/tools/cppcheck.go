@@ -3,9 +3,7 @@ package internal
 import (
 	"github.com/Armur-Ai/Trishul/internal/logger"
 	utils "github.com/Armur-Ai/Trishul/pkg"
-	"bytes"
 	"encoding/xml"
-	"os/exec"
 	"strings"
 )
 
@@ -13,20 +11,16 @@ import (
 func RunCppcheck(directory string) (map[string]interface{}, error) {
 	logger.Info().Str("tool", "cppcheck").Str("dir", directory).Msg("running")
 
-	cmd := exec.Command("cppcheck",
+	// cppcheck writes XML to stderr by default; RunToolCommand captures combined output.
+	out, _ := RunToolCommand("cppcheck",
 		"--enable=all",
 		"--xml",
 		"--xml-version=2",
 		"--quiet",
 		directory,
 	)
-	// cppcheck writes XML to stderr by default
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	cmd.Run()
 
-	output := stderr.String()
+	output := string(out)
 	if strings.TrimSpace(output) == "" {
 		logger.Debug().Str("tool", "cppcheck").Msg("no output")
 		return utils.ConvertCategorizedResults(utils.InitCategorizedResults()), nil
