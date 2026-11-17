@@ -26,21 +26,9 @@ func NormalizeSeverity(tool, raw string) models.Severity {
 		return normalizeOSV(raw)
 	}
 
-	// Generic normalization — works for gosec, bandit, trivy, and most tools
-	switch upper {
-	case "CRITICAL":
-		return models.SeverityCritical
-	case "HIGH", "ERROR", "SEVERE":
-		return models.SeverityHigh
-	case "MEDIUM", "WARNING", "MODERATE":
-		return models.SeverityMedium
-	case "LOW", "MINOR":
-		return models.SeverityLow
-	case "INFO", "INFORMATIONAL", "NOTE", "STYLE":
-		return models.SeverityInfo
-	default:
-		return models.SeverityInfo
-	}
+	// Generic normalization — delegate to the single canonical mapper in models
+	// (works for gosec, bandit, trivy, and most tools).
+	return models.NormalizeSeverityString(raw)
 }
 
 func normalizeSemgrep(upper string) models.Severity {
