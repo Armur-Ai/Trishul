@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -365,19 +366,62 @@ func RunSimpleScan(dirPath string, language string) (map[string]interface{}, []S
 	// Surface the built-in, dependency-free analyzers (infra / secrets / agent
 	// security) that the standard formatter omits, matching RunSimpleScanLocal.
 	adv := utils.ReformatAdvancedScanResults(newCatResult)
-	out[utils.INFRA_SECURITY] = adv[utils.INFRA_SECURITY]
-	out[utils.SECRET_DETECTION] = adv[utils.SECRET_DETECTION]
-	if v := newCatResult[utils.AGENT_SECURITY]; v != nil {
-		out[utils.AGENT_SECURITY] = v
-	} else {
-		out[utils.AGENT_SECURITY] = []interface{}{}
-	}
-	if v := newCatResult[utils.VIBE_SECURITY]; v != nil {
-		out[utils.VIBE_SECURITY] = v
-	} else {
-		out[utils.VIBE_SECURITY] = []interface{}{}
-	}
+	out[utils.INFRA_SECURITY] = sortFlatFindings(adv[utils.INFRA_SECURITY])
+	out[utils.SECRET_DETECTION] = sortFlatFindings(adv[utils.SECRET_DETECTION])
+	out[utils.AGENT_SECURITY] = sortFlatFindings(newCatResult[utils.AGENT_SECURITY])
+	out[utils.VIBE_SECURITY] = sortFlatFindings(newCatResult[utils.VIBE_SECURITY])
 	return out, scanErrors, nil
+}
+
+// sortFlatFindings returns the flat finding maps in a stable order (path, line,
+// check_id). The vibe_security category aggregates findings from several
+// analyzers that run concurrently, so their merged order is otherwise
+// non-deterministic — which would churn SARIF/CLI diffs run to run. Always
+// returns a non-nil slice.
+func sortFlatFindings(v interface{}) []interface{} {
+	items, ok := v.([]interface{})
+	if !ok {
+		return []interface{}{}
+	}
+	// key unwraps a grouped entry ({issues:[...], message}) to its first issue so
+	// grouped categories (infra_security) sort as stably as flat ones.
+	key := func(m interface{}) (string, int, string) {
+		mm, ok := m.(map[string]interface{})
+		if !ok {
+			return "", 0, ""
+		}
+		if iss, ok := mm["issues"].([]interface{}); ok && len(iss) > 0 {
+			if f, ok := iss[0].(map[string]interface{}); ok {
+				mm = f
+			}
+		}
+		s := func(k string) string {
+			if v, ok := mm[k].(string); ok {
+				return v
+			}
+			return ""
+		}
+		var ln int
+		switch l := mm["line"].(type) {
+		case int:
+			ln = l
+		case float64:
+			ln = int(l)
+		}
+		return s("path"), ln, s("check_id")
+	}
+	sort.SliceStable(items, func(i, j int) bool {
+		pi, li, ci := key(items[i])
+		pj, lj, cj := key(items[j])
+		if pi != pj {
+			return pi < pj
+		}
+		if li != lj {
+			return li < lj
+		}
+		return ci < cj
+	})
+	return items
 }
 
 // RunSimpleScanLocal is RunSimpleScan without directory cleanup (for local paths).
@@ -393,19 +437,11 @@ func RunSimpleScanLocal(dirPath string, language string) (map[string]interface{}
 	// Surface the built-in, dependency-free analyzers (Supabase RLS -> infra,
 	// client secrets -> secrets) whose categories the standard formatter omits.
 	adv := utils.ReformatAdvancedScanResults(newCatResult)
-	out[utils.INFRA_SECURITY] = adv[utils.INFRA_SECURITY]
-	out[utils.SECRET_DETECTION] = adv[utils.SECRET_DETECTION]
+	out[utils.INFRA_SECURITY] = sortFlatFindings(adv[utils.INFRA_SECURITY])
+	out[utils.SECRET_DETECTION] = sortFlatFindings(adv[utils.SECRET_DETECTION])
 	// Agent-security findings are already flat maps; surface them directly.
-	if v := newCatResult[utils.AGENT_SECURITY]; v != nil {
-		out[utils.AGENT_SECURITY] = v
-	} else {
-		out[utils.AGENT_SECURITY] = []interface{}{}
-	}
-	if v := newCatResult[utils.VIBE_SECURITY]; v != nil {
-		out[utils.VIBE_SECURITY] = v
-	} else {
-		out[utils.VIBE_SECURITY] = []interface{}{}
-	}
+	out[utils.AGENT_SECURITY] = sortFlatFindings(newCatResult[utils.AGENT_SECURITY])
+	out[utils.VIBE_SECURITY] = sortFlatFindings(newCatResult[utils.VIBE_SECURITY])
 	return out, scanErrors, nil
 }
 
