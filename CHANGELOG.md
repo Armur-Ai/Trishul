@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### AI Agent Supply-Chain Security (new capability, in progress)
 - New `internal/agentsec` subsystem protecting developers whose AI coding agents (Claude Code, Cursor, Codex, Copilot) review/checkout PRs, read repo instructions, install deps, and run tools — from malicious instructions and execution paths planted in untrusted PRs/repos.
-- Self-registering component analyzers (passive, read-only, treat scanned text as data): **agent-instruction analysis** (override/impersonation/escalation/sensitive-action directives in CLAUDE.md/AGENTS.md/.cursorrules/…). More components (MCP/permission, command/exec-path, encoded-content, prompt-injection, cross-file attack-chain correlation) landing incrementally.
+- Seven self-registering, passive, read-only components (treat scanned text as data; never execute it): **agent-instruction analysis**, **prompt-injection** (heuristic; capped at MEDIUM), **command/execution-path** (install/CI hooks, curl|sh, secret exfil), **MCP server & tool trust** (unpinned runners, remote-code servers, embedded secrets — redacted), **permission/sandbox config** (allow-all, bypass modes, `--dangerously-*`), **encoded/obfuscation** (invisible/bidi Unicode, base64/hex decoding to instructions, hidden HTML comments), and **cross-file attack-chain correlation** (`AGENT-CHAIN-001` — raises corroborated signals to HIGH, e2e-tested).
 - Findings carry the **trust boundary** crossed, the affected agent workflow, confidence + limitations, and remediation; wired into every scan and emitted to SARIF; rendered in the CLI. Never claims an agent is compromised merely because suspicious text exists.
 
 ### Phase 0: Safety & honesty hardening (in progress)
