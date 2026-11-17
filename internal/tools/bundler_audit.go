@@ -3,9 +3,7 @@ package internal
 import (
 	"github.com/Armur-Ai/Trishul/internal/logger"
 	utils "github.com/Armur-Ai/Trishul/pkg"
-	"bytes"
 	"fmt"
-	"os/exec"
 	"regexp"
 	"strings"
 )
@@ -14,15 +12,9 @@ import (
 func RunBundlerAudit(directory string) (map[string]interface{}, error) {
 	logger.Info().Str("tool", "bundler-audit").Str("dir", directory).Msg("running")
 
-	cmd := exec.Command("bundle", "audit", "check", "--update")
-	cmd.Dir = directory
+	stdout, _ := RunToolCommandStdoutInDir(directory, "bundle", "audit", "check", "--update")
 
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	cmd.Run()
-
-	output := stdout.String()
+	output := string(stdout)
 	if strings.TrimSpace(output) == "" {
 		logger.Debug().Str("tool", "bundler-audit").Msg("no output")
 		return utils.ConvertCategorizedResults(utils.InitCategorizedResults()), nil

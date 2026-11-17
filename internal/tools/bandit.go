@@ -3,10 +3,8 @@ package internal
 import (
 	"github.com/Armur-Ai/Trishul/internal/logger"
 	utils "github.com/Armur-Ai/Trishul/pkg"
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"os/exec"
 	"path/filepath"
 	"strings"
 )
@@ -39,12 +37,8 @@ func RunBandit(directory string) (map[string]interface{}, error) {
 }
 
 func RunBanditOnRepo(directory string) string {
-	cmd := exec.Command("bandit", "-r", directory, "-f", "json")
-	var out, stderr bytes.Buffer
-	cmd.Stdout = &out
-	cmd.Stderr = &stderr
-	cmd.Run()
-	return out.String()
+	out, _ := RunToolCommandStdout("bandit", "-r", directory, "-f", "json")
+	return string(out)
 }
 
 func CategorizeBanditResults(results string) map[string][]interface{} {
