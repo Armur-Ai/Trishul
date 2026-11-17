@@ -32,7 +32,13 @@ var scanInteractiveCmd = &cobra.Command{
 		// Scan profile: exported via env so an auto-started server inherits it.
 		// (For an already-running server, set TRISHUL_PROFILE in its environment.)
 		if profile, _ := cmd.Flags().GetString("profile"); profile != "" {
-			os.Setenv("TRISHUL_PROFILE", profile)
+			switch profile {
+			case "security", "quality", "web3", "all":
+				os.Setenv("TRISHUL_PROFILE", profile)
+			default:
+				color.Red("Unknown --profile %q (expected: security, quality, web3, all)", profile)
+				os.Exit(1)
+			}
 		}
 
 		var targetType string
