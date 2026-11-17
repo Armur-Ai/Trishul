@@ -66,16 +66,16 @@
 - **Acceptance:** `trishul scan .` works with no Redis and no server process running.
 
 ### 0.6 Findings normalization & SARIF correctness (`internal/models`, `internal/tools/severity.go`, `pkg/sarif`)
-- [ ] _Deferred:_ unify the severity normalizers. `tools.NormalizeSeverity` (canonical) imports `models`, so `models.normalizeSev` can't delegate to it without a cycle; the canonical one is also currently unwired. Proper fix = move the shared map to a low-level package — a focused follow-up, low runtime impact today.
-- [ ] Add missing schema fields: **scanner version**, **data-flow/trace** (for Phase 1), structured evidence.
-- [x] ✨ **Line-insensitive fingerprint** in SARIF (`partialFingerprints` = hash of ruleID|file|message). _(Unifying the `Finding.ComputeID` vs `dedup.go` keys is a follow-up.)_
-- [x] SARIF: emit `partialFingerprints` + **deterministic rule ordering**. _(Consuming SCA/IaC/secrets categories and a real non-`UNKNOWN` ruleId remain.)_
-- **Acceptance:** ✅ SARIF carries stable fingerprints and reproducible ordering; full category coverage pending.
+- [x] **Severity normalizers unified**: one canonical `models.NormalizeSeverityString`; `tools.NormalizeSeverity` delegates its generic path to it; `models.normalizeSev` too. No divergent copy. (Avoided the cycle by putting the shared map in the low-level `models` package.)
+- [ ] Add missing schema fields: **scanner version**, **data-flow/trace** (for Phase 1), structured evidence. _(ToolVersion helper exists; wiring into findings pending.)_
+- [x] ✨ **Line-insensitive, unified fingerprint**: `Finding.ComputeID` now hashes Tool|File|RuleID|normalized-Message (no raw line); the dedup key is aligned to the same basis. SARIF `partialFingerprints` likewise line-insensitive.
+- [x] SARIF: `partialFingerprints` + **deterministic rule ordering** + **consumes all categories** (security, secrets-redacted, SCA, IaC) with stable per-rule ids (no `UNKNOWN` collapse).
+- **Acceptance:** ✅ SARIF carries stable fingerprints, reproducible ordering, and full category coverage; severity + finding-identity unified.
 
 ### 0.7 Profiles & signal-over-volume (`internal/tasks`, `cli`)
-- [~] ✨ **web3 profile** done: Slither/Mythril (the only out-of-scope tools wired into the default scan) now run only under `TRISHUL_PROFILE=web3|all`. Full `security`/`quality`/`all` profile plumbing through the CLI is the remaining part.
-- [ ] Default profile excludes golint/gocyclo/radon/pydocstyle/vulture/godeadcode/jscpd/cargo-geiger from the security view. _(They already route to non-security buckets; a `--profile` flag to stop running them is pending.)_
-- **Acceptance:** out-of-scope smart-contract tools are off by default; quality-tool gating pending.
+- [x] ✨ **Profiles** `security` (default) / `quality` / `web3` / `all`, selectable via `--profile` (exported as `TRISHUL_PROFILE`, inherited by the auto-started server) and classified in `internal/tools/profiles.go`.
+- [x] Default profile **omits** golint/gocyclo/radon/pydocstyle/vulture/godeadcode/jscpd/cargo-geiger (the runner skips quality tools unless `quality`/`all`); smart-contract tools stay behind `web3`.
+- **Acceptance:** ✅ default scan runs security tools only; `--profile quality|web3|all` opts in; gating unit-tested.
 
 ### 0.8 Truth in packaging, branding & CI (`.github/workflows`, `action.yml`, `packages/*`, `cli/armur-cli`)
 - [x] Fix CI: align test/lint/release workflows to Go `1.25` (the skew that reddened `main`).
