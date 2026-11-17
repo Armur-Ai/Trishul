@@ -508,8 +508,12 @@ func buildSimpleScanRunnersNamed(dirPath, language string) ([]func() toolResult,
 			r, err := tools.RunDependencyProvenance(dirPath)
 			return toolResult{"dependency-provenance", r, err}
 		}),
+		withTimeout("firebase-rules", func() toolResult {
+			r, err := tools.RunFirebaseRules(dirPath)
+			return toolResult{"firebase-rules", r, err}
+		}),
 	}
-	names := []string{"semgrep", "supabase-rls", "client-secrets", "agent-security", "placeholder-security", "abuse-controls", "webhook-verification", "llm-integration", "route-authorization", "dependency-provenance"}
+	names := []string{"semgrep", "supabase-rls", "client-secrets", "agent-security", "placeholder-security", "abuse-controls", "webhook-verification", "llm-integration", "route-authorization", "dependency-provenance", "firebase-rules"}
 
 	switch language {
 	case "go":

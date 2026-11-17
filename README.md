@@ -140,7 +140,7 @@ We organize findings around the **Vibe Top 10**, the failure modes that show up 
 |---|---|---|---|
 | **V01** | Secrets shipped to the client | Service-role key behind `NEXT_PUBLIC_`; API keys in the bundle | **Yes**: built-in client-secret analyzer (redacted), plus hardcoded credentials in source |
 | **V02** | Missing or client-only authorization | API routes and server actions with no session check; IDOR | **Yes**: built-in route-authorization analyzer — data routes with no auth guard (Next.js/Express/FastAPI/Flask) and an authenticated-IDOR heuristic |
-| **V03** | Open data layer | Supabase tables without RLS; Firebase rules of `if true` | **Yes** (Supabase): built-in RLS analyzer — missing RLS, `using (true)`, public buckets. Firebase planned. |
+| **V03** | Open data layer | Supabase tables without RLS; Firebase rules of `if true` | **Yes**: built-in Supabase RLS analyzer (missing RLS, `using (true)`, public buckets) **and** Firebase/Firestore/Storage rules analyzer (world read/write, auth-only without ownership, public buckets) |
 | **V04** | Hallucinated and risky dependencies | Packages that do not exist, are brand new, or are malicious | Partial: known CVEs, in the deep pass |
 | **V05** | String-built injection | SQL, shell, SSRF and XSS built by concatenating user input | **Yes**: command injection, XSS, `eval`; SQL injection in Python |
 | **V06** | Placeholder security | `JWT_SECRET = "secret"`, `admin`/`admin`, wildcard CORS | **Yes**: built-in placeholder-security analyzer — placeholder secrets (redacted), default creds, disabled TLS verification, wildcard CORS + credentials, debug-on, security TODOs |
