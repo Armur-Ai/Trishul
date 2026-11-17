@@ -1,6 +1,6 @@
 # Supported Tools
 
-Armur integrates with 30+ security tools across 10 languages and IaC platforms.
+Trishul integrates with a curated set of security tools across the languages and IaC platforms common to AI-generated apps. Each tool is listed with the capability it serves; availability is reported honestly at scan time.
 
 ## Language Coverage
 
