@@ -1,0 +1,203 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1360 860" width="1360" height="860" role="img" aria-label="Trishul scan pipeline: inputs (local directory, repository, pull-request diff) flow into the engine, which fans out to analyzers for SAST, SCA, secrets, IaC and the flagship AI Agent Supply-Chain Security, then through normalization with stable fingerprints and dedup, to outputs including CLI, JSON, SARIF, GitHub PR annotations and MCP tools.">
+  <!--
+    Trishul scan pipeline. Palette tokens (shared across /assets SVGs):
+      bg #0a0f1c  surface #111b2e  surface2 #16243c  border #2a3e5c
+      ink #e8eef7  muted #8fa1bd
+      cyan #22d3ee (engine/SAST)  teal #2dd4bf (SCA/IaC)  saffron #f5a524 (flagship)  rose #fb6a84 (critical)
+    Text-fit rule: monospace ~0.6em/char. Boxes are sized so the longest label
+    clears its inner padding; headings use sans-serif (narrower still).
+  -->
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#3f5c82"/>
+    </marker>
+    <marker id="arrowC" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#22d3ee"/>
+    </marker>
+    <marker id="arrowS" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#f5a524"/>
+    </marker>
+    <linearGradient id="bgGrad2" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b1222"/>
+      <stop offset="1" stop-color="#0a0f1c"/>
+    </linearGradient>
+  </defs>
+
+  <style>
+    .lbl   { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; }
+    .mono  { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .col   { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 13px; font-weight: 700; letter-spacing: 2px; }
+    .title { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-weight: 700; }
+    .flow  { fill:none; stroke-width:2; }
+  </style>
+
+  <rect width="1360" height="860" rx="16" fill="url(#bgGrad2)"/>
+  <rect x="1" y="1" width="1358" height="858" rx="15" fill="none" stroke="#2a3e5c"/>
+
+  <!-- Header -->
+  <text x="40" y="52" class="title" font-size="26" fill="#e8eef7">trishul<tspan class="lbl" font-size="18" font-weight="400" fill="#8fa1bd">  scan pipeline</tspan></text>
+  <text x="40" y="78" class="lbl" font-size="14" fill="#8fa1bd">Read-only, local-first orchestration. Every scanned file is treated as data, never executed.</text>
+
+  <!-- ===================== Column headers ===================== -->
+  <text x="150" y="118" class="col" fill="#6f84a3" text-anchor="middle">INPUT</text>
+  <text x="430" y="118" class="col" fill="#6f84a3" text-anchor="middle">ENGINE</text>
+  <text x="760" y="118" class="col" fill="#6f84a3" text-anchor="middle">ANALYZER FAN-OUT</text>
+  <text x="1065" y="118" class="col" fill="#6f84a3" text-anchor="middle">NORMALIZE</text>
+  <text x="1255" y="118" class="col" fill="#6f84a3" text-anchor="middle">OUTPUT</text>
+
+  <!-- ===================== INPUTS ===================== -->
+  <g>
+    <rect x="40" y="150" width="220" height="56" rx="10" fill="#111b2e" stroke="#2a3e5c"/>
+    <text x="60" y="176" class="lbl" font-size="15" fill="#e8eef7">Local directory</text>
+    <text x="60" y="194" class="mono" font-size="12" fill="#8fa1bd">trishul scan .</text>
+
+    <rect x="40" y="226" width="220" height="56" rx="10" fill="#111b2e" stroke="#2a3e5c"/>
+    <text x="60" y="252" class="lbl" font-size="15" fill="#e8eef7">Repository URL</text>
+    <text x="60" y="270" class="mono" font-size="12" fill="#8fa1bd">scan https://... -l js</text>
+
+    <!-- PR diff — part of the flagship path, saffron-accented -->
+    <rect x="40" y="302" width="220" height="56" rx="10" fill="#1a1608" stroke="#f5a524" stroke-width="1.5"/>
+    <text x="60" y="328" class="lbl" font-size="15" fill="#f7cd84">Pull-request diff</text>
+    <text x="60" y="346" class="mono" font-size="12" fill="#c79a4f">untrusted PR content</text>
+  </g>
+
+  <!-- ===================== ENGINE ===================== -->
+  <rect x="330" y="150" width="200" height="300" rx="12" fill="#101a2c" stroke="#22d3ee" stroke-width="1.5"/>
+  <text x="430" y="182" class="title" font-size="16" fill="#22d3ee" text-anchor="middle">engine</text>
+  <g class="lbl" font-size="13" fill="#cfe0f2">
+    <rect x="350" y="200" width="160" height="38" rx="8" fill="#16243c" stroke="#2a3e5c"/>
+    <text x="430" y="224" text-anchor="middle">dispatch &amp; language detect</text>
+    <rect x="350" y="248" width="160" height="38" rx="8" fill="#16243c" stroke="#2a3e5c"/>
+    <text x="430" y="272" text-anchor="middle">parallel tool runners</text>
+    <rect x="350" y="296" width="160" height="38" rx="8" fill="#16243c" stroke="#2a3e5c"/>
+    <text x="430" y="320" text-anchor="middle">per-tool hard timeout</text>
+    <rect x="350" y="344" width="160" height="38" rx="8" fill="#16243c" stroke="#2a3e5c"/>
+    <text x="430" y="368" text-anchor="middle">read-only invariant</text>
+    <rect x="350" y="392" width="160" height="38" rx="8" fill="#16243c" stroke="#2a3e5c"/>
+    <text x="430" y="416" text-anchor="middle">skipped-tool reporting</text>
+  </g>
+
+  <!-- ===================== ANALYZER FAN-OUT ===================== -->
+  <!-- SAST -->
+  <rect x="580" y="150" width="360" height="58" rx="10" fill="#111b2e" stroke="#2a3e5c"/>
+  <circle cx="602" cy="170" r="5" fill="#22d3ee"/>
+  <text x="616" y="175" class="lbl" font-size="15" font-weight="700" fill="#e8eef7">SAST</text>
+  <text x="602" y="196" class="mono" font-size="11" fill="#8fa1bd">semgrep · gosec · bandit · eslint · staticcheck</text>
+
+  <!-- SCA -->
+  <rect x="580" y="216" width="360" height="58" rx="10" fill="#111b2e" stroke="#2a3e5c"/>
+  <circle cx="602" cy="236" r="5" fill="#2dd4bf"/>
+  <text x="616" y="241" class="lbl" font-size="15" font-weight="700" fill="#e8eef7">SCA</text>
+  <text x="602" y="262" class="mono" font-size="11" fill="#8fa1bd">osv-scanner · trivy · grype</text>
+
+  <!-- Secrets -->
+  <rect x="580" y="282" width="360" height="58" rx="10" fill="#111b2e" stroke="#2a3e5c"/>
+  <circle cx="602" cy="302" r="5" fill="#2dd4bf"/>
+  <text x="616" y="307" class="lbl" font-size="15" font-weight="700" fill="#e8eef7">Secrets</text>
+  <text x="602" y="328" class="mono" font-size="11" fill="#8fa1bd">trufflehog · gitleaks + built-in client-secret</text>
+
+  <!-- IaC -->
+  <rect x="580" y="348" width="360" height="58" rx="10" fill="#111b2e" stroke="#2a3e5c"/>
+  <circle cx="602" cy="368" r="5" fill="#2dd4bf"/>
+  <text x="616" y="373" class="lbl" font-size="15" font-weight="700" fill="#e8eef7">IaC</text>
+  <text x="602" y="394" class="mono" font-size="11" fill="#8fa1bd">checkov · tfsec · kics + built-in Supabase RLS</text>
+
+  <!-- Agent Supply-Chain Security — FLAGSHIP -->
+  <rect x="580" y="414" width="360" height="148" rx="12" fill="#17130a" stroke="#f5a524" stroke-width="2"/>
+  <circle cx="602" cy="438" r="5.5" fill="#f5a524"/>
+  <text x="616" y="443" class="lbl" font-size="15" font-weight="700" fill="#f5a524">AI Agent Supply-Chain Security</text>
+  <text x="602" y="463" class="lbl" font-size="11.5" fill="#c79a4f">flagship · protects agents that review/checkout untrusted PRs</text>
+  <g class="mono" font-size="11" fill="#f3d59a">
+    <rect x="600" y="474" width="156" height="26" rx="6" fill="#1f1708" stroke="#5a4414"/>
+    <text x="608" y="491">instruction-poisoning</text>
+    <rect x="764" y="474" width="156" height="26" rx="6" fill="#1f1708" stroke="#5a4414"/>
+    <text x="772" y="491">prompt injection</text>
+    <rect x="600" y="504" width="156" height="26" rx="6" fill="#1f1708" stroke="#5a4414"/>
+    <text x="608" y="521">exec-path hooks</text>
+    <rect x="764" y="504" width="156" height="26" rx="6" fill="#1f1708" stroke="#5a4414"/>
+    <text x="772" y="521">MCP trust</text>
+    <rect x="600" y="534" width="156" height="26" rx="6" fill="#1f1708" stroke="#5a4414"/>
+    <text x="608" y="551">permissions</text>
+    <rect x="764" y="534" width="156" height="26" rx="6" fill="#1f1708" stroke="#5a4414"/>
+    <text x="772" y="551">encoded / obfuscation</text>
+  </g>
+
+  <!-- cross-file correlation callout under the flagship -->
+  <rect x="580" y="574" width="360" height="40" rx="8" fill="#1a0f12" stroke="#fb6a84" stroke-width="1.5"/>
+  <circle cx="602" cy="594" r="5" fill="#fb6a84"/>
+  <text x="616" y="590" class="lbl" font-size="12.5" font-weight="700" fill="#fb8fa3">cross-file attack-chain correlation</text>
+  <text x="616" y="606" class="mono" font-size="11" fill="#c98493">entry point + enabled action = corroborated chain</text>
+
+  <!-- ===================== NORMALIZE ===================== -->
+  <rect x="980" y="214" width="170" height="232" rx="12" fill="#101a2c" stroke="#2dd4bf" stroke-width="1.5"/>
+  <text x="1065" y="246" class="title" font-size="15" fill="#2dd4bf" text-anchor="middle">normalize</text>
+  <g class="lbl" font-size="12.5" fill="#cfe0f2">
+    <rect x="998" y="262" width="134" height="36" rx="8" fill="#16243c" stroke="#2a3e5c"/>
+    <text x="1065" y="285" text-anchor="middle">severity map</text>
+    <rect x="998" y="306" width="134" height="36" rx="8" fill="#16243c" stroke="#2a3e5c"/>
+    <text x="1065" y="329" text-anchor="middle">CWE mapping</text>
+    <rect x="998" y="350" width="134" height="36" rx="8" fill="#16243c" stroke="#2a3e5c"/>
+    <text x="1065" y="373" text-anchor="middle">stable fingerprints</text>
+    <rect x="998" y="394" width="134" height="36" rx="8" fill="#16243c" stroke="#2a3e5c"/>
+    <text x="1065" y="417" text-anchor="middle">dedup</text>
+  </g>
+
+  <!-- ===================== OUTPUTS ===================== -->
+  <g class="lbl" font-size="14" fill="#e8eef7">
+    <rect x="1190" y="214" width="150" height="40" rx="9" fill="#111b2e" stroke="#2a3e5c"/>
+    <text x="1265" y="239" text-anchor="middle">CLI report</text>
+    <rect x="1190" y="262" width="150" height="40" rx="9" fill="#111b2e" stroke="#2a3e5c"/>
+    <text x="1265" y="287" text-anchor="middle">JSON</text>
+    <rect x="1190" y="310" width="150" height="40" rx="9" fill="#101a2c" stroke="#22d3ee"/>
+    <text x="1265" y="335" text-anchor="middle" fill="#8fe8f5">SARIF 2.1.0</text>
+    <rect x="1190" y="358" width="150" height="40" rx="9" fill="#1a1608" stroke="#f5a524"/>
+    <text x="1265" y="383" text-anchor="middle" fill="#f7cd84">GitHub PR checks</text>
+    <rect x="1190" y="406" width="150" height="40" rx="9" fill="#111b2e" stroke="#2a3e5c"/>
+    <text x="1265" y="431" text-anchor="middle">MCP tools</text>
+  </g>
+
+  <!-- ===================== FLOW LINES ===================== -->
+  <!-- inputs -> engine -->
+  <path class="flow" stroke="#3f5c82" d="M260,178 C 300,178 300,250 330,250" marker-end="url(#arrow)"/>
+  <path class="flow" stroke="#3f5c82" d="M260,254 L330,270" marker-end="url(#arrow)"/>
+  <!-- PR diff -> engine (flagship, saffron) -->
+  <path class="flow" stroke="#f5a524" stroke-width="2.5" d="M260,330 C 300,330 300,300 330,300" marker-end="url(#arrowS)"/>
+
+  <!-- engine -> analyzers -->
+  <path class="flow" stroke="#22d3ee" d="M530,300 C 556,300 556,179 580,179" marker-end="url(#arrowC)"/>
+  <path class="flow" stroke="#22d3ee" d="M530,300 C 556,300 556,245 580,245" marker-end="url(#arrowC)"/>
+  <path class="flow" stroke="#22d3ee" d="M530,300 L580,311" marker-end="url(#arrowC)"/>
+  <path class="flow" stroke="#22d3ee" d="M530,300 C 556,300 556,377 580,377" marker-end="url(#arrowC)"/>
+  <!-- engine -> flagship (saffron, thicker) -->
+  <path class="flow" stroke="#f5a524" stroke-width="2.5" d="M530,300 C 556,300 556,470 580,470" marker-end="url(#arrowS)"/>
+
+  <!-- analyzers -> normalize -->
+  <path class="flow" stroke="#3f5c82" d="M940,179 C 962,179 962,300 980,300" marker-end="url(#arrow)"/>
+  <path class="flow" stroke="#3f5c82" d="M940,245 C 962,245 962,310 980,310" marker-end="url(#arrow)"/>
+  <path class="flow" stroke="#3f5c82" d="M940,311 L980,320" marker-end="url(#arrow)"/>
+  <path class="flow" stroke="#3f5c82" d="M940,377 C 962,377 962,330 980,330" marker-end="url(#arrow)"/>
+  <path class="flow" stroke="#f5a524" stroke-width="2.5" d="M940,488 C 962,488 962,350 980,350" marker-end="url(#arrowS)"/>
+
+  <!-- normalize -> outputs -->
+  <path class="flow" stroke="#3f5c82" d="M1150,300 C 1170,300 1170,234 1190,234" marker-end="url(#arrow)"/>
+  <path class="flow" stroke="#3f5c82" d="M1150,320 C 1170,320 1170,282 1190,282" marker-end="url(#arrow)"/>
+  <path class="flow" stroke="#22d3ee" d="M1150,330 L1190,330" marker-end="url(#arrowC)"/>
+  <!-- normalize -> PR checks (flagship path continues, saffron) -->
+  <path class="flow" stroke="#f5a524" stroke-width="2.5" d="M1150,350 C 1170,350 1170,378 1190,378" marker-end="url(#arrowS)"/>
+  <path class="flow" stroke="#3f5c82" d="M1150,360 C 1170,360 1170,426 1190,426" marker-end="url(#arrow)"/>
+
+  <!-- ===================== Legend ===================== -->
+  <g class="lbl" font-size="13">
+    <text x="40" y="700" font-weight="700" fill="#6f84a3" letter-spacing="1">LEGEND</text>
+    <rect x="40" y="716" width="28" height="4" rx="2" fill="#f5a524"/>
+    <text x="78" y="724" fill="#8fa1bd">Flagship AI-agent + pull-request path</text>
+    <rect x="360" y="716" width="28" height="4" rx="2" fill="#22d3ee"/>
+    <text x="398" y="724" fill="#8fa1bd">Engine / SARIF data flow</text>
+    <rect x="620" y="716" width="28" height="4" rx="2" fill="#fb6a84"/>
+    <text x="658" y="724" fill="#8fa1bd">Correlated attack chain (critical)</text>
+    <rect x="940" y="716" width="28" height="4" rx="2" fill="#3f5c82"/>
+    <text x="978" y="724" fill="#8fa1bd">Standard data flow</text>
+  </g>
+  <text x="40" y="762" class="lbl" font-size="12.5" fill="#6f84a3">Missing external tools are reported as skipped and never fail the scan. Built-in analyzers (client-secret, Supabase RLS, AI-agent) need no external binary.</text>
+  <text x="40" y="786" class="lbl" font-size="12.5" fill="#6f84a3">Secret findings are redacted in every output. See the Project status table in the README for exactly what is wired to the CLI today.</text>
+</svg>
