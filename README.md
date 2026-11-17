@@ -147,6 +147,11 @@ Coming next, in order: Gitleaks and validated secret detection, hallucinated-dep
 | Scan engine: parallel scanners, severity normalisation, CWE mapping, SARIF | Working |
 | Repository and single-file scans through the CLI and the API | Working |
 | Interactive terminal menu | Working |
+| Secret findings redacted everywhere (no plaintext in API, Redis, webhooks, reports) | Working — enforced by a canary regression test |
+| Read-only scans — a scan never modifies or deletes the target tree | Working — enforced by a byte-identical invariant test |
+| Honest tool status — uninstalled/failed scanners are reported as skipped, not hidden | Working |
+| Per-tool hard timeout that actually kills the process | Working |
+| Continuous integration (build, test, lint) on `main` | Working |
 | Scanning a local directory from the CLI | Not yet. Scan a repository URL or a file. |
 | Published packages (Homebrew, npm, install script) | Not yet. Build from source. |
 | GitHub Action and pre-commit hook | Not yet. The files in this repo predate the rename and do not work. |
