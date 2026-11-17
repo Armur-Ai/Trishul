@@ -151,6 +151,13 @@ We organize findings around the **Vibe Top 10**, the failure modes that show up 
 
 Against our own reference target, [`examples/vibe-coded-app`](examples/vibe-coded-app), today's scan reports the command injection, the XSS, the `eval`, and the hardcoded credentials — and, now that the built-in Vibe analyzers run on every scan, the **missing authorization**, the **exposed Supabase service-role key** (masked), the **table without row-level security**, the wildcard-CORS-with-credentials, the missing rate limiting, and the untrusted input flowing into an LLM prompt. (This is pinned by an integration test, [`internal/tools/reference_app_test.go`](internal/tools/reference_app_test.go).) It does not yet report the SQL injection in the JavaScript or the SSRF — closing the remaining SAST gaps is what the [roadmap](ROADMAP.md) is about.
 
+## Documentation
+
+- **[Vibe Top 10 detection reference](docs/vibe-top-10.md)** — every analyzer, its check IDs, and how it holds down false positives.
+- **[AI Agent Supply-Chain Security](docs/agent-security.md)** — the flagship: threat model, the seven components, and attack-chain correlation.
+- **[Authoring a built-in analyzer](docs/authoring-an-analyzer.md)** — the contract for adding your own read-only detector.
+- **[Roadmap](ROADMAP.md)** &bull; **[Changelog](CHANGELOG.md)**
+
 ## Quick start
 
 Trishul is pre-release. There are no published packages yet, so you build it from source. You need Docker and Go 1.25 or newer.
