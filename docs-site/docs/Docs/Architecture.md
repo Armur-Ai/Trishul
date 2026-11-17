@@ -1,8 +1,8 @@
-# Armur Code Scanner - Technical Documentation
+# Trishul - Technical Documentation
 
 ## Overview
 
-Armur Code Scanner is a powerful static code analysis tool built with Go, designed to identify security vulnerabilities and code quality issues across multiple programming languages. The project combines various open-source static analysis tools into a seamless pipeline, providing comprehensive security scanning capabilities.
+Trishul is a powerful static code analysis tool built with Go, designed to identify security vulnerabilities and code quality issues across multiple programming languages. The project combines various open-source static analysis tools into a seamless pipeline, providing comprehensive security scanning capabilities.
 
 ## Technology Stack
 
@@ -52,7 +52,7 @@ Armur Code Scanner is a powerful static code analysis tool built with Go, design
 
 ### System Workflow
 
-The Armur Code Scanner operates through a well-defined workflow that ensures efficient and reliable code analysis:
+The Trishul operates through a well-defined workflow that ensures efficient and reliable code analysis:
 
 1. **Request Handling**
 
