@@ -9,8 +9,7 @@ import (
 
 // RunGrype runs Grype vulnerability scanner on a container image or directory.
 func RunGrype(target string) (map[string]interface{}, error) {
-	cmd := exec.Command("grype", target, "-o", "json")
-	output, err := cmd.Output()
+	output, err := RunToolCommandStdout("grype", target, "-o", "json")
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
 			// Grype exits 1 when vulns found
@@ -24,8 +23,7 @@ func RunGrype(target string) (map[string]interface{}, error) {
 
 // RunTrivyImage runs Trivy on a container image.
 func RunTrivyImage(imageRef string) (map[string]interface{}, error) {
-	cmd := exec.Command("trivy", "image", "--format", "json", imageRef)
-	output, err := cmd.Output()
+	output, err := RunToolCommandStdout("trivy", "image", "--format", "json", imageRef)
 	if err != nil {
 		return nil, fmt.Errorf("trivy image error: %w", err)
 	}

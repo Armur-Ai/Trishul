@@ -3,9 +3,7 @@ package internal
 import (
 	"github.com/Armur-Ai/Trishul/internal/logger"
 	utils "github.com/Armur-Ai/Trishul/pkg"
-	"bytes"
 	"encoding/json"
-	"os/exec"
 	"strings"
 )
 
@@ -13,13 +11,9 @@ import (
 func RunKubeLinter(directory string) (map[string]interface{}, error) {
 	logger.Info().Str("tool", "kube-linter").Str("dir", directory).Msg("running")
 
-	cmd := exec.Command("kube-linter", "lint", "--format", "json", directory)
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	cmd.Run()
+	stdout, _ := RunToolCommandStdout("kube-linter", "lint", "--format", "json", directory)
 
-	output := stdout.String()
+	output := string(stdout)
 	if strings.TrimSpace(output) == "" {
 		logger.Debug().Str("tool", "kube-linter").Msg("no output")
 		return utils.ConvertCategorizedResults(utils.InitCategorizedResults()), nil

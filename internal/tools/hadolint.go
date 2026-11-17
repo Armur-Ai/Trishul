@@ -3,9 +3,7 @@ package internal
 import (
 	"github.com/Armur-Ai/Trishul/internal/logger"
 	utils "github.com/Armur-Ai/Trishul/pkg"
-	"bytes"
 	"encoding/json"
-	"os/exec"
 	"strings"
 )
 
@@ -13,13 +11,9 @@ import (
 func RunHadolint(directory string) (map[string]interface{}, error) {
 	logger.Info().Str("tool", "hadolint").Str("dir", directory).Msg("running")
 
-	cmd := exec.Command("hadolint", "--format", "json", directory)
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	cmd.Run()
+	stdout, _ := RunToolCommandStdout("hadolint", "--format", "json", directory)
 
-	output := stdout.String()
+	output := string(stdout)
 	if strings.TrimSpace(output) == "" {
 		logger.Debug().Str("tool", "hadolint").Msg("no output")
 		return utils.ConvertCategorizedResults(utils.InitCategorizedResults()), nil
