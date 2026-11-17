@@ -203,6 +203,56 @@ func FromScanResults(results map[string]interface{}, toolVersion string) *Log {
 		}
 	}
 
+	// Secret findings (already redacted upstream) — include them so they reach
+	// GitHub Code Scanning. We only ever emit the masked preview, never a raw
+	// secret value.
+	if rawSecrets, ok := results["secret_detection"]; ok {
+		if secrets, ok := rawSecrets.([]interface{}); ok && len(secrets) > 0 {
+			const secretRule = "CWE-798"
+			if _, seen := rulesSeen[secretRule]; !seen {
+				rulesSeen[secretRule] = Rule{
+					ID:               secretRule,
+					Name:             secretRule,
+					ShortDescription: &MultiformatMessageString{Text: "Use of hard-coded credentials (CWE-798)"},
+					HelpURI:          "https://cwe.mitre.org/data/definitions/798.html",
+				}
+			}
+			for _, rawS := range secrets {
+				s, ok := rawS.(map[string]interface{})
+				if !ok {
+					continue
+				}
+				filePath := getString(s, "path")
+				line := getInt(s, "line")
+				msg := getString(s, "message")
+				if msg == "" {
+					msg = "Hard-coded secret detected"
+				}
+				if prev := getString(s, "secret_preview"); prev != "" {
+					msg = msg + " (" + prev + ")"
+				}
+				fp := getString(s, "fingerprint")
+				if fp == "" {
+					fp = fingerprint(secretRule, filePath, msg)
+				}
+				res := Result{
+					RuleID:              secretRule,
+					Level:               severityToLevel(getString(s, "severity")),
+					Message:             Message{Text: msg},
+					PartialFingerprints: map[string]string{"trishul/v1": fp},
+				}
+				if filePath != "" {
+					loc := Location{PhysicalLocation: PhysicalLocation{ArtifactLocation: ArtifactLocation{URI: filePath}}}
+					if line > 0 {
+						loc.PhysicalLocation.Region = &Region{StartLine: line}
+					}
+					res.Locations = []Location{loc}
+				}
+				sarifResults = append(sarifResults, res)
+			}
+		}
+	}
+
 	// Build the rules list in a deterministic order (map iteration is random,
 	// which otherwise churns the SARIF output and its diffs run to run).
 	var rules []Rule
