@@ -1,7 +1,5 @@
 package agentsec
 
-import "sort"
-
 // Analyzer inspects a directory (read-only) and returns agent-security findings.
 // Each component registers itself via register() in an init() so new components
 // are added without editing any central list.
@@ -18,7 +16,16 @@ func Registered() int { return len(analyzers) }
 // aggregated, deterministically-ordered findings. A failing component is skipped
 // (logged by the caller), never aborting the whole analysis.
 func AnalyzePath(dir string) ([]AgentFinding, error) {
-	return runAnalyzers(dir, analyzers)
+	base, err := runAnalyzers(dir, analyzers)
+	if err != nil {
+		return nil, err
+	}
+	// Component 7: correlate individually-suspicious signals into attack chains.
+	if chains := correlate(dir, base); len(chains) > 0 {
+		base = append(base, chains...)
+		sortFindings(base)
+	}
+	return base, nil
 }
 
 func runAnalyzers(dir string, list []Analyzer) ([]AgentFinding, error) {
@@ -30,14 +37,6 @@ func runAnalyzers(dir string, list []Analyzer) ([]AgentFinding, error) {
 		}
 		all = append(all, fs...)
 	}
-	sort.SliceStable(all, func(i, j int) bool {
-		if all[i].File != all[j].File {
-			return all[i].File < all[j].File
-		}
-		if all[i].Line != all[j].Line {
-			return all[i].Line < all[j].Line
-		}
-		return all[i].CheckID < all[j].CheckID
-	})
+	sortFindings(all)
 	return all, nil
 }
