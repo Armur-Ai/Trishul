@@ -91,6 +91,33 @@ func withTimeout(name string, run func() toolResult) func() toolResult {
 	}
 }
 
+// countFindings totals the findings across every category of a tool result.
+func countFindings(result map[string][]interface{}) int {
+	n := 0
+	for _, v := range result {
+		n += len(v)
+	}
+	return n
+}
+
+// drainResults consumes tool results into categorized, classifying and logging
+// each tool's structured ToolOutcome, and returns the per-tool scan errors so a
+// skipped/failed tool is recorded rather than silently dropped.
+func drainResults(ch <-chan toolResult, categorized map[string][]interface{}) []ScanError {
+	var scanErrors []ScanError
+	for res := range ch {
+		if res.err != nil {
+			logger.Info().Str("tool", res.name).Str("outcome", string(tools.ClassifyOutcome(res.err, 0))).Msg("tool finished")
+			scanErrors = append(scanErrors, ScanError{Tool: res.name, Message: res.err.Error()})
+			continue
+		}
+		n := countFindings(res.result)
+		logger.Debug().Str("tool", res.name).Str("outcome", string(tools.ClassifyOutcome(nil, n))).Int("findings", n).Msg("tool finished")
+		mergeResultss(categorized, res.result)
+	}
+	return scanErrors
+}
+
 // runParallel executes a set of named tool functions concurrently up to the
 // configured concurrency limit and returns aggregated results + per-tool errors.
 func runParallel(dirPath string, runners []func() toolResult) (map[string][]interface{}, []ScanError) {
@@ -115,14 +142,7 @@ func runParallel(dirPath string, runners []func() toolResult) (map[string][]inte
 	}()
 
 	categorized := utils.InitCategorizedResults()
-	var scanErrors []ScanError
-	for res := range ch {
-		if res.err != nil {
-			scanErrors = append(scanErrors, ScanError{Tool: res.name, Message: res.err.Error()})
-			continue
-		}
-		mergeResultss(categorized, res.result)
-	}
+	scanErrors := drainResults(ch, categorized)
 	return categorized, scanErrors
 }
 
@@ -149,14 +169,7 @@ func runParallelAdvanced(dirPath string, runners []func() toolResult) (map[strin
 	}()
 
 	categorized := utils.InitAdvancedCategorizedResults()
-	var scanErrors []ScanError
-	for res := range ch {
-		if res.err != nil {
-			scanErrors = append(scanErrors, ScanError{Tool: res.name, Message: res.err.Error()})
-			continue
-		}
-		mergeResultss(categorized, res.result)
-	}
+	scanErrors := drainResults(ch, categorized)
 	return categorized, scanErrors
 }
 
