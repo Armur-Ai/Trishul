@@ -35,6 +35,7 @@ const (
 	DOCKSTRING_ABSENT = "dockstring_absent"
 	ANTIPATTERNS_BUGS = "antipatterns_bugs"
 	SECURITY_ISSUES   = "security_issues"
+	AGENT_SECURITY    = "agent_security"
 	UNKNOWN           = "unknown"
 )
 

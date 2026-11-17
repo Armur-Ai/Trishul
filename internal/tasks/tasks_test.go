@@ -228,10 +228,10 @@ func TestBuildSimpleScanRunners_JS(t *testing.T) {
 
 func TestBuildSimpleScanRunners_Unknown(t *testing.T) {
 	runners := buildSimpleScanRunners("/tmp", "unknown")
-	// Language-agnostic base runners: semgrep + the built-in supabase-rls and
-	// client-secrets analyzers.
-	if len(runners) != 3 {
-		t.Errorf("expected 3 base runners (semgrep + supabase-rls + client-secrets), got %d", len(runners))
+	// Language-agnostic base runners: semgrep + the built-in supabase-rls,
+	// client-secrets, and agent-security analyzers.
+	if len(runners) != 4 {
+		t.Errorf("expected 4 base runners (semgrep + supabase-rls + client-secrets + agent-security), got %d", len(runners))
 	}
 }
 

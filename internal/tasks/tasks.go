@@ -1,6 +1,7 @@
 package tasks
 
 import (
+	"github.com/Armur-Ai/Trishul/internal/agentsec"
 	"github.com/Armur-Ai/Trishul/internal/config"
 	"github.com/Armur-Ai/Trishul/internal/logger"
 	tools "github.com/Armur-Ai/Trishul/internal/tools"
@@ -378,6 +379,12 @@ func RunSimpleScanLocal(dirPath string, language string) (map[string]interface{}
 	adv := utils.ReformatAdvancedScanResults(newCatResult)
 	out[utils.INFRA_SECURITY] = adv[utils.INFRA_SECURITY]
 	out[utils.SECRET_DETECTION] = adv[utils.SECRET_DETECTION]
+	// Agent-security findings are already flat maps; surface them directly.
+	if v := newCatResult[utils.AGENT_SECURITY]; v != nil {
+		out[utils.AGENT_SECURITY] = v
+	} else {
+		out[utils.AGENT_SECURITY] = []interface{}{}
+	}
 	return out, scanErrors, nil
 }
 
@@ -405,8 +412,14 @@ func buildSimpleScanRunnersNamed(dirPath, language string) ([]func() toolResult,
 			r, err := tools.RunClientSecretExposure(dirPath)
 			return toolResult{"client-secrets", r, err}
 		}),
+		withTimeout("agent-security", func() toolResult {
+			findings, _ := agentsec.AnalyzePath(dirPath)
+			return toolResult{"agent-security", map[string]interface{}{
+				utils.AGENT_SECURITY: agentsec.ToFindingMaps(findings),
+			}, nil}
+		}),
 	}
-	names := []string{"semgrep", "supabase-rls", "client-secrets"}
+	names := []string{"semgrep", "supabase-rls", "client-secrets", "agent-security"}
 
 	switch language {
 	case "go":
