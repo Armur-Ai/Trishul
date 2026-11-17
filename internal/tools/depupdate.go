@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 )
@@ -45,9 +44,7 @@ func CheckOutdatedDeps(dirPath string) ([]DepUpdateResult, error) {
 }
 
 func checkGoOutdated(dirPath string) []DepUpdateResult {
-	cmd := exec.Command("go", "list", "-u", "-m", "-json", "all")
-	cmd.Dir = dirPath
-	output, err := cmd.Output()
+	output, err := RunToolCommandStdoutInDir(dirPath, "go", "list", "-u", "-m", "-json", "all")
 	if err != nil {
 		return nil
 	}
@@ -81,9 +78,8 @@ func checkGoOutdated(dirPath string) []DepUpdateResult {
 }
 
 func checkNpmOutdated(dirPath string) []DepUpdateResult {
-	cmd := exec.Command("npm", "outdated", "--json")
-	cmd.Dir = dirPath
-	output, _ := cmd.Output() // exits non-zero when outdated packages found
+	// npm outdated exits non-zero when outdated packages found
+	output, _ := RunToolCommandStdoutInDir(dirPath, "npm", "outdated", "--json")
 
 	var outdated map[string]struct {
 		Current string `json:"current"`
@@ -108,9 +104,7 @@ func checkNpmOutdated(dirPath string) []DepUpdateResult {
 }
 
 func checkPipOutdated(dirPath string) []DepUpdateResult {
-	cmd := exec.Command("pip", "list", "--outdated", "--format=json")
-	cmd.Dir = dirPath
-	output, err := cmd.Output()
+	output, err := RunToolCommandStdoutInDir(dirPath, "pip", "list", "--outdated", "--format=json")
 	if err != nil {
 		return nil
 	}

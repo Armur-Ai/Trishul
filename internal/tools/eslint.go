@@ -3,9 +3,7 @@ package internal
 import (
 	"github.com/Armur-Ai/Trishul/internal/logger"
 	utils "github.com/Armur-Ai/Trishul/pkg"
-	"bytes"
 	"encoding/json"
-	"os/exec"
 	"strings"
 )
 
@@ -62,8 +60,7 @@ func RunESLintOnRepo(repoPath string) (map[string]interface{}, error) {
 func RunESLintAdvancedOnRepo(repoPath string) (map[string][]interface{}, error) {
 	categorizedResults := utils.InitAdvancedCategorizedResults()
 
-	cmd := exec.Command("eslint", "--format", "json", "--config", "eslint_deadcode.config.js", repoPath)
-	output, err := cmd.Output()
+	output, err := RunToolCommandStdout("eslint", "--format", "json", "--config", "eslint_deadcode.config.js", repoPath)
 	if err != nil {
 		logger.Debug().Str("tool", "eslint-deadcode").Err(err).Msg("non-zero exit (may still have results)")
 	}
@@ -120,18 +117,13 @@ func contains(slice []string, item string) bool {
 }
 
 func RunESLint(directory, configFile string) ([]map[string]interface{}, error) {
-	cmd := exec.Command("eslint", "--format", "json", "--config", configFile, directory)
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	err := cmd.Run()
+	stdout, err := RunToolCommandStdout("eslint", "--format", "json", "--config", configFile, directory)
 	if err != nil {
 		// ESLint exits non-zero when it finds issues; that's expected
 		logger.Debug().Str("tool", "eslint").Str("config", configFile).Err(err).Msg("non-zero exit (may still have results)")
 	}
 	var results []map[string]interface{}
-	err = json.Unmarshal(stdout.Bytes(), &results)
+	err = json.Unmarshal(stdout, &results)
 	if err != nil {
 		logger.Error().Str("tool", "eslint").Str("config", configFile).Err(err).Msg("failed to parse results")
 		return nil, err

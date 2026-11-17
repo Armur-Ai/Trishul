@@ -3,7 +3,6 @@ package internal
 import (
 	"bufio"
 	"fmt"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -15,10 +14,7 @@ func RunGoFuzz(dirPath string, timeout time.Duration) (map[string]interface{}, e
 		timeout = 60 * time.Second
 	}
 
-	cmd := exec.Command("go", "test", "-fuzz=Fuzz", fmt.Sprintf("-fuzztime=%s", timeout), "./...")
-	cmd.Dir = dirPath
-
-	output, err := cmd.CombinedOutput()
+	output, err := RunToolCommandInDir(dirPath, "go", "test", "-fuzz=Fuzz", fmt.Sprintf("-fuzztime=%s", timeout), "./...")
 	outputStr := string(output)
 
 	findings := []interface{}{}
@@ -73,13 +69,10 @@ func RunAtheris(dirPath string, timeout time.Duration) (map[string]interface{}, 
 
 	findings := []interface{}{}
 	for _, target := range targets {
-		cmd := exec.Command("python3", "-m", "atheris",
+		output, err := RunToolCommandInDir(dirPath, "python3", "-m", "atheris",
 			fmt.Sprintf("-runs=%d", int(timeout.Seconds())*100),
 			target,
 		)
-		cmd.Dir = dirPath
-
-		output, err := cmd.CombinedOutput()
 		if err != nil {
 			outputStr := string(output)
 			if strings.Contains(outputStr, "Exception") || strings.Contains(outputStr, "Traceback") {
@@ -106,10 +99,7 @@ func RunJSFuzz(dirPath string, timeout time.Duration) (map[string]interface{}, e
 
 	findings := []interface{}{}
 	for _, target := range targets {
-		cmd := exec.Command("jsfuzz", target, "--runs", "5000")
-		cmd.Dir = dirPath
-
-		output, err := cmd.CombinedOutput()
+		output, err := RunToolCommandInDir(dirPath, "jsfuzz", target, "--runs", "5000")
 		if err != nil {
 			outputStr := string(output)
 			if strings.Contains(outputStr, "crash") || strings.Contains(outputStr, "Error") {
