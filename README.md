@@ -87,7 +87,13 @@ Useful flags:
 ./bin/trishul scan <repo-url> -l js --advanced          # deep pass: dependencies, IaC, duplication, dead code
 ./bin/trishul scan <target> --output json               # machine-readable results
 ./bin/trishul scan <target> --fail-on-severity high     # non-zero exit for CI
+./bin/trishul scan <target> --profile quality           # also run complexity/style/dead-code tools
+./bin/trishul scan <target> --profile web3              # also run smart-contract tools (Slither/Mythril)
 ```
+
+By default scans use the **security** profile — security findings only, no
+complexity/style noise. The default scan also never modifies the target
+(read-only) and reports any skipped/uninstalled tools rather than hiding them.
 
 Running `./bin/trishul` with no arguments opens the interactive menu:
 
