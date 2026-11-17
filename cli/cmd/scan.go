@@ -405,9 +405,45 @@ func printFormattedResults(results map[string]interface{}) {
 			printCategoryData(category, categoryData)
 		}
 	}
+	printVibeSecurity(results)
 	printAgentSecurity(results)
 	printScanErrors(results)
 	fmt.Println(color.GreenString("\nScan completed. Results displayed."))
+}
+
+// printVibeSecurity renders the built-in Vibe Top 10 analyzer findings (missing
+// authorization, placeholder/insecure defaults, unsafe LLM integration, …).
+func printVibeSecurity(results map[string]interface{}) {
+	raw, ok := results["vibe_security"]
+	if !ok {
+		return
+	}
+	var items []map[string]interface{}
+	switch v := raw.(type) {
+	case []interface{}:
+		for _, e := range v {
+			if m, ok := e.(map[string]interface{}); ok {
+				items = append(items, m)
+			}
+		}
+	case []map[string]interface{}:
+		items = v
+	}
+	if len(items) == 0 {
+		return
+	}
+	fmt.Printf("\n%s\n", color.CyanString("Vibe security (%d) — common mistakes in AI-generated code:", len(items)))
+	for _, m := range items {
+		sev := getStringValue(m, "severity", "INFO")
+		title := getStringValue(m, "message", "")
+		id := getStringValue(m, "check_id", "")
+		file := getStringValue(m, "path", "-")
+		line := getIntValue(m, "line")
+		fmt.Printf("  %s %s  %s:%d  [%s]\n", severityTag(sev), color.New(color.Bold).Sprint(title), file, line, id)
+		if rem := getStringValue(m, "remediation", ""); rem != "" {
+			fmt.Printf("      fix: %s\n", rem)
+		}
+	}
 }
 
 // printAgentSecurity renders AI Agent Supply-Chain Security findings: suspicious
