@@ -70,7 +70,7 @@ brews:
       name: homebrew-tap
       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
     homepage: "https://trishul.dev"
-    description: "Security Scanner for Vibe-Coded Software — SAST + DAST + exploit simulation"
+    description: "Security Scanner for Vibe-Coded Software — SAST, SCA, secrets & IaC"
     license: "MIT"
     install: |
       bin.install "trishul"
