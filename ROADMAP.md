@@ -8,7 +8,11 @@ This document replaces the 59-sprint `IMPROVEMENTS.md` plan (archived at
 "Armur, a general security agent" and optimised for breadth. This one is written for one bet:
 **own the vibe-coding security category**, and cut everything that does not serve it.
 
-Last reviewed: 2026-09-30.
+> **This roadmap holds the general phases and the bet.** The granular, checkbox-tracked task
+> breakdown lives in [`docs/IMPLEMENTATION-PLAN.md`](docs/IMPLEMENTATION-PLAN.md), grounded in the
+> evidence-based [`docs/audit/PHASE-0-AUDIT.md`](docs/audit/PHASE-0-AUDIT.md).
+
+Last reviewed: 2026-11-17.
 
 ---
 
@@ -26,7 +30,7 @@ Last reviewed: 2026-09-30.
 10. [Go-to-market](#10-go-to-market)
 11. [Risks](#11-risks)
 12. [Open decisions](#12-open-decisions)
-13. [The first ten tasks](#13-the-first-ten-tasks)
+13. [Immediate priorities](#13-immediate-priorities)
 
 ---
 
@@ -60,68 +64,43 @@ ends up citing.
 
 ## 2. Where we actually are
 
-This audit was run against `main` at `52efb12` on 2026-09-30, by building and running everything
-on a clean machine. It is blunt on purpose: every later phase depends on fixing this first.
+Re-audited against `main` at `73e46d7` on 2026-11-17, read-only and evidence-based across the
+whole tree. Full detail with `file:line` evidence and a capability matrix is in
+[`docs/audit/PHASE-0-AUDIT.md`](docs/audit/PHASE-0-AUDIT.md); this is the honest summary.
 
-Three things were fixed alongside this document so that the README's quick start is true: the
-Docker image builds again, `docker compose up` starts a working engine, and the CLI can complete a
-repository scan and a single-file scan. They are marked *fixed* below. Everything else stands.
+**What is genuinely good.** The code builds and the root-module unit tests pass with no external
+dependencies. IaC scanning is the best-covered capability (checkov, tfsec, kics, hadolint,
+kube-linter, kube-score all wired). SAST orchestration is real (semgrep, gosec, bandit, eslint,
+spotbugs, pmd, cppcheck, flawfinder, brakeman). And — unusually — the README and this roadmap are
+honest: they already enumerate the gaps below. The remaining overclaims survive only in satellite
+artifacts (`.goreleaser.yml`, the npm/pip/vscode manifests, docs-site) and a stale committed binary.
 
-### What is real
+**What must be fixed first (Phase 0).**
 
-| Area | State |
-|---|---|
-| Go server (Gin + Asynq + Redis), parallel tool runner with per-tool timeouts | Builds, tests pass |
-| 37 tool runners wired into the scan pipeline | Code exists; each needs its binary on `PATH` |
-| SARIF output, severity normalisation, dedup, fingerprinting | Implemented with tests |
-| CLI (Cobra) with Bubbletea menu, wizard, results browser | Builds; menu launches |
-| MCP server implementation (`internal/mcp`, 655 lines, 5 tools) | Implemented, not reachable (see below) |
-| Agent, AI, sandbox/DAST, exploit, attack-path, compliance, intel packages (~2,900 lines) | Implemented, not reachable |
-
-### What the README promised and what happens
-
-| Promise | What happens today |
-|---|---|
-| `brew install Armur-Ai/tap/trishul` | The tap has no trishul formula. The repo has no GitHub releases, so nothing can be installed from it. |
-| `npm install -g @trishul/cli` | 404. The package was never published. |
-| `pip install trishul` | **Installs someone else's package.** `trishul` on PyPI is an unrelated third-party project. We were telling users to install code we do not control. |
-| `curl ... install.sh \| sh` | Downloads from GitHub releases. There are none. |
-| "No flags, no config" | Scanning needs the `armur-server` binary, a Redis instance, and every tool installed by hand. On a clean dev Mac `trishul doctor` reports 2 of 25 tools. |
-| `docker-compose up` | *Fixed.* The image did not build (Go 1.23 base against a 1.25 `go.mod`, a Python dependency conflict, a pinned Trivy download that no longer exists) and the compose file ran `go run` in an image with no Go toolchain. |
-| `trishul scan <repo>` | *Fixed.* The CLI waited forever: the progress stream only ever reports `queued`, because nothing writes per-tool progress. The CLI now polls task status as well. The progress feed itself is still empty. |
-| `trishul scan <file>` | *Fixed.* The CLI sent JSON to an endpoint that expects a multipart upload. |
-| `trishul scan <directory>` | Not supported. `/scan/local` is never called by the CLI, and it enqueues the wrong scan type (a repo clone). |
-| `--advanced` | Runs a separate set of tools instead of adding to the standard scan, and the summary card does not count its findings ("Total findings: 0" on a scan with 200+). |
-| Scan output | The `FILE` column is empty, messages are cut at 40 characters, and the total disagrees with the rows shown. |
-| `trishul mcp` | Prints setup instructions and exits. The real server in `internal/mcp` is never started. Tool names are still `armur_*`. |
-| DAST, exploit simulation, attack paths, AI PR review | Nothing in the server or CLI imports these packages. |
-| "30+ tools" | 37 runners are wired, but the Docker image installs about 17, and it installs `trufflehog3` (an unrelated older Python project) rather than TruffleHog (now removed from the image, so deep scans skip secret detection). Gitleaks, Grype, govulncheck, npm/pip audit, LLM, PII and crypto checks have wrappers that nothing calls. ShellCheck is advertised and does not exist. |
-| JavaScript / TypeScript | The main language of vibe-coded apps gets two tools: Semgrep and ESLint. |
-| `.trishul.yml` | The CLI writes `.trishul.yml`. The server reads `.armur.yml`. |
-
-### Bugs to fix before anything else
-
-1. **Scans strip the files other scanners need.** When a language is passed (the CLI requires
-   `-l` for repo URLs), `RemoveNonRelevantFiles` deletes every file that is not that language's
-   source: `package.json`, lockfiles, `.env`, Dockerfiles, SQL migrations. SCA, secrets and IaC
-   tools then run on what is left.
-2. **Latent data-loss path.** `RunScanTaskLocal` calls the same function on the user's own
-   directory (`internal/tasks/tasks.go:193`). It is only unreached because `/scan/local` enqueues
-   the wrong scan type. Fixing the routing without fixing this would delete users' files.
-3. **Semgrep runs with `--config=auto`.** That needs network access, sends metrics, and pulls
-   registry rules whose licence restricts use inside a competing product. See [Risks](#11-risks).
-4. **CI is red on `main`** and has been since at least March: the lint job's golangci-lint is
-   built with an older Go than `go.mod` targets, the test job fails, and `armur-scan.yml` does not
-   load. Nothing else in Phase 0 can be trusted until it is green.
-5. **Leftover branding.** `action.yml`, pre-commit hooks, MCP tool names, docs and the changelog
-   still say `armur`; the Action installs from `install.armur.ai`.
-6. **The banner named tools we do not run** (Nuclei, Snyk). *Fixed.*
+- **`trishul scan .` is broken.** Local-directory scans are rejected outright; only single-file and
+  repo-URL scans work. The advertised primary workflow does not run.
+- **Not local-first.** `scan` is an HTTP client to a separate `armur-server` backed by external
+  Redis; the embedded Redis exists but is never wired. Only the (unreachable) MCP path runs
+  in-process.
+- **Secrets leak in plaintext.** TruffleHog's raw value is stored and escapes via the JSON API,
+  Redis, and outbound webhooks; there is no redaction, and a test actually asserts the leak. P0.
+- **Scanner failures read as success.** No adapter checks whether its binary exists; a missing tool
+  yields empty results, and the CLI suppresses the error channel, so "all tools missing" looks like
+  "clean".
+- **Two read-only footguns** (in-place file filtering + unconditional tree delete) are safe today
+  only by convention; one future caller = deletion of user source.
+- **The agentic surface is written but unwired:** the MCP server is never started, PR review is a
+  stub that marks every finding "new", and agent-config change detection does not exist.
+- **Real taint / code-flow analysis is absent** (only an orphaned CWE-chaining stub) — the biggest
+  single capability gap.
+- **CI is red on `main`** (Go 1.24 vs 1.25 skew), a 14 MB old-brand binary is committed, and the
+  `armur → trishul` rename is only half done.
 
 ### The honest summary
 
-trishul is a well-tested orchestration server with a good-looking CLI shell and a lot of
-unconnected feature code. It is not yet a product someone can install and run. The old roadmap
-shows 996 boxes checked; most of the later ones are scaffolds. **Phase 0 exists to close that gap.**
+Trishul is a well-tested orchestration engine with a good CLI shell and a lot of unconnected
+feature code — a strong base to harden, not a rewrite. **Phase 0 exists to make the default
+`trishul scan .` real, safe, and honest before anything is built on top of it.**
 
 ---
 
@@ -202,177 +181,71 @@ Every rule we ship maps to one of these plus a CWE. Reports lead with the Vibe T
 ## 7. Phases
 
 Phases are ordered by dependency, not by date. Each has an exit test that can be checked by a
-stranger on a clean machine.
+stranger on a clean machine. The task-level breakdown — with checkboxes, `file:line` references and
+per-task acceptance checks — lives in [`docs/IMPLEMENTATION-PLAN.md`](docs/IMPLEMENTATION-PLAN.md).
 
-### Phase 0: Make the promise true (v0.1)
+### Phase 0: Make the promise true & make it safe (v0.1)
 
-Nothing else matters until a stranger can install trishul and get a real result.
+Nothing else matters until a stranger can install Trishul, run `trishul scan .` on a real project,
+get honest results, and have their files untouched. Phase 0 is the embedded in-process engine (no
+Redis/server for the default path, server retained for CI/hosted), the non-negotiable safety fixes
+(secret redaction, read-only guarantee, honest skipped-tool reporting), findings/SARIF
+normalisation, scan profiles (security by default), green CI, and finishing the `armur → trishul`
+rename.
 
-**Local engine**
-- [ ] Merge CLI and server into one Go module and one binary. The scan pipeline is called as a
-      library; `trishul serve` remains for the API use case.
-- [ ] Remove Redis and Asynq from the default path. In-process worker pool.
-- [ ] Delete `RemoveNonRelevantFiles` from every scan path. Select files per tool with include
-      globs instead. Never mutate the scan target. Add a test that scans a fixture and asserts the
-      directory is byte-identical afterwards.
-- [ ] Auto-detect languages and frameworks per directory; `-l` becomes optional everywhere.
-- [ ] Fix local directory scanning end to end, including monorepos.
-- [ ] Write real per-tool progress so the CLI and dashboard show what is running.
-- [ ] Make `--advanced` a superset of the standard scan, and count its findings in the summary.
+**Exit test:** on clean macOS and Ubuntu, `trishul scan .` against `examples/vibe-coded-app`
+finishes under 60 s, reports the planted findings, leaves the directory byte-identical, surfaces
+any skipped tools, leaks no plaintext secret, and makes no network calls beyond opt-in tool/DB
+updates.
 
-**Tool provisioning**
-- [ ] `trishul tools install`: download pinned, checksummed releases of each scanner into
-      `~/.trishul/tools`. No `pip install`, no `go install` at scan time.
-- [ ] Fallback `--docker` mode that runs the same pipeline in one published image.
-- [x] Make the Dockerfile build again.
-- [ ] Pin every tool version in the image, add the real TruffleHog, and build the image in CI on
-      every PR so it cannot rot again.
-- [ ] A scan with zero external tools still returns results from the built-in checks (Phase 1).
+### Phase 1: Reliable core + vibe-native detection (v0.2 to v0.3)
 
-**Truth in packaging**
-- [ ] Get CI green on `main` and keep it required for merges.
-- [ ] First tagged release through goreleaser; verify brew, npm and the install script on clean
-      macOS, Linux and Windows runners in CI.
-- [ ] Resolve the PyPI name collision (see [Open decisions](#12-open-decisions)).
-- [ ] Wire `trishul mcp` to the real server; rename tools to `trishul_*`.
-- [ ] One config file name: `.trishul.yml`, with `.armur.yml` read as a fallback for one release.
-- [ ] Purge `armur` from `action.yml`, pre-commit hooks, docs and changelog.
-- [ ] Hide or remove CLI commands whose backends are not wired (`review`, `explain`, `fix`) until
-      they work.
-- [ ] Stop using Semgrep `--config=auto`; ship a pinned, licence-clean rule set, offline by default.
+The moat. The six capabilities each get genuinely-wired, structured, tested adapters (reviving the
+dead in-scope wrappers), a real taint-capable engine for source→sink evidence, and Trishul's own
+analyzers and rule packs for the [Vibe Top 10](#5-the-vibe-top-10) — Supabase RLS, Firebase rules,
+framework route/authorization inventory, hallucinated-dependency intelligence, and unsafe-LLM
+patterns. Every detector ships with a vulnerable and a safe fixture.
 
-**Exit test:** on a clean macOS and a clean Ubuntu runner, `npx trishul scan .` against
-`examples/vibe-coded-app` finishes in under 60 seconds, reports the planted findings, leaves the
-directory untouched, and makes no network calls other than tool downloads and vulnerability
-database updates.
-
-### Phase 1: Vibe-native detection (v0.2 to v0.3)
-
-This is the moat. Each item is a built-in Go analyzer or a rule pack, tested against fixtures with
-both vulnerable and safe variants.
-
-**Secrets in the wrong place (V01)**
-- [ ] Wire Gitleaks; add TruffleHog or Kingfisher for live validation of found keys.
-- [ ] Client-exposure analyzer: secret-shaped values behind `NEXT_PUBLIC_`, `VITE_`, `EXPO_PUBLIC_`,
-      `REACT_APP_`; Supabase service-role JWTs (decode and check the `role` claim); provider keys
-      reachable from files marked `"use client"` or imported into browser bundles.
-- [ ] Committed `.env` files and `.env` missing from `.gitignore`.
-
-**Open data layer (V03)**
-- [ ] Supabase migration analyzer: parse SQL migrations; flag tables without
-      `enable row level security`, policies with `using (true)` or `with check (true)`, policies
-      granted to `anon`, `security definer` functions without `search_path`, public buckets.
-- [ ] Firebase rules analyzer for Firestore, Realtime Database and Storage: `if true`, missing
-      `request.auth` checks, wildcard paths.
-- [ ] Optional live mode using Supabase's Splinter lints when a database URL is supplied.
-
-**Missing authorization (V02)**
-- [ ] Next.js route inventory: enumerate `app/**/route.ts`, `pages/api/**`, and server actions;
-      flag handlers that read or write data with no session or token check on the path.
-- [ ] Middleware matcher gaps: routes that fall outside the `matcher` protecting the rest.
-- [ ] The same inventory for Express, FastAPI, Flask, Hono and Supabase Edge Functions.
-- [ ] IDOR heuristic: handlers that take an ID from the request and query by it without an owner
-      predicate.
-
-**Dependency intelligence (V04)**
-- [ ] `trishul deps`: for every dependency in manifests, lockfiles and import statements, check
-      the registry. Flag names that do not exist, were published within the last 30 days, have
-      negligible downloads, or sit within edit distance of a popular package.
-- [ ] Malicious package detection via OSV `MAL-` advisories and GuardDog heuristics.
-- [ ] Wire `npm audit`, `pnpm audit`, `pip-audit`, govulncheck and Grype (wrappers exist).
-- [ ] Unused dependencies (knip, depcheck): AI adds packages it never uses.
-- [ ] Offline mode with a bundled snapshot of popular package names.
-
-**Placeholder security, webhooks, abuse controls (V06, V07, V08)**
-- [ ] Rule pack for hardcoded JWT and session secrets, default credentials, disabled TLS
-      verification, wildcard CORS with credentials, debug flags, security `TODO` markers.
-- [ ] Stripe, Clerk, GitHub and Svix webhook handlers without signature verification.
-- [ ] Prices, plans or roles read from the request body.
-- [ ] Auth and LLM endpoints with no rate limiter on the route.
-
-**Unsafe LLM integration (V09)**
-- [ ] Replace the regex patterns in `llmsecurity.go` with taint rules: user input to prompt, model
-      output to `eval`, SQL, shell or HTML sinks. Cover the OpenAI, Anthropic, Vercel AI SDK and
-      LangChain call shapes.
-- [ ] Provider SDK clients constructed in browser code.
-
-**Reporting**
-- [ ] Default profile `vibe`: security findings only. Complexity, docstring, duplication and style
-      tools move to `--profile quality`.
-- [ ] Rebuild the text report: file and line, the full message, one row per finding, a total that
-      matches.
-- [ ] Plain-English output: what it is, why an attacker cares, the fix. Vibe Top 10 ID plus CWE on
-      every finding.
-- [ ] A single launch-readiness score with the three things to fix first.
-
-**Exit test:** on the fixture corpus, each Vibe Top 10 class has at least one rule with a
-vulnerable and a safe fixture, and the default profile reports zero findings on the safe variants.
+**Exit test:** each Vibe Top 10 class fires on its vulnerable fixture and stays silent on its safe
+fixture; scans are reproducible (same input → same fingerprints).
 
 ### Phase 2: In the agent loop (v0.4)
 
-Where we stop being "another scanner" and become part of how AI-written code gets made.
+Where Trishul becomes part of how AI-written code is made: a shipped MCP server (scan, explain,
+propose-and-verify-fix) for Claude Code / Cursor / Copilot / Codex, editor and pre-install hooks, a
+prompt-injection guard for Trishul's own AI features, fix prompts, guard-rule generation, and the
+agent-surface scanner (`CLAUDE.md`/`.cursorrules`/MCP-config change detection — treating those files
+as untrusted data).
 
-- [ ] **MCP server that earns its place.** Tools: scan path, scan diff, check a dependency before
-      installing it, explain a finding, list open findings. Works with Claude Code, Cursor,
-      Windsurf, Copilot and Codex. One-line install for each.
-- [ ] **Editor hooks.** `trishul hooks install` writes a Claude Code `PostToolUse` hook that scans
-      files after each edit and a `Stop` hook that blocks completion on new critical findings; the
-      equivalent for Cursor hooks.
-- [ ] **Pre-install guard.** A hook on shell commands that checks `npm install`, `pip install` and
-      `npx` targets against `trishul deps` before they run.
-- [ ] **Fix prompts.** `trishul fix --prompt` emits a paste-ready prompt with file, line, the
-      vulnerable code, the required property of the fix, and how to verify it. No API key needed;
-      the user's own agent does the work.
-- [ ] **Guard rules.** `trishul guard` writes a security section into `CLAUDE.md`, `AGENTS.md`,
-      `.cursor/rules` and `copilot-instructions.md`, tailored to the detected stack and to the
-      findings this repo keeps producing.
-- [ ] **Agent surface scan (V10).** `trishul agent-scan`: hidden and bidirectional Unicode in
-      rules files and skills; instruction-injection phrases; MCP servers launched with unpinned
-      `npx -y` or `uvx`; secrets in MCP config; blanket permission allow-lists; hooks that run
-      remote code.
-- [ ] **AI provenance.** Identify AI-authored commits from trailers and agent metadata;
-      `trishul scan --ai-authored` scans only that code; reports show findings by author type.
-- [ ] Wire `trishul explain` and `trishul fix` to the existing `internal/ai` providers.
+**Exit test:** in a recorded session, an agent writes a Supabase table without RLS, the hook fires,
+the agent receives the finding, and the verify-loop confirms the fix — with no human typing.
 
-**Exit test:** in a recorded session, an agent writes a Supabase table without RLS, the hook
-fires, the agent receives the finding, and fixes it without the human typing anything.
+### Phase 3: PR review & scanner breadth (v0.5)
 
-### Phase 3: Scanner breadth (v0.5)
+A diff-aware PR gate that distinguishes newly-introduced findings from pre-existing ones (including
+new findings surfaced by changed data-flow/config, not just changed lines), with SARIF and GitHub
+annotations — plus broader, benchmarked tool coverage from the [expansion plan](#8-scanner-expansion-plan),
+each addition pinned, normalised, fixtured and Vibe-Top-10-mapped.
 
-Add and replace underlying tools per the [expansion plan](#8-scanner-expansion-plan). Every
-addition needs a pinned version, a provisioning entry, a normaliser into the `Finding` type, a
-fixture that proves it fires, and a Vibe Top 10 mapping.
-
-**Exit test:** the tool matrix in the README is generated from the registry in code, and CI fails
-if a listed tool has no passing fixture.
+**Exit test:** a PR introducing a vuln is flagged as *new* and a pre-existing one is not re-reported;
+the README tool matrix is generated from code and CI fails if a listed tool has no passing fixture.
 
 ### Phase 4: Proof and distribution (v0.6 to v1.0)
 
-- [ ] **VibeBench.** A fixed set of app prompts ("SaaS with auth and Stripe", "AI chat app",
-      "internal admin dashboard") run through each major AI coding tool. Commit the outputs, scan
-      them, publish the numbers and the method. This is also our precision and recall harness.
-- [ ] **State of Vibe-Coded Security.** A short report from VibeBench, refreshed quarterly.
-- [ ] **GitHub Action** on the Marketplace with SARIF upload and a PR comment that leads with the
-      three findings that matter.
-- [ ] **PR review** wired to `internal/agent`, diff-aware, commenting inline.
-- [ ] **Web scan at trishul.dev.** Paste a public repo URL, get a report. The top of the funnel
-      for people who will never open a terminal.
-- [ ] **Badge.** "Scanned by trishul" with grade, linking to the public report.
-- [ ] **Extension** for VS Code, Cursor and Windsurf (one codebase).
-- [ ] Docs site that matches the product, plus `CONTRIBUTING.md` with a rule-writing guide.
+Public, reproducible evidence: **VibeBench** (app prompts run through each major AI coding tool,
+scanned, numbers published) as the precision/recall harness; reachability/exploitability triage with
+VEX output; incremental/cached scans; the Marketplace Action; a web scan at trishul.dev; the
+"Scanned by Trishul" badge; and a single editor extension.
 
-**Exit test:** v1.0 ships when VibeBench shows recall above an agreed bar for every Vibe Top 10
-class and the false-positive rate on the safe corpus is below an agreed bar. Set both bars from the
-first benchmark run, not before.
+**Exit test:** VibeBench recall above an agreed bar for every Vibe Top 10 class and the
+false-positive rate on the safe corpus below an agreed bar (bars set from the first run).
 
-### Phase 5: Runtime verification (after v1.0)
+### Phase 5: Runtime verification (after v1.0, demand-driven)
 
-- [ ] `trishul probe <url>` for apps you own: exposed `.env` and `.git`, source maps, keys in
-      bundles, Supabase tables readable with the anon key, open Firebase databases, headers.
-      Requires proof of ownership before any active check.
-- [ ] Wire the existing sandbox, DAST and exploit packages to confirm static findings, so reports
-      can say "confirmed exploitable" instead of "possible".
-- [ ] Attack-path view built on confirmed findings.
+Out of scope for the current upgrade; the isolated sandbox/DAST/exploit code stays in-tree and
+returns here only as *verification of static findings* — `trishul probe <url>` for owned apps
+(ownership proof required), "confirmed exploitable" labelling, and an attack-path view on confirmed
+findings.
 
 ### Later, demand-driven
 
@@ -521,18 +394,16 @@ These need an owner's call before Phase 0 finishes.
 
 ---
 
-## 13. The first ten tasks
+## 13. Immediate priorities
 
-In order. Each is a separate PR.
+The ordered, PR-sized task list has moved to **Phase 0** of
+[`docs/IMPLEMENTATION-PLAN.md`](docs/IMPLEMENTATION-PLAN.md). The first few, in order:
 
-1. Remove `pip install trishul` from every doc and package README. *(Done in the README.)*
-2. Delete `RemoveNonRelevantFiles` from scan paths; add the "target is untouched" test.
-3. Add a Docker image build to CI. *(The Dockerfile itself is fixed.)*
-4. Merge `cli/` and the server into one module; `trishul scan .` runs the pipeline in-process.
-5. Replace `--config=auto` with a pinned local rule directory.
-6. Wire Gitleaks, OSV-Scanner, npm and pip audit into the default JS/TS and Python pipelines.
-7. `trishul tools install` with pinned, checksummed downloads.
-8. Wire `trishul mcp` to `internal/mcp`; rename tools to `trishul_*`.
-9. Rename leftovers: `action.yml`, pre-commit hooks, config file name, docs.
-10. Tag `v0.1.0`, publish brew and npm, run the Phase 0 exit test in CI, then re-record the demos
-    with `vhs demo/scan.tape` and `vhs demo/menu.tape`.
+1. Redact secrets everywhere + canary regression test (the plaintext-leak P0).
+2. Guarantee read-only scans (remove `RemoveNonRelevantFiles`; add the "target untouched" test).
+3. Honest scanner status (version/existence detection; surface skipped tools; kill soft timeouts).
+4. Fix `trishul scan .` end-to-end via the embedded in-process engine.
+5. Normalise findings + SARIF (stable fingerprints, all categories, `partialFingerprints`).
+6. Green CI; remove the committed binary; finish the `armur → trishul` rename.
+
+See the implementation plan for the full breakdown with acceptance checks.
