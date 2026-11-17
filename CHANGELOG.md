@@ -1,11 +1,20 @@
 # Changelog
 
-All notable changes to Armur Security Agent are documented in this file.
+All notable changes to Trishul are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+### Phase 0: Safety & honesty hardening (in progress)
+- **Secrets never leak in plaintext** — new `internal/redact` package; TruffleHog findings emit a masked preview + non-reversible fingerprint instead of the raw value, closing the JSON-API / Redis / webhook leak. Canary regression test added.
+- **Read-only scans** — `SafeRemoveAll` / `IsManagedPath` guards; file pruning no-ops on any non-managed (user) path; byte-identical invariant test guarantees a scan never modifies the target.
+- **Honest scanner status** — `RunToolCommand` helper adds an availability check and a timeout that actually kills the process; known-missing tools are reported as skipped (never as a clean result) and surfaced in the CLI; structured `ToolOutcome` enum.
+- **Scanner adapters** (~47) routed through the timeout/availability helpers, preserving each tool's output semantics.
+- **SARIF** — stable `partialFingerprints` (cross-run tracking) + deterministic rule ordering.
+- **Scope** — smart-contract tools (Slither/Mythril) gated behind an opt-in `TRISHUL_PROFILE=web3`.
+- **Fixes** — BatchScan scan-type mismatch; CI aligned to Go 1.25 (was red); removed a committed 14 MB binary; corrected DAST/exploit-simulation overclaims in packaging and docs; `armur` → `trishul` rename across MCP tools, the Action, pre-commit hooks, and docs.
 
 ### Phase 1: Foundation (Sprints 1-4)
 - Test suite, error propagation, input validation, structured logging, API authentication
