@@ -523,6 +523,38 @@ func FromScanResults(results map[string]interface{}, toolVersion string) *Log {
 		sarifResults = append(sarifResults, res)
 	}
 
+	// Built-in Vibe Top 10 analyzer findings (missing authz, placeholder
+	// security, unsafe LLM, …). The check_id is the rule.
+	for _, issue := range flattenIssues(results["vibe_security"]) {
+		ruleID := getString(issue, "check_id")
+		if ruleID == "" {
+			ruleID = "VIBE-SECURITY"
+		}
+		if _, seen := rulesSeen[ruleID]; !seen {
+			rulesSeen[ruleID] = Rule{
+				ID:               ruleID,
+				Name:             ruleID,
+				ShortDescription: &MultiformatMessageString{Text: "Vibe-coding security issue: " + ruleID},
+			}
+		}
+		filePath := getString(issue, "path")
+		msg := getString(issue, "message")
+		res := Result{
+			RuleID:              ruleID,
+			Level:               severityToLevel(getSeverity(issue, "severity")),
+			Message:             Message{Text: msg},
+			PartialFingerprints: map[string]string{"trishul/v1": fingerprint(ruleID, filePath, msg)},
+		}
+		if filePath != "" {
+			loc := Location{PhysicalLocation: PhysicalLocation{ArtifactLocation: ArtifactLocation{URI: filePath}}}
+			if line := getInt(issue, "line"); line > 0 {
+				loc.PhysicalLocation.Region = &Region{StartLine: line}
+			}
+			res.Locations = []Location{loc}
+		}
+		sarifResults = append(sarifResults, res)
+	}
+
 	// Build the rules list in a deterministic order (map iteration is random,
 	// which otherwise churns the SARIF output and its diffs run to run).
 	var rules []Rule
