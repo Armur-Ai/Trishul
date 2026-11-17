@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### AI Agent Supply-Chain Security (new capability, in progress)
+- New `internal/agentsec` subsystem protecting developers whose AI coding agents (Claude Code, Cursor, Codex, Copilot) review/checkout PRs, read repo instructions, install deps, and run tools — from malicious instructions and execution paths planted in untrusted PRs/repos.
+- Self-registering component analyzers (passive, read-only, treat scanned text as data): **agent-instruction analysis** (override/impersonation/escalation/sensitive-action directives in CLAUDE.md/AGENTS.md/.cursorrules/…). More components (MCP/permission, command/exec-path, encoded-content, prompt-injection, cross-file attack-chain correlation) landing incrementally.
+- Findings carry the **trust boundary** crossed, the affected agent workflow, confidence + limitations, and remediation; wired into every scan and emitted to SARIF; rendered in the CLI. Never claims an agent is compromised merely because suspicious text exists.
+
 ### Phase 0: Safety & honesty hardening (in progress)
 - **Secrets never leak in plaintext** — new `internal/redact` package; TruffleHog findings emit a masked preview + non-reversible fingerprint instead of the raw value, closing the JSON-API / Redis / webhook leak. Canary regression test added.
 - **Read-only scans** — `SafeRemoveAll` / `IsManagedPath` guards; file pruning no-ops on any non-managed (user) path; byte-identical invariant test guarantees a scan never modifies the target.
