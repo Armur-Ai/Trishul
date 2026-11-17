@@ -34,6 +34,8 @@ jobs:
   publish-npm:
     needs: release
     runs-on: ubuntu-latest
+    # Optional publish: don't fail the release when the registry token is absent.
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
 
@@ -58,6 +60,7 @@ jobs:
   publish-pypi:
     needs: release
     runs-on: ubuntu-latest
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
 
