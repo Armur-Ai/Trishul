@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Vibe Top 10 — built-in analyzers (new)
+- New `vibe_security` finding category and five built-in, dependency-free, read-only analyzers that run on every scan and emit to SARIF/CLI:
+  - **placeholder-security** (V06) — hardcoded placeholder secrets (redacted), default credentials, disabled TLS verification, wildcard CORS + credentials, debug-on, security TODOs (`VIBE-PLACEHOLDER-001..006`).
+  - **webhook-verification** (V07) — provider webhooks (Stripe/Svix/Clerk/GitHub/Shopify/PayPal) without signature verification, and `amount`/`price`/`plan`/`role` trusted from the request body (`VIBE-WEBHOOK-001..002`).
+  - **abuse-controls** (V08) — auth/LLM routes with no rate limiting (project-wide suppression if a limiter exists), unbounded uploads, unvalidated mutating routes (`VIBE-ABUSE-001..003`).
+  - **llm-integration** (V09) — untrusted input concatenated into prompts, model output into `eval`/exec/SQL/`innerHTML`, provider keys in client code; bounded taint propagation, key values never emitted (`VIBE-LLM-001..003`).
+  - **dependency-provenance** (V04) — non-registry dependency sources, unpinned floating specs without a lockfile, and `overrides` repointing to non-registry sources (`VIBE-DEP-001..003`).
+- **Firebase/Firestore/Storage rules** analyzer (V03 complement) — world-readable/writable rules, auth-only (no-ownership) rules, public buckets (`FIREBASE-00x` → `infra_security`).
+- All Vibe analyzers are read-only, deterministic, and redact secrets; see [docs/vibe-top-10.md](docs/vibe-top-10.md).
+
 ### AI Agent Supply-Chain Security (new capability, in progress)
 - New `internal/agentsec` subsystem protecting developers whose AI coding agents (Claude Code, Cursor, Codex, Copilot) review/checkout PRs, read repo instructions, install deps, and run tools — from malicious instructions and execution paths planted in untrusted PRs/repos.
 - Seven self-registering, passive, read-only components (treat scanned text as data; never execute it): **agent-instruction analysis**, **prompt-injection** (heuristic; capped at MEDIUM), **command/execution-path** (install/CI hooks, curl|sh, secret exfil), **MCP server & tool trust** (unpinned runners, remote-code servers, embedded secrets — redacted), **permission/sandbox config** (allow-all, bypass modes, `--dangerously-*`), **encoded/obfuscation** (invisible/bidi Unicode, base64/hex decoding to instructions, hidden HTML comments), and **cross-file attack-chain correlation** (`AGENT-CHAIN-001` — raises corroborated signals to HIGH, e2e-tested).
