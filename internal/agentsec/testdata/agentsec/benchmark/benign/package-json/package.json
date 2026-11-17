@@ -1,0 +1,9 @@
+{
+  "name": "widget",
+  "version": "2.3.1",
+  "scripts": {
+    "build": "tsc -p .",
+    "postinstall": "npm run build",
+    "test": "jest"
+  }
+}
