@@ -3,7 +3,6 @@ package internal
 import (
 	"github.com/Armur-Ai/Trishul/internal/logger"
 	utils "github.com/Armur-Ai/Trishul/pkg"
-	"os/exec"
 	"strings"
 )
 
@@ -19,8 +18,7 @@ func RunVulture(directory string) (map[string]interface{}, error) {
 }
 
 func runVultureOnRepo(directory string) (string, error) {
-	cmd := exec.Command("vulture", directory)
-	output, _ := cmd.Output()
+	output, _ := RunToolCommandStdout("vulture", directory)
 	return string(output), nil
 }
 

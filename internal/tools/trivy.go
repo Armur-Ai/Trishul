@@ -4,7 +4,6 @@ import (
 	"github.com/Armur-Ai/Trishul/internal/logger"
 	utils "github.com/Armur-Ai/Trishul/pkg"
 	"encoding/json"
-	"os/exec"
 	"strings"
 )
 
@@ -42,8 +41,7 @@ type TrivyResult struct {
 
 func RunTrivy(target string) (map[string]interface{}, error) {
 	logger.Info().Str("tool", "trivy").Str("target", target).Msg("running")
-	cmd := exec.Command("trivy", "fs", "--format", "json", target)
-	output, err := cmd.Output()
+	output, err := RunToolCommandStdout("trivy", "fs", "--format", "json", target)
 	if err != nil {
 		logger.Debug().Str("tool", "trivy").Err(err).Msg("non-zero exit (may still have results)")
 	}

@@ -8,8 +8,7 @@ import (
 
 // RunTerrascan runs the multi-cloud IaC security scanner.
 func RunTerrascan(dirPath string) (map[string]interface{}, error) {
-	cmd := exec.Command("terrascan", "scan", "-i", "terraform", "-d", dirPath, "-o", "json")
-	output, err := cmd.Output()
+	output, err := RunToolCommandStdout("terrascan", "scan", "-i", "terraform", "-d", dirPath, "-o", "json")
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			if exitErr.ExitCode() <= 4 {
@@ -72,8 +71,7 @@ func mapTerrascanSeverity(sev string) string {
 
 // RunKubesec runs kubesec risk scoring on Kubernetes manifests.
 func RunKubesec(filePath string) (map[string]interface{}, error) {
-	cmd := exec.Command("kubesec", "scan", filePath)
-	output, err := cmd.Output()
+	output, err := RunToolCommandStdout("kubesec", "scan", filePath)
 	if err != nil {
 		return nil, fmt.Errorf("kubesec error: %w", err)
 	}
