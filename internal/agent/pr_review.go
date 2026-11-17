@@ -28,6 +28,13 @@ type PRReview struct {
 	Summary      string        `json:"summary"`
 	ReviewedAt   time.Time     `json:"reviewed_at"`
 	Duration     time.Duration `json:"duration"`
+
+	// AI Agent Supply-Chain Security + Vibe analyzer results, surfaced
+	// prominently because a PR is exactly where an attacker plants content that
+	// targets the reviewer's AI coding agent.
+	AgentFindings  int      `json:"agent_findings"`
+	VibeFindings   int      `json:"vibe_findings"`
+	AgentHighlights []string `json:"agent_highlights,omitempty"`
 }
 
 // ReviewOpts configures the PR review behavior.
@@ -94,6 +101,11 @@ func ReviewPR(ctx context.Context, prURL string, opts ReviewOpts) (*PRReview, er
 	// All SAST findings on the PR branch are treated as new findings
 	// since we're scanning the PR branch in isolation
 	review.NewFindings = sastCount
+
+	// Surface the agent-supply-chain and vibe analyzer results explicitly.
+	review.AgentFindings = countValue(results["agent_security"])
+	review.VibeFindings = countValue(results["vibe_security"])
+	review.AgentHighlights = collectAgentHighlights(results["agent_security"])
 
 	// 7. DAST (if enabled) — placeholder for Sprint 17
 	if opts.DAST {
@@ -312,6 +324,52 @@ func countValue(v interface{}) int {
 	}
 }
 
+// collectAgentHighlights turns agent_security findings into short, reviewer-
+// facing lines, putting cross-file attack chains (AGENT-CHAIN-*) first. It reads
+// only the normalized flat finding maps; it never executes anything.
+func collectAgentHighlights(v interface{}) []string {
+	items, ok := v.([]interface{})
+	if !ok {
+		return nil
+	}
+	var chains, rest []string
+	for _, it := range items {
+		m, ok := it.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		id, _ := m["check_id"].(string)
+		msg, _ := m["message"].(string)
+		path, _ := m["path"].(string)
+		sev, _ := m["severity"].(string)
+		var line int
+		switch l := m["line"].(type) {
+		case int:
+			line = l
+		case float64:
+			line = int(l)
+		}
+		loc := path
+		if line > 0 {
+			loc = fmt.Sprintf("%s:%d", path, line)
+		}
+		entry := fmt.Sprintf("**%s** `%s` — %s", sev, id, truncate(msg, 160))
+		if loc != "" {
+			entry += fmt.Sprintf(" (%s)", loc)
+		}
+		if strings.HasPrefix(id, "AGENT-CHAIN") {
+			chains = append(chains, entry)
+		} else {
+			rest = append(rest, entry)
+		}
+	}
+	out := append(chains, rest...)
+	if len(out) > 10 {
+		out = out[:10]
+	}
+	return out
+}
+
 // truncate shortens a string to at most maxLen characters.
 func truncate(s string, maxLen int) string {
 	if len(s) <= maxLen {
@@ -380,8 +438,18 @@ func generateSummary(review *PRReview) string {
 	b.WriteString(fmt.Sprintf("| SAST Findings | %d |\n", review.SASTFindings))
 	b.WriteString(fmt.Sprintf("| DAST Findings | %d |\n", review.DASTFindings))
 	b.WriteString(fmt.Sprintf("| Attack Paths | %d |\n", review.AttackPaths))
+	b.WriteString(fmt.Sprintf("| AI Agent Supply-Chain | %d |\n", review.AgentFindings))
+	b.WriteString(fmt.Sprintf("| Vibe findings | %d |\n", review.VibeFindings))
 	b.WriteString(fmt.Sprintf("| Files Changed | %d |\n", len(review.ChangedFiles)))
 	b.WriteString(fmt.Sprintf("| Review Time | %s |\n", review.Duration.Truncate(time.Second)))
+
+	if len(review.AgentHighlights) > 0 {
+		b.WriteString("\n### 🔱 AI Agent Supply-Chain Security\n")
+		b.WriteString("This PR contains content that could confuse or hijack an AI coding agent reviewing it (instruction poisoning, prompt injection, unsafe install/CI hooks, MCP/permission changes, or obfuscated instructions). These are passive detections — Trishul never executed anything in this PR.\n\n")
+		for _, h := range review.AgentHighlights {
+			b.WriteString("- " + h + "\n")
+		}
+	}
 
 	b.WriteString("\n---\n")
 	b.WriteString("Reviewed by [Trishul](https://github.com/Armur-Ai/Trishul)\n")
