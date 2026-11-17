@@ -361,7 +361,18 @@ func RunSimpleScan(dirPath string, language string) (map[string]interface{}, []S
 		return nil, scanErrors, fmt.Errorf("failed to remove directory: %v", err)
 	}
 	newCatResult := utils.ConvertCategorizedResults(categorized)
-	return utils.ReformatScanResults(newCatResult), scanErrors, nil
+	out := utils.ReformatScanResults(newCatResult)
+	// Surface the built-in, dependency-free analyzers (infra / secrets / agent
+	// security) that the standard formatter omits, matching RunSimpleScanLocal.
+	adv := utils.ReformatAdvancedScanResults(newCatResult)
+	out[utils.INFRA_SECURITY] = adv[utils.INFRA_SECURITY]
+	out[utils.SECRET_DETECTION] = adv[utils.SECRET_DETECTION]
+	if v := newCatResult[utils.AGENT_SECURITY]; v != nil {
+		out[utils.AGENT_SECURITY] = v
+	} else {
+		out[utils.AGENT_SECURITY] = []interface{}{}
+	}
+	return out, scanErrors, nil
 }
 
 // RunSimpleScanLocal is RunSimpleScan without directory cleanup (for local paths).
