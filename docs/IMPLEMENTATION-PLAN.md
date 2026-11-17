@@ -234,3 +234,60 @@
 | Local-first `scan .` | **Broken** | Working, embedded, no Redis/server needed |
 
 *Each phase ships with a refreshed "capability matrix — after" appended to the audit doc, per the deliverables list.*
+
+---
+
+## Capability 7 — AI Agent Supply-Chain Security (`internal/agentsec`)
+
+> **Incremental extension, not a new project.** Deepens the agent-surface work (Phase 2.4). **Reuse** the PR diff engine (Phase 3.1), the shared `Finding` schema + stable fingerprints, the SARIF/annotation/MCP reporting, and the existing config parsing. No duplicate scanners or pipelines. New home: `internal/agentsec` (deterministic parsers + a semantic layer + a correlation graph), wired into the normal scan pipeline and a dedicated `trishul agent-security` command. Passive by default; an external LLM is never mandatory.
+
+### Threat model (encode as fixtures, §F)
+- [ ] Attacker controls PR content (source, comments, Markdown, test fixtures, package scripts, CI workflows, agent-config, MCP config) but **not** trusted host policies.
+- [ ] Protected agent workflows: review PR · checkout PR · read repo instructions · run tests/builds · install deps · invoke tools · propose/apply changes.
+- [ ] For each workflow, enumerate the **trust boundary** (untrusted repo content → agent action) the analysis reasons about.
+
+### Component 1 — Agent instruction analysis
+- [ ] Structural parse of `CLAUDE.md`, `AGENTS.md`, `.cursorrules`, `.cursor/rules/*`, `.github/copilot-instructions.md`, Claude/Cursor skills, hooks config.
+- [ ] Detect instruction-override / system-or-developer-message impersonation / authority-escalation language (e.g. "ignore previous", "you are now", fake "SYSTEM:"/"DEVELOPER:" framing) — reported as *suspicious instruction*, never "agent compromised".
+- **Acceptance:** malicious instruction-file fixtures flagged with file/line + trust-boundary; benign instruction files clean.
+
+### Component 2 — Prompt-injection detection (semantic layer)
+- [ ] Heuristic + optional-LLM detection of injection in comments, README/Markdown, test fixtures, tool-output-laundered text. The semantic layer is **never the sole basis for a high-confidence claim** (must be corroborated by a deterministic/correlation signal).
+- [ ] Treat all scanned text as data; Trishul's own analysis must not follow it.
+- **Acceptance:** source-comment and doc injection fixtures flagged; a security-research doc *describing* injection is not a false positive.
+
+### Component 3 — Command & execution-path analysis
+- [ ] Parse `package.json` scripts (pre/post-install), `Makefile`, shell scripts, build files, and `.github/workflows/*` for install-/build-time code execution, suspicious `curl|sh`, new network destinations, credential access.
+- **Acceptance:** unsafe install/build hook + suspicious CI fixtures flagged with the executable path and the destination.
+
+### Component 4 — MCP server & tool trust analysis
+- [ ] Parse MCP config (`.mcp.json`, `.cursor/mcp.json`, `mcp.json`, client configs): flag newly-registered/untrusted MCP servers, unpinned `npx -y`/`uvx` launchers, servers fetching remote code, and secrets embedded in MCP config.
+- **Acceptance:** malicious MCP-config-change fixtures flagged; a pinned, known server is clean.
+
+### Component 5 — Permission & sandbox configuration analysis
+- [ ] Detect permission-policy widening / sandbox weakening in agent configs (blanket allow-lists, disabled approvals, `--dangerously-*` flags, expanded tool scopes, disabled security checks).
+- **Acceptance:** permission-escalation fixtures flagged with the before→after delta.
+
+### Component 6 — Encoded-content & obfuscation analysis
+- [ ] Detect concealed instructions: hidden/bidirectional Unicode, zero-width chars, base64/hex/rot blobs that decode to instruction-like text, HTML/Markdown comment hiding, homoglyphs.
+- **Acceptance:** encoded-instruction fixtures flagged (decoded conceptually, not executed); ordinary base64 assets not over-flagged.
+
+### Component 7 — Cross-file PR attack-chain correlation
+- [ ] Build a graph linking: untrusted content → agent-consumption entry point → requested action → executable script → tool permission → sensitive resource → network destination → security control.
+- [ ] Emit **attack-chain findings** combining individually-low-risk changes; each finding states entry point, suspicious change, affected workflow, trust boundary, enabled action, file/line refs, confidence + **limitations**, remediation.
+- **Acceptance:** a multi-file chain fixture (e.g. README injection → new npm postinstall → exfil URL) produces one correlated finding with the full path; unrelated benign changes do not chain.
+
+### Safe analysis invariants (§D)
+- [ ] Passive by default: never execute untrusted instructions/hooks/install scripts/MCP servers. Any dynamic validation is opt-in, in a disposable sandbox with no prod creds, restricted FS/network, explicit authorization.
+- [ ] Secret canaries never appear in reports or external-model requests (reuse `internal/redact` + the canary test).
+
+### CLI, reporting & integration (§G)
+- [ ] `trishul agent-security scan .` and `trishul agent-security pr --base main`.
+- [ ] Findings via CLI / JSON / SARIF / GitHub PR annotations / MCP tools; mapped to the shared schema + CWE (CWE-77/CWE-94/CWE-829/CWE-506).
+- [ ] Folded into the normal scan pipeline as a built-in, dependency-free analyzer set (runs read-only, no external LLM required).
+
+### Benchmark (§F)
+- [ ] `testdata/agentsec/` with paired benign + malicious PR fixtures for each component above, plus benign security-doc/research examples (the hard false-positive cases). Measure precision/recall/FP/latency/evidence-quality. **No invented results.**
+
+### Definition of done (§H)
+- [ ] Malicious vs benign fixtures distinguished at a *measured* accuracy; configs parsed structurally; attack chains carry verifiable evidence; no untrusted code executed; secret canaries never leak; PR annotations name actionable risks; docs state detection limitations honestly.
