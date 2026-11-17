@@ -173,40 +173,27 @@ func (m ScanFlowModel) selectCurrent() (tea.Model, tea.Cmd) {
 func (m ScanFlowModel) View() string {
 	var b strings.Builder
 
-	width := m.Width
-	if width == 0 {
-		width = 80
-	}
-	if width > 80 {
-		width = 80
-	}
-
-	// Header with step indicator
-	headerStyle := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(lipgloss.Color("39")).
-		PaddingLeft(2)
+	width := clampWidth(m.Width, 80, 80)
 
 	stepNames := []string{"Target", "Language", "Depth", "Confirm"}
 	var steps []string
 	for i, name := range stepNames {
 		if i == int(m.Step) {
-			steps = append(steps, lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("39")).Render(fmt.Sprintf("● %s", name)))
+			steps = append(steps, lipgloss.NewStyle().Bold(true).Foreground(ColBrand).Render(GlyphRunning+" "+name))
 		} else if i < int(m.Step) {
-			steps = append(steps, lipgloss.NewStyle().Foreground(lipgloss.Color("40")).Render(fmt.Sprintf("✓ %s", name)))
+			steps = append(steps, lipgloss.NewStyle().Foreground(ColLow).Render(GlyphDone+" "+name))
 		} else {
-			steps = append(steps, lipgloss.NewStyle().Foreground(lipgloss.Color("241")).Render(fmt.Sprintf("○ %s", name)))
+			steps = append(steps, FaintStyle.Render(GlyphQueued+" "+name))
 		}
 	}
 
 	b.WriteString("\n")
-	b.WriteString(headerStyle.Render("TRISHUL — Scan Configuration"))
+	b.WriteString(TitleStyle.PaddingLeft(2).Render(Trident + " Trishul — Scan Configuration"))
 	b.WriteString("\n")
-	b.WriteString(lipgloss.NewStyle().PaddingLeft(2).Render(strings.Join(steps, "  →  ")))
+	b.WriteString(lipgloss.NewStyle().PaddingLeft(2).Render(strings.Join(steps, FaintStyle.Render("  →  "))))
 	b.WriteString("\n\n")
 
-	sepStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("236"))
-	b.WriteString(sepStyle.Render(strings.Repeat("─", width-4)))
+	b.WriteString("  " + RuleStyle.Render(strings.Repeat("─", width-4)))
 	b.WriteString("\n\n")
 
 	// Current step content
@@ -223,10 +210,14 @@ func (m ScanFlowModel) View() string {
 
 	// Footer
 	b.WriteString("\n")
-	b.WriteString(sepStyle.Render(strings.Repeat("─", width-4)))
+	b.WriteString("  " + RuleStyle.Render(strings.Repeat("─", width-4)))
 	b.WriteString("\n")
-	footerStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("241")).PaddingLeft(2)
-	b.WriteString(footerStyle.Render("↑↓ navigate  enter select  backspace back  esc cancel"))
+	b.WriteString(renderHelp(
+		[2]string{"↑↓", "navigate"},
+		[2]string{"enter", "select"},
+		[2]string{"backspace", "back"},
+		[2]string{"esc", "cancel"},
+	))
 	b.WriteString("\n")
 
 	return b.String()
@@ -235,19 +226,18 @@ func (m ScanFlowModel) View() string {
 func (m ScanFlowModel) renderOptions(title string, options []string, cursor int) string {
 	var b strings.Builder
 
-	titleStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("252")).PaddingLeft(2)
-	b.WriteString(titleStyle.Render(title))
+	b.WriteString(TextStyle.Bold(true).PaddingLeft(2).Render(title))
 	b.WriteString("\n\n")
 
 	for i, opt := range options {
 		selected := i == cursor
 
-		indicator := "  ○ "
-		style := lipgloss.NewStyle().Foreground(lipgloss.Color("252"))
+		indicator := FaintStyle.Render("  " + GlyphQueued + " ")
+		style := lipgloss.NewStyle().Foreground(ColText)
 
 		if selected {
-			indicator = lipgloss.NewStyle().Foreground(lipgloss.Color("39")).Bold(true).Render("  ● ")
-			style = lipgloss.NewStyle().Foreground(lipgloss.Color("39")).Bold(true)
+			indicator = lipgloss.NewStyle().Foreground(ColBrand).Bold(true).Render("  " + GlyphRunning + " ")
+			style = lipgloss.NewStyle().Foreground(ColBrand).Bold(true)
 		}
 
 		b.WriteString(indicator)
@@ -261,44 +251,36 @@ func (m ScanFlowModel) renderOptions(title string, options []string, cursor int)
 func (m ScanFlowModel) renderConfirmation() string {
 	var b strings.Builder
 
-	boxStyle := lipgloss.NewStyle().
-		BorderStyle(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("63")).
-		Padding(1, 3).
-		Width(50)
-
 	langDisplay := m.Language
 	if langDisplay == "" {
 		langDisplay = "auto-detect"
 	}
 
-	content := fmt.Sprintf("%s\n\n%s  %s\n%s  %s\n%s  %s",
-		lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("39")).Render("Ready to scan"),
-		lipgloss.NewStyle().Foreground(lipgloss.Color("245")).Render("Target:  "),
-		m.Target,
-		lipgloss.NewStyle().Foreground(lipgloss.Color("245")).Render("Language:"),
-		langDisplay,
-		lipgloss.NewStyle().Foreground(lipgloss.Color("245")).Render("Depth:   "),
-		m.Depth,
+	lbl := func(s string) string { return MutedStyle.Render(fmt.Sprintf("%-9s", s)) }
+	content := fmt.Sprintf("%s\n\n%s %s\n%s %s\n%s %s",
+		TitleStyle.Render("Ready to scan"),
+		lbl("Target:"), TextStyle.Render(m.Target),
+		lbl("Language:"), TextStyle.Render(langDisplay),
+		lbl("Depth:"), TextStyle.Render(m.Depth),
 	)
 
-	b.WriteString(lipgloss.NewStyle().PaddingLeft(2).Render(boxStyle.Render(content)))
+	b.WriteString(lipgloss.NewStyle().PaddingLeft(2).Render(PanelStyle.Width(50).Render(content)))
 	b.WriteString("\n\n")
 
 	confirmOptions := []string{"Start Scan", "Go Back", "Cancel"}
 	for i, opt := range confirmOptions {
 		selected := i == m.confirmCursor
 		if selected {
-			color := "39"
+			col := ColBrand
 			if i == 0 {
-				color = "40" // green for start
+				col = ColLow // green for start
 			}
 			if i == 2 {
-				color = "196" // red for cancel
+				col = ColCritical // red for cancel
 			}
-			b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color(color)).Bold(true).PaddingLeft(4).Render("▸ " + opt))
+			b.WriteString(lipgloss.NewStyle().Foreground(col).Bold(true).PaddingLeft(4).Render(GlyphArrow + " " + opt))
 		} else {
-			b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("245")).PaddingLeft(4).Render("  " + opt))
+			b.WriteString(MutedStyle.PaddingLeft(4).Render("  " + opt))
 		}
 		b.WriteString("\n")
 	}

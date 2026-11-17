@@ -76,117 +76,65 @@ func (m MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m MenuModel) View() string {
 	var b strings.Builder
 
-	width := m.Width
-	if width == 0 {
-		width = 80
-	}
-	if width > 90 {
-		width = 90
-	}
+	width := clampWidth(m.Width, 80, 90)
 
-	// Banner
-	bannerStyle := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(lipgloss.Color("39")).
-		Align(lipgloss.Center).
-		Width(width)
-
-	subtitleStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("245")).
-		Align(lipgloss.Center).
-		Width(width)
-
+	// Banner.
 	b.WriteString("\n")
-	b.WriteString(bannerStyle.Render("V I B E S C A N"))
+	b.WriteString(lipgloss.PlaceHorizontal(width, lipgloss.Center, TridentBanner(min(width, 56))))
 	b.WriteString("\n")
-	b.WriteString(subtitleStyle.Render("Security Scanner for Vibe-Coded Software"))
-	b.WriteString("\n")
-	b.WriteString(subtitleStyle.Render("SAST  +  DAST  +  Exploit Simulation  +  Attack Paths"))
+	b.WriteString(lipgloss.NewStyle().Foreground(ColMuted).Align(lipgloss.Center).Width(width).
+		Render("SAST  ·  Dependencies  ·  Secrets  ·  IaC  ·  Agent Supply-Chain"))
 	b.WriteString("\n\n")
 
-	// Separator
-	sepStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("236"))
-	b.WriteString(sepStyle.Render(strings.Repeat("─", width-4)))
+	// Separator.
+	b.WriteString("  " + RuleStyle.Render(strings.Repeat("─", width-4)))
 	b.WriteString("\n\n")
 
-	// Prompt
-	promptStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("252")).
-		Bold(true).
-		PaddingLeft(2)
-	b.WriteString(promptStyle.Render("What would you like to do?"))
+	// Prompt.
+	b.WriteString(TextStyle.Bold(true).PaddingLeft(2).Render("What would you like to do?"))
 	b.WriteString("\n\n")
 
-	// Menu items
+	// Menu items.
 	for i, item := range m.Items {
 		selected := i == m.Cursor
 
-		cursor := "  "
+		cursor := "   "
 		if selected {
-			cursor = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("39")).
-				Bold(true).
-				Render("▸ ")
+			cursor = lipgloss.NewStyle().Foreground(ColBrand).Bold(true).Render(" " + GlyphArrow + " ")
 		}
 
-		titleStyle := lipgloss.NewStyle().
-			Foreground(lipgloss.Color("252")).
-			PaddingLeft(1)
-
-		descStyle := lipgloss.NewStyle().
-			Foreground(lipgloss.Color("241")).
-			PaddingLeft(1)
-
+		titleStyle := lipgloss.NewStyle().Foreground(ColText)
+		descStyle := lipgloss.NewStyle().Foreground(ColFaint)
 		if selected {
-			titleStyle = titleStyle.
-				Foreground(lipgloss.Color("39")).
-				Bold(true)
-			descStyle = descStyle.
-				Foreground(lipgloss.Color("69"))
+			titleStyle = titleStyle.Foreground(ColBrand).Bold(true)
+			descStyle = descStyle.Foreground(ColMuted)
 		}
 
-		icon := item.Icon
-		if selected {
-			icon = lipgloss.NewStyle().Foreground(lipgloss.Color("39")).Render(item.Icon)
-		} else {
-			icon = lipgloss.NewStyle().Foreground(lipgloss.Color("241")).Render(item.Icon)
-		}
-
-		line := fmt.Sprintf("%s%s %s  %s",
+		line := fmt.Sprintf("%s%s  %s",
 			cursor,
-			icon,
-			titleStyle.Render(item.Title),
+			titleStyle.Render(fmt.Sprintf("%-20s", item.Title)),
 			descStyle.Render(item.Description),
 		)
 
 		if selected {
-			// Highlight background for selected row
-			rowStyle := lipgloss.NewStyle().
-				Background(lipgloss.Color("236")).
-				Width(width - 4)
-			b.WriteString(rowStyle.Render(line))
+			b.WriteString(lipgloss.NewStyle().Background(ColSelBg).Width(width - 2).Render(line))
 		} else {
 			b.WriteString(line)
 		}
 		b.WriteString("\n")
 	}
 
-	// Footer
+	// Footer.
 	b.WriteString("\n")
-	b.WriteString(sepStyle.Render(strings.Repeat("─", width-4)))
+	b.WriteString("  " + RuleStyle.Render(strings.Repeat("─", width-4)))
 	b.WriteString("\n")
-
-	footerStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("241")).
-		PaddingLeft(2)
-	b.WriteString(footerStyle.Render("↑↓ navigate  enter select  q quit"))
+	b.WriteString(renderHelp(
+		[2]string{"↑↓", "navigate"},
+		[2]string{"enter", "select"},
+		[2]string{"q", "quit"},
+	))
 	b.WriteString("\n")
-
-	// Version hint
-	versionStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("238")).
-		PaddingLeft(2)
-	b.WriteString(versionStyle.Render("trishul v0.1.0 — https://trishul.dev"))
+	b.WriteString(FaintStyle.PaddingLeft(2).Render(Trident + " trishul — security scanner for AI-era codebases"))
 	b.WriteString("\n")
 
 	return b.String()
