@@ -765,6 +765,11 @@ func init() {
 	scanCmd.Flags().StringP("min-severity", "S", "", "Minimum severity to display (info, low, medium, high, critical)")
 	scanCmd.Flags().String("fail-on-severity", "", "Exit with code 1 if findings at or above this severity exist (info, low, medium, high, critical)")
 	scanCmd.Flags().Bool("staged-only", false, "Scan only git-staged files (for pre-commit hooks)")
+	// --diff and --staged-only are not yet wired (the command body does not read
+	// them). Hide them so help doesn't advertise options that currently do
+	// nothing; they return when diff/staged scanning lands in a later phase.
+	_ = scanCmd.Flags().MarkHidden("diff")
+	_ = scanCmd.Flags().MarkHidden("staged-only")
 	scanCmd.Flags().StringP("format", "f", "text", "Output format (text, json, sarif)")
 	scanCmd.Flags().Bool("no-server", false, "Skip auto-starting the embedded server")
 	scanCmd.Flags().BoolP("interactive", "i", false, "Launch interactive scanning mode")
