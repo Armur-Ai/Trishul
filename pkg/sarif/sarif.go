@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -411,6 +412,69 @@ func FromScanResults(results map[string]interface{}, toolVersion string) *Log {
 		if filePath != "" {
 			loc := Location{PhysicalLocation: PhysicalLocation{ArtifactLocation: ArtifactLocation{URI: filePath}}}
 			if line := getInt(issue, "line"); line > 0 {
+				loc.PhysicalLocation.Region = &Region{StartLine: line}
+			}
+			res.Locations = []Location{loc}
+		}
+		sarifResults = append(sarifResults, res)
+	}
+
+	// Infrastructure-as-Code / infra security findings — misconfigurations
+	// reported by checkov, tfsec, trivy, etc. The reformatter groups these by
+	// message; flattenIssues descends to the individual checks, each of which
+	// carries its own file path.
+	for _, issue := range flattenIssues(results["infra_security"]) {
+		// Prefer the scanner's check id (e.g. CKV_AWS_..., AVD-...); otherwise a
+		// CWE if the scanner attached one; otherwise a stable IAC rule.
+		checkID := getString(issue, "check_id")
+		cwe := getSeverity(issue, "cwe") // tolerant of string / list cwe values
+		ruleID := checkID
+		if ruleID == "" {
+			ruleID = cwe
+		}
+		if ruleID == "" {
+			ruleID = "IAC"
+		}
+		if _, seen := rulesSeen[ruleID]; !seen {
+			rule := Rule{
+				ID:               ruleID,
+				Name:             ruleID,
+				ShortDescription: &MultiformatMessageString{Text: fmt.Sprintf("Infrastructure misconfiguration: %s", ruleID)},
+			}
+			if strings.HasPrefix(ruleID, "CWE-") {
+				rule.HelpURI = "https://cwe.mitre.org/data/definitions/" + strings.TrimPrefix(ruleID, "CWE-") + ".html"
+			}
+			rulesSeen[ruleID] = rule
+		}
+
+		filePath := getString(issue, "path")
+		msg := getString(issue, "message")
+		if msg == "" {
+			msg = "Infrastructure misconfiguration"
+		}
+		if checkID != "" {
+			msg = checkID + ": " + msg
+		}
+
+		res := Result{
+			RuleID:              ruleID,
+			Level:               severityToLevel(getSeverity(issue, "severity")),
+			Message:             Message{Text: msg},
+			PartialFingerprints: map[string]string{"trishul/v1": fingerprint(ruleID, filePath, msg)},
+		}
+		if filePath != "" {
+			loc := Location{PhysicalLocation: PhysicalLocation{ArtifactLocation: ArtifactLocation{URI: filePath}}}
+			// Line may come as an int ("line") or as the start of a
+			// "start:end" range string ("file_line_range", from checkov).
+			line := getInt(issue, "line")
+			if line == 0 {
+				if lr := getString(issue, "file_line_range"); lr != "" {
+					if start, err := strconv.Atoi(strings.SplitN(lr, ":", 2)[0]); err == nil {
+						line = start
+					}
+				}
+			}
+			if line > 0 {
 				loc.PhysicalLocation.Region = &Region{StartLine: line}
 			}
 			res.Locations = []Location{loc}
