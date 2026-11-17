@@ -140,4 +140,6 @@ Tracks the deltas landed in the Phase-0 run. Items not listed are unchanged from
 | BatchScan | Broken (scan-type literals) | Fixed (uses the constants) |
 | Overclaims / brand | DAST/exploit/"30+ tools"; `armur` surfaces | Corrected across packaging/docs; MCP tools, Action, pre-commit, docs renamed to `trishul` |
 
-**Still open (next):** `trishul scan .` / embedded engine (0.2/0.5), severity-normalizer unification (0.6), full `--profile` plumbing + quality-tool gating (0.7), per-detector fixtures, docker-image rename + PyPI collision (0.8).
+**Also landed (second wave):** severity normalizers unified; stable line-insensitive finding fingerprint + aligned dedup; SARIF consumes all categories (SAST/SCA/IaC/redacted-secrets) with stable ruleIds; `--profile security|quality|web3|all` with quality tools off by default; adapter parse-test coverage (gitleaks/govulncheck/grype/sbom/sca/terrascan); `armur→trishul` finished on docker/CI/docs/postman; an in-process `engine.ScanLocal` (no server/Redis) now used by the MCP tool; and two built-in, dependency-free, read-only analyzers — **Supabase RLS** (V03) and **client-secret exposure** (V01, redacted) — wired on every scan and e2e-tested through the engine.
+
+**Still open (next):** CLI `trishul scan .` via the module-merge onto the engine (0.2/0.5), Firebase + route-authorization analyzers (V02/V03), dependency intelligence (V04), docker-image publish + PyPI-name decision (0.8).
