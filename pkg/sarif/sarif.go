@@ -12,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	common "github.com/Armur-Ai/Trishul/pkg/common"
 )
 
 // --- SARIF 2.1.0 schema types ---
@@ -210,11 +212,11 @@ func severityToLevel(severity string) string {
 	}
 }
 
-// FromScanResults converts Armur scan results (map[string]interface{}) to a SARIF Log.
+// FromScanResults converts Trishul scan results (map[string]interface{}) to a SARIF Log.
 // It expects the standard Armur output structure with a "security_issues" key.
 func FromScanResults(results map[string]interface{}, toolVersion string) *Log {
 	if toolVersion == "" {
-		toolVersion = "dev"
+		toolVersion = common.Version
 	}
 
 	var sarifResults []Result
