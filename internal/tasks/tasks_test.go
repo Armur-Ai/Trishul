@@ -228,9 +228,9 @@ func TestBuildSimpleScanRunners_JS(t *testing.T) {
 
 func TestBuildSimpleScanRunners_Unknown(t *testing.T) {
 	runners := buildSimpleScanRunners("/tmp", "unknown")
-	// Only semgrep for unknown language
-	if len(runners) != 1 {
-		t.Errorf("expected 1 runner (semgrep) for unknown language, got %d", len(runners))
+	// Language-agnostic base runners: semgrep + the built-in supabase-rls analyzer.
+	if len(runners) != 2 {
+		t.Errorf("expected 2 base runners (semgrep + supabase-rls) for unknown language, got %d", len(runners))
 	}
 }
 

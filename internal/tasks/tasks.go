@@ -390,8 +390,13 @@ func buildSimpleScanRunnersNamed(dirPath, language string) ([]func() toolResult,
 			r, err := tools.RunSemgrep(dirPath, "--config=auto")
 			return toolResult{"semgrep", r, err}
 		}),
+		// Built-in, dependency-free analyzers run on every scan (read-only).
+		withTimeout("supabase-rls", func() toolResult {
+			r, err := tools.RunSupabaseRLS(dirPath)
+			return toolResult{"supabase-rls", r, err}
+		}),
 	}
-	names := []string{"semgrep"}
+	names := []string{"semgrep", "supabase-rls"}
 
 	switch language {
 	case "go":
