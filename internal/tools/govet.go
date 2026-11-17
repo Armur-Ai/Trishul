@@ -4,7 +4,6 @@ import (
 	"github.com/Armur-Ai/Trishul/internal/logger"
 	utils "github.com/Armur-Ai/Trishul/pkg"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 )
@@ -18,9 +17,7 @@ func RunGovet(directory string) (map[string]interface{}, error) {
 
 func runGovetOnRepo(directory string) string {
 	if _, err := os.Stat(filepath.Join(directory, "go.mod")); err == nil {
-		cmd := exec.Command("go", "vet", "./...")
-		cmd.Dir = directory
-		output, _ := cmd.CombinedOutput()
+		output, _ := RunToolCommandInDir(directory, "go", "vet", "./...")
 		return strings.TrimSpace(string(output))
 	}
 
@@ -42,9 +39,7 @@ func runGovetOnRepo(directory string) string {
 		return ""
 	}
 
-	cmd := exec.Command("go", append([]string{"vet"}, files...)...)
-	cmd.Dir = directory
-	output, err := cmd.CombinedOutput()
+	output, err := RunToolCommandInDir(directory, "go", append([]string{"vet"}, files...)...)
 	if err != nil {
 		logger.Debug().Str("tool", "govet").Err(err).Msg("non-zero exit (may still have results)")
 	}

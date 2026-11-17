@@ -3,8 +3,6 @@ package internal
 import (
 	"github.com/Armur-Ai/Trishul/internal/logger"
 	utils "github.com/Armur-Ai/Trishul/pkg"
-	"bytes"
-	"os/exec"
 	"strings"
 )
 
@@ -20,13 +18,8 @@ func RunGocyclo(directory string) (map[string]interface{}, error) {
 }
 
 func RunGoCycloOnRepo(directory string) (string, error) {
-	cmd := exec.Command("gocyclo", directory)
-
-	var out bytes.Buffer
-	cmd.Stdout = &out
-	cmd.Stderr = &out
-	cmd.Run()
-	return out.String(), nil
+	out, _ := RunToolCommand("gocyclo", directory)
+	return string(out), nil
 }
 
 func CategorizeGocycloResults(results string, directory string) map[string][]interface{} {

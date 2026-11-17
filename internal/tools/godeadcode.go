@@ -3,7 +3,6 @@ package internal
 import (
 	"github.com/Armur-Ai/Trishul/internal/logger"
 	utils "github.com/Armur-Ai/Trishul/pkg"
-	"os/exec"
 	"strings"
 )
 
@@ -19,8 +18,7 @@ func RunGoDeadcode(directory string) (map[string]interface{}, error) {
 }
 
 func RunDecodeOnRepO(directory string) (string, error) {
-	cmd := exec.Command("deadcode", directory)
-	output, err := cmd.CombinedOutput()
+	output, err := RunToolCommand("deadcode", directory)
 	if err != nil {
 		logger.Debug().Str("tool", "deadcode").Err(err).Msg("non-zero exit (may still have results)")
 	}

@@ -3,14 +3,11 @@ package internal
 import (
 	"encoding/json"
 	"fmt"
-	"os/exec"
 )
 
 // RunGovulncheck runs the official Go vulnerability checker with call graph analysis.
 func RunGovulncheck(dirPath string) (map[string]interface{}, error) {
-	cmd := exec.Command("govulncheck", "-json", "./...")
-	cmd.Dir = dirPath
-	output, err := cmd.Output()
+	output, err := RunToolCommandStdoutInDir(dirPath, "govulncheck", "-json", "./...")
 	if err != nil {
 		return nil, fmt.Errorf("govulncheck error: %w", err)
 	}
