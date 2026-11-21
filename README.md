@@ -73,6 +73,48 @@ Run `trishul scan <repo>` and the affected dependencies show up in CLI, JSON, or
 
 ---
 
+## Beyond presence — the exploitability engine
+
+Anyone can run `osv-scanner` and get a list of vulnerable versions. SCA answers
+**"is a vulnerable version present?"** — and that's where every pipeline tool
+stops. The question that actually matters is **"is it exploitable *here, right
+now*?"** — and that depends on things a dependency scanner *never looks at*: your
+config state, your call sites, your runtime flags.
+
+A vulnerable Laravel dependency is noise. The same dependency **plus
+`APP_DEBUG=true` in your `.env`** is a live, unauthenticated RCE. SCA can't tell
+the difference, because it only resolves the dependency graph — it never reads
+your `.env`, your `application.yml`, or your `yaml.load()` call.
+
+Trishul's **exploitability engine** does. It's a static, passive analyzer (the
+scanner's perspective — it reads files, sends no traffic, exploits nothing) that
+turns a version list into a short list of what's *actually live*, each with the
+exact condition that proves it and a note on what SCA misses:
+
+| Live-exploitability check | The condition it proves | Why SCA can't see it |
+|---|---|---|
+| **Spring Actuator exposed** | `exposure.include = *` / `env,heapdump,…` over the web | it's in `application.yml`, not the dep graph |
+| **Laravel debug / Ignition RCE** (CVE-2021-3129) | `APP_DEBUG=true` in a live `.env` | SCA never reads `.env` |
+| **Django debug leak** | `DEBUG = True` in settings | config state, not a version |
+| **Flask / Werkzeug debugger RCE** | `debug=True` at the call site | a runtime flag, invisible to SCA |
+| **Unsafe YAML deserialization** (CWE-502) | `yaml.load()` without `SafeLoader` | a *current* PyYAML is still RCE if called wrong |
+
+```console
+$ trishul scan ./myapp
+exploitability  CRITICAL  .env:2                  Laravel debug mode enabled in production (Ignition RCE)
+                          └ beyond SCA: exploitability hinges on APP_DEBUG=true, which lives only in your .env
+exploitability  CRITICAL  application.properties:7 Spring Actuator exposes ALL endpoints (/actuator/env, heapdump, gateway)
+```
+
+This is Trishul's alpha — not another scanner bolted into a pipeline, but the
+layer that tells you *which* of the hundred CVEs on your report can actually be
+used against you today. It's also the clean half of a bigger loop: Trishul
+(white-box, static) points at what's worth proving; **Pentest-Swarm** (black-box,
+dynamic) then *proves* it with real traffic. The engine is new and growing —
+detectors are self-registering, so coverage expands every release.
+
+---
+
 ## Architecture
 
 Trishul normalizes a handful of input shapes, fans out to best-in-class analyzers in parallel, then collapses everything into one deduplicated, stably-fingerprinted report. The **AI-agent + pull-request path (saffron)** is the flagship.
