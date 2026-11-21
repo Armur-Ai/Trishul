@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="assets/trishul-banner.svg" alt="trishul — a local-first, open-source security scanner for AI-generated code: SAST, SCA, secrets, IaC, and AI Agent Supply-Chain Security" width="100%">
+<img src="assets/hero.jpg" alt="Trishul — a local-first, open-source security scanner for AI-generated code: SAST, SCA, secrets, IaC, and AI Agent Supply-Chain Security" width="100%">
 
 ### A local-first, open-source security scanner for AI-generated code
 
@@ -33,6 +33,32 @@ AI assistants write code that compiles, runs, and demos well. Whether it is safe
 The mistakes are repetitive: a service key in the browser bundle, a database table anyone can read, an API route with no login check, a dependency that was never real. And there is a newer risk: the AI agent itself. When your coding agent checks out and reviews an untrusted pull request, a hidden instruction or a malicious install hook can turn *the agent* into the attacker's hands on your machine.
 
 Trishul is built for both. It runs the best open-source scanners behind one command, adds its own analyzers for what AI tools actually get wrong, and ships a flagship **AI Agent Supply-Chain Security** capability for the agent-in-the-loop threat. It is **local-first** and **passive** — it reads your files, never executes them, and redacts secrets everywhere.
+
+## 2026's critical vulns — Trishul flags them today
+
+2026 has been relentless. Critical, in-the-wild RCEs landed in nearly every stack — month after month, in the software your apps and your AI agents pull in without a second thought:
+
+<p align="center">
+  <img src="assets/vulns-2026.jpg" alt="2026 timeline of critical, in-the-wild RCEs across every major stack — vm2, Axios and Shai-Hulud npm worms, nginx Rift and nginx2root, Spring JMS deserialization, KindaRails2Shell, Next.js RCE, Django GeoDjango, PHP2Shell, Go build-time RCE, React2Shell, Java4Shell, Drupal" width="100%">
+</p>
+
+Here's the thing: **Trishul's SCA already checks for every one of these — right now.** It reads your lockfiles, manifests, and container images and matches them against the live OSV / CVE / GHSA feeds, so the moment one of these is published a scan tells you whether you're running an affected version. No new rules to write, no waiting on us to ship a signature.
+
+| Ecosystem | 2026 headliners Trishul's SCA checks for |
+|---|---|
+| **PHP** | **PHP2Shell** — CVE-2026-109618 / CVE-2026-109619 (unauth RCE in PHP core) + follow-up CVE-2026-115560; **Drupal** core RCE |
+| **nginx** | **nginx2root** — CVE-2026-123007 / 123633 / 123634 / 121810 / 113425; **"Rift"** CVE-2026-42945; CVE-2026-42533; CVE-2026-42530 (HTTP/3 UAF) |
+| **Ruby / Rails** | **KindaRails2Shell** — CVE-2026-66066 (Active Storage libvips file-read → RCE, CVSS 9.5) |
+| **Node / npm** | Brotli-decoder RCE CVE-2026-111497; **vm2** sandbox escape; AdonisJS CVE-2026-21440; supply-chain worms (mini-Shai-Hulud, Axios, @redhat-cloud) |
+| **Python** | **Django** GeoDjango CVE-2026-15307; **Flask-Reuploaded** CVE-2026-27641 (SSTI → RCE, 9.8); Django SQLi CVE-2026-1207 / 1287 / 1312 |
+| **Java / Spring** | Spring JMS deser CVE-2026-41855; SerializingHttpMessageConverter CVE-2026-47864; Spring Integration CVE-2026-59307; **Java4Shell** CVE-2026-114938 |
+| **Go / Next.js** | Go build-time RCE (1.27.4, CVE-2026-97033); **Next.js** CVE-2026-75604 / CVE-2026-96889; **"React2Shell"** |
+
+Run `trishul scan <repo>` and the affected dependencies show up in CLI, JSON, or **SARIF 2.1.0** — today.
+
+> **Supply-chain caveat (why SCA alone isn't enough).** CVE scanning catches vulnerable *versions*; it won't catch a brand-new malicious package before it gets an advisory. That's exactly why Trishul pairs SCA with **secret detection**, install-script and **AI-agent supply-chain** analysis, and lockfile review — covering the gaps a pure CVE scan leaves open.
+
+---
 
 ## Architecture
 
