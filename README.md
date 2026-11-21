@@ -19,6 +19,19 @@
 ---
 
 <div align="center">
+
+#### 🔱 The feature that matters most today: catch the attack hidden in a pull request — before your AI agent runs it.
+
+<img src="demo/agent-security.gif" alt="Trishul scanning an untrusted pull request and catching an AGENT-CHAIN-001 critical attack chain — a poisoned agent instruction plus a postinstall fetch-and-exec — before an AI coding agent acts on it" width="100%">
+
+<sub>Your AI coding agent checks out and reviews untrusted PRs. A hidden instruction in <code>CLAUDE.md</code>, a malicious MCP server, or a <code>postinstall</code> hook can turn <strong>the agent itself</strong> into the attacker's hands on your machine. Trishul correlates the untrusted entry point + the enabled action into one <strong>AGENT-CHAIN-001 (CRITICAL)</strong> and stops it first. <a href="#-ai-agent-supply-chain-security-the-flagship">How it works →</a></sub>
+
+</div>
+
+<br>
+
+<div align="center">
+<sub>…and the everyday scan: SAST · SCA · secrets · IaC over the code your agents write.</sub>
 <img src="demo/scan.gif" alt="trishul scanning an AI-generated Express app and reporting command injection, XSS, eval and hardcoded credentials" width="100%">
 </div>
 
