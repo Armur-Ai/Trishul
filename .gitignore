@@ -70,3 +70,10 @@ armur-server
 
 # local agent worktrees / scratch
 .claude/
+
+# Private implementation plan — competitive, not for the public repo
+# (public high-level plan stays in docs/IMPLEMENTATION-PLAN.md)
+IMPLEMENTATION_PLAN.md
+/private/
+NEXT_SESSION.md
+future_ideas.md
