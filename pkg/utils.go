@@ -37,6 +37,7 @@ const (
 	SECURITY_ISSUES   = "security_issues"
 	AGENT_SECURITY    = "agent_security"
 	VIBE_SECURITY     = "vibe_security"
+	EXPLOITABILITY    = "exploitability"
 	UNKNOWN           = "unknown"
 )
 

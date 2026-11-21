@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/Armur-Ai/Trishul/internal/agentsec"
 	"github.com/Armur-Ai/Trishul/internal/config"
+	"github.com/Armur-Ai/Trishul/internal/exploitability"
 	"github.com/Armur-Ai/Trishul/internal/logger"
 	tools "github.com/Armur-Ai/Trishul/internal/tools"
 	utils "github.com/Armur-Ai/Trishul/pkg"
@@ -369,6 +370,7 @@ func RunSimpleScan(dirPath string, language string) (map[string]interface{}, []S
 	out[utils.INFRA_SECURITY] = sortFlatFindings(adv[utils.INFRA_SECURITY])
 	out[utils.SECRET_DETECTION] = sortFlatFindings(adv[utils.SECRET_DETECTION])
 	out[utils.AGENT_SECURITY] = sortFlatFindings(newCatResult[utils.AGENT_SECURITY])
+	out[utils.EXPLOITABILITY] = sortFlatFindings(newCatResult[utils.EXPLOITABILITY])
 	out[utils.VIBE_SECURITY] = sortFlatFindings(newCatResult[utils.VIBE_SECURITY])
 	return out, scanErrors, nil
 }
@@ -450,6 +452,7 @@ func RunSimpleScanLocal(dirPath string, language string) (map[string]interface{}
 	out[utils.SECRET_DETECTION] = sortFlatFindings(adv[utils.SECRET_DETECTION])
 	// Agent-security findings are already flat maps; surface them directly.
 	out[utils.AGENT_SECURITY] = sortFlatFindings(newCatResult[utils.AGENT_SECURITY])
+	out[utils.EXPLOITABILITY] = sortFlatFindings(newCatResult[utils.EXPLOITABILITY])
 	out[utils.VIBE_SECURITY] = sortFlatFindings(newCatResult[utils.VIBE_SECURITY])
 	return out, scanErrors, nil
 }
@@ -477,6 +480,12 @@ func buildSimpleScanRunnersNamed(dirPath, language string) ([]func() toolResult,
 		withTimeout("client-secrets", func() toolResult {
 			r, err := tools.RunClientSecretExposure(dirPath)
 			return toolResult{"client-secrets", r, err}
+		}),
+		withTimeout("exploitability", func() toolResult {
+			findings, _ := exploitability.AnalyzePath(dirPath)
+			return toolResult{"exploitability", map[string]interface{}{
+				utils.EXPLOITABILITY: exploitability.ToFindingMaps(findings),
+			}, nil}
 		}),
 		withTimeout("agent-security", func() toolResult {
 			findings, _ := agentsec.AnalyzePath(dirPath)
@@ -513,7 +522,7 @@ func buildSimpleScanRunnersNamed(dirPath, language string) ([]func() toolResult,
 			return toolResult{"firebase-rules", r, err}
 		}),
 	}
-	names := []string{"semgrep", "supabase-rls", "client-secrets", "agent-security", "placeholder-security", "abuse-controls", "webhook-verification", "llm-integration", "route-authorization", "dependency-provenance", "firebase-rules"}
+	names := []string{"semgrep", "supabase-rls", "client-secrets", "exploitability", "agent-security", "placeholder-security", "abuse-controls", "webhook-verification", "llm-integration", "route-authorization", "dependency-provenance", "firebase-rules"}
 
 	switch language {
 	case "go":
