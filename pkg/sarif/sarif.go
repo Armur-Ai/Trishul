@@ -38,10 +38,10 @@ type Tool struct {
 
 // Driver describes the scanning tool.
 type Driver struct {
-	Name            string `json:"name"`
-	Version         string `json:"version"`
-	InformationURI  string `json:"informationUri"`
-	Rules           []Rule `json:"rules"`
+	Name           string `json:"name"`
+	Version        string `json:"version"`
+	InformationURI string `json:"informationUri"`
+	Rules          []Rule `json:"rules"`
 }
 
 // Rule describes a single analysis rule.
@@ -535,6 +535,38 @@ func FromScanResults(results map[string]interface{}, toolVersion string) *Log {
 				ID:               ruleID,
 				Name:             ruleID,
 				ShortDescription: &MultiformatMessageString{Text: "Vibe-coding security issue: " + ruleID},
+			}
+		}
+		filePath := getString(issue, "path")
+		msg := getString(issue, "message")
+		res := Result{
+			RuleID:              ruleID,
+			Level:               severityToLevel(getSeverity(issue, "severity")),
+			Message:             Message{Text: msg},
+			PartialFingerprints: map[string]string{"trishul/v1": fingerprint(ruleID, filePath, msg)},
+		}
+		if filePath != "" {
+			loc := Location{PhysicalLocation: PhysicalLocation{ArtifactLocation: ArtifactLocation{URI: filePath}}}
+			if line := getInt(issue, "line"); line > 0 {
+				loc.PhysicalLocation.Region = &Region{StartLine: line}
+			}
+			res.Locations = []Location{loc}
+		}
+		sarifResults = append(sarifResults, res)
+	}
+
+	// Process exploitability — the exploitability engine's live-exploitability
+	// findings (prefers the finding's own check_id / CVE as the SARIF rule id).
+	for _, issue := range flattenIssues(results["exploitability"]) {
+		ruleID := firstString(issue, "check_id", "cve")
+		if ruleID == "" {
+			ruleID = "EXPLOITABILITY"
+		}
+		if _, seen := rulesSeen[ruleID]; !seen {
+			rulesSeen[ruleID] = Rule{
+				ID:               ruleID,
+				Name:             ruleID,
+				ShortDescription: &MultiformatMessageString{Text: "Exploitability: " + ruleID},
 			}
 		}
 		filePath := getString(issue, "path")
