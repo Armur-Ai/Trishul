@@ -370,9 +370,22 @@ func RunSimpleScan(dirPath string, language string) (map[string]interface{}, []S
 	out[utils.INFRA_SECURITY] = sortFlatFindings(adv[utils.INFRA_SECURITY])
 	out[utils.SECRET_DETECTION] = sortFlatFindings(adv[utils.SECRET_DETECTION])
 	out[utils.AGENT_SECURITY] = sortFlatFindings(newCatResult[utils.AGENT_SECURITY])
-	out[utils.EXPLOITABILITY] = sortFlatFindings(newCatResult[utils.EXPLOITABILITY])
+	out[utils.EXPLOITABILITY] = correlatedExploitability(out, newCatResult)
 	out[utils.VIBE_SECURITY] = sortFlatFindings(newCatResult[utils.VIBE_SECURITY])
 	return out, scanErrors, nil
+}
+
+// correlatedExploitability returns the exploitability findings augmented with
+// LIVE-EXPLOITABLE correlations: for each exploitability finding whose CVE is
+// also confirmed present by SCA, a joined critical finding is appended. out must
+// already hold the SCA category.
+func correlatedExploitability(out, newCatResult map[string]interface{}) []interface{} {
+	expFlat := sortFlatFindings(newCatResult[utils.EXPLOITABILITY])
+	scaCVEs := exploitability.CVEsFromSCA([]interface{}{out[utils.SCA], newCatResult[utils.SCA]})
+	if corr := exploitability.CorrelateMaps(expFlat, scaCVEs); len(corr) > 0 {
+		expFlat = append(expFlat, corr...)
+	}
+	return sortFlatFindings(expFlat)
 }
 
 // sortFlatFindings returns the flat finding maps in a stable order (path, line,
@@ -452,7 +465,7 @@ func RunSimpleScanLocal(dirPath string, language string) (map[string]interface{}
 	out[utils.SECRET_DETECTION] = sortFlatFindings(adv[utils.SECRET_DETECTION])
 	// Agent-security findings are already flat maps; surface them directly.
 	out[utils.AGENT_SECURITY] = sortFlatFindings(newCatResult[utils.AGENT_SECURITY])
-	out[utils.EXPLOITABILITY] = sortFlatFindings(newCatResult[utils.EXPLOITABILITY])
+	out[utils.EXPLOITABILITY] = correlatedExploitability(out, newCatResult)
 	out[utils.VIBE_SECURITY] = sortFlatFindings(newCatResult[utils.VIBE_SECURITY])
 	return out, scanErrors, nil
 }
