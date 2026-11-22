@@ -1,14 +1,15 @@
 package api
 
 import (
+	"encoding/json"
+	"fmt"
+	"github.com/Armur-Ai/Trishul/internal/exploitability"
 	"github.com/Armur-Ai/Trishul/internal/middleware"
 	"github.com/Armur-Ai/Trishul/internal/models"
 	"github.com/Armur-Ai/Trishul/internal/tasks"
 	utils "github.com/Armur-Ai/Trishul/pkg"
 	"github.com/Armur-Ai/Trishul/pkg/sarif"
 	"github.com/Armur-Ai/Trishul/pkg/suite"
-	"encoding/json"
-	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -496,4 +497,16 @@ func ScanLocalHandler(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"task_id": taskID})
+}
+
+// CoverageHandler returns the exploitability engine's self-describing coverage
+// catalog — what Trishul's exploitability checks look for — so integrators and
+// the product UI can list checks (CheckID, title, CWE, category, languages)
+// without running a scan.
+func CoverageHandler(c *gin.Context) {
+	catalog := exploitability.Catalog()
+	c.JSON(http.StatusOK, gin.H{
+		"count":  len(catalog),
+		"checks": catalog,
+	})
 }

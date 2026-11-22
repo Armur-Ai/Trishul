@@ -14,6 +14,7 @@ func RegisterRoutes(r *gin.Engine) {
 	// Health endpoints (no auth required)
 	r.GET("/health", HealthCheck)
 	r.GET("/ready", ReadinessCheck)
+	r.GET("/coverage", CoverageHandler)
 
 	api := r.Group("/api/v1")
 	api.Use(middleware.RateLimiter(60, 10)) // 60 req/min, burst of 10

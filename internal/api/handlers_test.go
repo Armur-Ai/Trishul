@@ -161,3 +161,26 @@ func TestTaskStatus_ValidTaskID_NoRedis(t *testing.T) {
 		t.Error("valid UUID should not return 400")
 	}
 }
+
+func TestCoverageHandler(t *testing.T) {
+	r := gin.New()
+	r.GET("/coverage", CoverageHandler)
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/coverage", nil)
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("coverage expected 200, got %d", w.Code)
+	}
+	var body struct {
+		Count  int `json:"count"`
+		Checks []struct {
+			CheckID string `json:"CheckID"`
+		} `json:"checks"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("coverage body must be JSON: %v", err)
+	}
+	if body.Count == 0 || len(body.Checks) == 0 || body.Count != len(body.Checks) {
+		t.Errorf("coverage should list checks, got count=%d len=%d", body.Count, len(body.Checks))
+	}
+}
