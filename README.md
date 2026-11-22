@@ -131,8 +131,10 @@ This is Trishul's alpha — not another scanner bolted into a pipeline, but the
 layer that tells you *which* of the hundred CVEs on your report can actually be
 used against you today. It's also the clean half of a bigger loop: Trishul
 (white-box, static) points at what's worth proving; **Pentest-Swarm** (black-box,
-dynamic) then *proves* it with real traffic. The engine is new and growing —
-detectors are self-registering, so coverage expands every release.
+dynamic) then *proves* it with real traffic. The engine ships 30+ live-exploitability checks across injection (SQLi/CMDI/code/
+NoSQL/SSTI), deserialization, broken auth (JWT/sessions/CORS), SSRF, path traversal,
+reachability (Log4Shell, Next.js) and misconfiguration — self-registering, so coverage
+expands every release.
 
 ---
 
