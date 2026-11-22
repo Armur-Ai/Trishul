@@ -98,6 +98,12 @@ exact condition that proves it and a note on what SCA misses:
 | **Django debug leak** | `DEBUG = True` in settings | config state, not a version |
 | **Flask / Werkzeug debugger RCE** | `debug=True` at the call site | a runtime flag, invisible to SCA |
 | **Unsafe YAML deserialization** (CWE-502) | `yaml.load()` without `SafeLoader` | a *current* PyYAML is still RCE if called wrong |
+| **TLS verification disabled** (CWE-295) | `InsecureSkipVerify`/`verify=False`/`rejectUnauthorized:false` | a code setting, not a library version |
+| **Exploitable CORS** (CWE-942) | credentials **+** wildcard/reflected origin | no vulnerable dep — a server config choice |
+| **JWT auth bypass** (CWE-347) | `alg:none` / signature verification off | the bypass is in how the lib is called |
+| **XXE enabled** (CWE-611) | `resolve_entities=True` / `LIBXML_NOENT` | an entity-resolution flag, not a version |
+| **Rails prod exposure** | `consider_all_requests_local=true` / hardcoded `secret_key_base` | config state SCA can't read |
+| **Next.js CVE-2025-29927** | vulnerable `next` **+** a middleware file (reachable) | SCA flags the version; reachability needs the code |
 
 ```console
 $ trishul scan ./myapp
