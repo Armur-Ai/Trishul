@@ -112,6 +112,21 @@ exploitability  CRITICAL  .env:2                  Laravel debug mode enabled in 
 exploitability  CRITICAL  application.properties:7 Spring Actuator exposes ALL endpoints (/actuator/env, heapdump, gateway)
 ```
 
+And the capstone — **LIVE-EXPLOITABLE correlation**. The scan joins what SCA
+knows (which CVEs are *present*) with what the exploitability engine knows (which
+*preconditions* are met) and raises a single **CRITICAL** finding only when both
+hold for the same CVE:
+
+```
+LIVE-EXPLOITABLE: CVE-2021-3129 — vulnerable version present AND exploit precondition met
+  └ SCA confirms CVE-2021-3129 present (vulnerable Laravel)
+  └ exploitability confirms APP_DEBUG=true in .env
+```
+
+OSV alone flags the version (true of thousands of repos — mostly noise).
+Together they *prove* the Ignition RCE is live in **this** repo. That join is
+deterministic and explainable, not a model guess — reachability by correlation.
+
 This is Trishul's alpha — not another scanner bolted into a pipeline, but the
 layer that tells you *which* of the hundred CVEs on your report can actually be
 used against you today. It's also the clean half of a bigger loop: Trishul
