@@ -542,6 +542,7 @@ func printScanErrors(results map[string]interface{}) {
 func printCategoryData(category string, data interface{}) {
 	descriptions := map[string]string{
 		"security_issues":   "Security vulnerabilities and potential threats",
+		"exploitability":    "Live-exploitability findings (config/call-site conditions that make a weakness exploitable here)",
 		"antipatterns_bugs": "Code patterns that are considered bad practices or likely to cause bugs",
 		"complex_functions": "Functions with high cyclomatic complexity",
 		"dockstring_absent": "Missing documentation strings",

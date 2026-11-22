@@ -18,6 +18,7 @@ var categoryDescriptions = map[string]string{
 	"secret_detection":  "Possible hardcoded secrets.",
 	"infra_security":    "Infrastructure-related security issues.",
 	"sca":               "Software Composition Analysis: Vulnerabilities in dependencies.",
+	"exploitability":    "Live-exploitability: known weaknesses whose exploit preconditions are met here.",
 	"complex_functions": "Functions with high cyclomatic complexity.",
 	"docstring_absent":  "Missing docstrings in functions, classes, or modules.",
 	"antipatterns_bugs": "Code patterns that are considered bad practices or likely to cause bugs.",

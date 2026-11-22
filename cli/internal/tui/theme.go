@@ -199,6 +199,8 @@ func CategoryLabel(cat string) string {
 		return "IaC"
 	case "agent_security":
 		return "Agent-Chain"
+	case "exploitability":
+		return "Exploitable"
 	default:
 		return cat
 	}
@@ -216,6 +218,8 @@ func CategoryColor(cat string) lipgloss.Color {
 	case "infra_security":
 		return ColInfo
 	case "security_issues":
+		return ColCritical
+	case "exploitability":
 		return ColCritical
 	default:
 		return ColMuted
