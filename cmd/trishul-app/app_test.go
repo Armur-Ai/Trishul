@@ -64,6 +64,15 @@ func (f *fakeGitHub) handler(t *testing.T) http.Handler {
 		case r.Method == "PATCH" && p == "/repos/o/r/check-runs/7":
 			var m map[string]interface{}
 			_ = json.Unmarshal(body, &m)
+			// Mirror GitHub's validation: annotations, when present, must be an array.
+			if out, ok := m["output"].(map[string]interface{}); ok {
+				if a, present := out["annotations"]; present {
+					if _, isArr := a.([]interface{}); !isArr {
+						http.Error(w, "For 'properties/annotations', nil is not an array.", http.StatusUnprocessableEntity)
+						return
+					}
+				}
+			}
 			f.checkRuns = append(f.checkRuns, m)
 			_, _ = w.Write([]byte("{}"))
 		case r.Method == "GET" && strings.HasPrefix(p, "/repos/o/r/compare/"):

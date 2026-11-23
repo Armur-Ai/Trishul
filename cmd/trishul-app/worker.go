@@ -169,7 +169,7 @@ func (s *Server) processPR(ctx context.Context, j Job) error {
 		"completed_at": time.Now().UTC().Format(time.RFC3339),
 		"output":       map[string]interface{}{"title": rep.Title(), "summary": summary, "annotations": first},
 	}, nil); err != nil {
-		return fmt.Errorf("complete check run: %w", err)
+		return fail("Could not publish results", err.Error())
 	}
 	for i := 50; i < len(anns); i += 50 {
 		end := i + 50
@@ -212,7 +212,7 @@ func failPolicy(baseDir string) string {
 }
 
 func annotations(fs []prgate.Finding) []annotation {
-	var out []annotation
+	out := []annotation{} // GitHub rejects a null annotations field
 	for _, f := range fs {
 		if f.Path == "" || f.Line <= 0 {
 			continue
