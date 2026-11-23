@@ -1,0 +1,25 @@
+# Dogfood: run the Trishul PR gate (this repo's own action, built from source)
+# on every PR to Trishul.
+name: Trishul
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+  security-events: write
+
+jobs:
+  trishul:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+      - uses: ./
+        with:
+          min-severity: medium
