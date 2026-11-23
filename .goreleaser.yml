@@ -18,6 +18,24 @@ builds:
       - -X main.commit={{.ShortCommit}}
       - -X main.date={{.Date}}
 
+  # Hermetic PR gate used by the GitHub Action (built-in analyzers only).
+  - id: trishul-ci
+    main: ./cmd/trishul-ci
+    binary: trishul-ci
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.ShortCommit}}
+
   - id: trishul-cli
     dir: cli
     binary: trishul
@@ -41,6 +59,14 @@ archives:
     builds:
       - trishul-cli
     name_template: "trishul_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        format: zip
+
+  - id: ci-archive
+    builds:
+      - trishul-ci
+    name_template: "trishul-ci_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     format_overrides:
       - goos: windows
         format: zip

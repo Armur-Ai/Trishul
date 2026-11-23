@@ -1,69 +1,80 @@
-# GitHub Actions Integration
+# GitHub Actions: the Trishul PR gate
 
-> **Pre-release note.** A published GitHub Action and install script are planned
-> but not live yet, so these templates build Trishul from source. The SARIF
-> upload flow below is the recommended way to surface findings — including AI
-> agent supply-chain findings, which are emitted to SARIF like every other
-> category.
+The Trishul Action runs `trishul-ci`, a hermetic build of Trishul's built-in analyzers. It needs no server, no Redis and no external tools, and it never executes repository code. On a pull request it scans the PR and its base and reports **only the findings the PR introduces**.
 
-## Quick Setup
+## Quick setup
 
-Add this workflow to `.github/workflows/trishul.yml`:
+```bash
+trishul init github --pr     # writes .github/workflows/trishul.yml and opens a PR
+```
+
+or add it by hand:
 
 ```yaml
-name: Security Scan
-
+name: Trishul
 on:
+  pull_request:
   push:
     branches: [main]
-  pull_request:
-    branches: [main]
-
+permissions:
+  contents: read
+  pull-requests: write    # one PR comment, edited in place
+  security-events: write  # SARIF upload to code scanning
 jobs:
-  trishul-scan:
+  trishul:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - uses: actions/setup-go@v5
-        with:
-          go-version: '1.25'
-
-      # Pre-release: build from source until a packaged Action/binary ships.
-      - name: Build Trishul from source
-        run: |
-          git clone https://github.com/Armur-Ai/trishul /tmp/trishul
-          (cd /tmp/trishul && docker compose up -d --build)
-          (cd /tmp/trishul/cli && go build -o /usr/local/bin/trishul .)
-
-      - name: Run scan
-        run: trishul scan https://github.com/${{ github.repository }} -l js --format sarif --output results.sarif --fail-on-severity high
-
-      - name: Upload SARIF
-        if: always()
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: results.sarif
+      - uses: Armur-Ai/Trishul@v0.2.0
 ```
 
-## Fail on Severity
+A typical scan takes a few seconds.
 
-Use `--fail-on-severity` to fail the build when findings exceed a threshold:
+## Inputs
+
+| Input | Default | Meaning |
+|---|---|---|
+| `fail-on` | *(empty)* | Fail the job when the PR introduces findings at or above this severity. Empty = never fail. Start empty, then set `high` once the team trusts it. |
+| `min-severity` | `medium` | Only report findings at or above this severity. |
+| `comment` | `auto` | `auto` comments only when there are new findings, then keeps that comment up to date (so a fixed PR flips to "all clear"). `always` or `never` are also accepted. |
+| `upload-sarif` | `true` | Upload SARIF to code scanning. Skipped automatically when the token can't (e.g. fork PRs). |
+| `baseline` | `.trishul-baseline.json` | Accepted findings that are never reported. |
+| `include-tests` | `false` | Also report findings in test/fixture code. Secrets and agent-security findings are always reported. |
+| `version` | action ref | `trishul-ci` release to use. |
+
+Outputs: `new-count`, `critical-count`, `high-count`, `failed`, `sarif-path`.
+
+## Supply-chain posture
+
+The Action never runs `curl | sh`. When pinned to a release tag it downloads that release's `trishul-ci` archive and **verifies its sha256** against the release `checksums.txt` before running it. Pinned to a branch or SHA, it builds `trishul-ci` from the action's own source at exactly that ref, which needs `actions/setup-go`. For maximum assurance, pin to a full commit SHA.
+
+## Adopting on an existing repo
+
+PR scans already ignore pre-existing findings. To also keep them out of push scans and the Security tab, accept today's state as a baseline:
+
+```bash
+go install github.com/Armur-Ai/Trishul/cmd/trishul-ci@latest
+trishul-ci --write-baseline .
+git add .trishul-baseline.json && git commit -m "chore: trishul baseline"
+```
+
+The baseline is plain JSON (rule, path, message, fingerprint), so reviewers can see exactly what was accepted. Fingerprints don't include line numbers, so unrelated edits don't resurrect findings.
+
+## Excluding paths
+
+`.trishul.yml`:
 
 ```yaml
-- run: trishul scan <target> --fail-on-severity high
+exclude:
+  - vendor/**
+  - "**/*.min.js"
 ```
 
-Options: `critical`, `high`, `medium`, `low`
+## Running locally
 
-## Advanced: Deep Scan
-
-Add `--advanced` for the deep pass (dependencies, IaC, duplication, dead code):
-
-```yaml
-- name: Deep scan
-  run: trishul scan <target> --advanced --format sarif --output results.sarif
+```bash
+trishul-ci --base origin/main .          # what would the PR gate say?
+trishul-ci --sarif out.sarif --json out.json .
 ```
 
-> Diff-only PR scanning and report generation in CI are planned; today a scan
-> targets a single file or a repository URL.
+Exit codes: `0` pass, `1` gate failed (`--fail-on`), `2` error.

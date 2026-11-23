@@ -56,11 +56,12 @@ type Rule struct {
 
 // Result represents a single finding.
 type Result struct {
-	RuleID              string            `json:"ruleId"`
-	Level               string            `json:"level"` // error, warning, note, none
-	Message             Message           `json:"message"`
-	Locations           []Location        `json:"locations,omitempty"`
-	PartialFingerprints map[string]string `json:"partialFingerprints,omitempty"`
+	RuleID              string                 `json:"ruleId"`
+	Level               string                 `json:"level"` // error, warning, note, none
+	Message             Message                `json:"message"`
+	Locations           []Location             `json:"locations,omitempty"`
+	PartialFingerprints map[string]string      `json:"partialFingerprints,omitempty"`
+	Properties          map[string]interface{} `json:"properties,omitempty"`
 }
 
 // fingerprint computes a stable, line-insensitive identity for a finding so
@@ -279,9 +280,10 @@ func FromScanResults(results map[string]interface{}, toolVersion string) *Log {
 					}
 
 					result := Result{
-						RuleID:  ruleID,
-						Level:   severityToLevel(sev),
-						Message: Message{Text: msg},
+						RuleID:     ruleID,
+						Level:      severityToLevel(sev),
+						Properties: sevProps(sev),
+						Message:    Message{Text: msg},
 						PartialFingerprints: map[string]string{
 							"trishul/v1": fingerprint(ruleID, filePath, msg),
 						},
@@ -343,6 +345,7 @@ func FromScanResults(results map[string]interface{}, toolVersion string) *Log {
 				res := Result{
 					RuleID:              secretRule,
 					Level:               severityToLevel(getString(s, "severity")),
+					Properties:          sevProps(getString(s, "severity")),
 					Message:             Message{Text: msg},
 					PartialFingerprints: map[string]string{"trishul/v1": fp},
 				}
@@ -408,6 +411,7 @@ func FromScanResults(results map[string]interface{}, toolVersion string) *Log {
 		res := Result{
 			RuleID:              ruleID,
 			Level:               severityToLevel(getSeverity(issue, "severity")),
+			Properties:          sevProps(getSeverity(issue, "severity")),
 			Message:             Message{Text: msg},
 			PartialFingerprints: map[string]string{"trishul/v1": fingerprint(ruleID, filePath, msg)},
 		}
@@ -461,6 +465,7 @@ func FromScanResults(results map[string]interface{}, toolVersion string) *Log {
 		res := Result{
 			RuleID:              ruleID,
 			Level:               severityToLevel(getSeverity(issue, "severity")),
+			Properties:          sevProps(getSeverity(issue, "severity")),
 			Message:             Message{Text: msg},
 			PartialFingerprints: map[string]string{"trishul/v1": fingerprint(ruleID, filePath, msg)},
 		}
@@ -510,6 +515,7 @@ func FromScanResults(results map[string]interface{}, toolVersion string) *Log {
 		res := Result{
 			RuleID:              ruleID,
 			Level:               severityToLevel(getSeverity(issue, "severity")),
+			Properties:          sevProps(getSeverity(issue, "severity")),
 			Message:             Message{Text: msg},
 			PartialFingerprints: map[string]string{"trishul/v1": fingerprint(ruleID, filePath, msg)},
 		}
@@ -542,6 +548,7 @@ func FromScanResults(results map[string]interface{}, toolVersion string) *Log {
 		res := Result{
 			RuleID:              ruleID,
 			Level:               severityToLevel(getSeverity(issue, "severity")),
+			Properties:          sevProps(getSeverity(issue, "severity")),
 			Message:             Message{Text: msg},
 			PartialFingerprints: map[string]string{"trishul/v1": fingerprint(ruleID, filePath, msg)},
 		}
@@ -574,6 +581,7 @@ func FromScanResults(results map[string]interface{}, toolVersion string) *Log {
 		res := Result{
 			RuleID:              ruleID,
 			Level:               severityToLevel(getSeverity(issue, "severity")),
+			Properties:          sevProps(getSeverity(issue, "severity")),
 			Message:             Message{Text: msg},
 			PartialFingerprints: map[string]string{"trishul/v1": fingerprint(ruleID, filePath, msg)},
 		}
@@ -645,4 +653,15 @@ func getInt(m map[string]interface{}, key string) int {
 		}
 	}
 	return 0
+}
+
+// sevProps records the original Trishul severity on a result. SARIF levels are
+// coarser (critical and high both map to "error"), so consumers such as the PR
+// gate read the precise severity from here.
+func sevProps(severity string) map[string]interface{} {
+	s := strings.ToLower(strings.TrimSpace(severity))
+	if s == "" {
+		s = "medium"
+	}
+	return map[string]interface{}{"severity": s}
 }

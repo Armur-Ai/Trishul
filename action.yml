@@ -1,76 +1,136 @@
-name: 'Trishul Security Scan'
-description: 'Scan your code for security vulnerabilities with Trishul'
-author: 'Trishul'
+name: 'Trishul PR Security Gate'
+description: 'Flags new security issues in each PR: AI agent supply-chain attacks, Vibe Top 10, leaked secrets. Low noise, non-blocking by default.'
+author: 'Armur AI'
 
 branding:
   icon: 'shield'
-  color: 'blue'
+  color: 'purple'
 
 inputs:
   path:
-    description: 'Path to scan (default: repository root)'
+    description: 'Directory to scan, relative to the workspace'
     required: false
     default: '.'
-  depth:
-    description: 'Scan depth: quick or deep'
-    required: false
-    default: 'quick'
-  fail-on-severity:
-    description: 'Fail if findings at this severity or above (critical, high, medium, low)'
+  fail-on:
+    description: 'Fail the job when the PR introduces findings at or above this severity (critical, high, medium, low). Empty = never fail (recommended while adopting).'
     required: false
     default: ''
   min-severity:
-    description: 'Minimum severity to include in output'
+    description: 'Only report findings at or above this severity'
     required: false
     default: 'medium'
-  output-format:
-    description: 'Output format: sarif, json, or text'
+  comment:
+    description: 'PR comment: auto (only when there are new findings, then kept up to date), always, or never'
     required: false
-    default: 'sarif'
+    default: 'auto'
   upload-sarif:
-    description: 'Upload SARIF to GitHub Security tab'
+    description: 'Upload SARIF to GitHub code scanning (needs security-events: write; skipped automatically when unavailable)'
     required: false
     default: 'true'
-  comment-on-pr:
-    description: 'Post findings summary as PR comment'
+  baseline:
+    description: 'Baseline file of accepted findings'
     required: false
-    default: 'true'
-  armur-version:
-    description: 'Armur CLI version to use (default: latest)'
+    default: '.trishul-baseline.json'
+  include-tests:
+    description: 'Also report findings in test/fixture code'
     required: false
-    default: 'latest'
+    default: 'false'
+  version:
+    description: 'trishul-ci version. Defaults to the action ref when it is a release tag, otherwise builds from the action source.'
+    required: false
+    default: ''
+  github-token:
+    description: 'Token used to post the PR comment'
+    required: false
+    default: ${{ github.token }}
 
 outputs:
-  findings-count:
-    description: 'Total number of findings'
+  new-count:
+    description: 'Number of new findings reported'
+    value: ${{ steps.scan.outputs.new-count }}
   critical-count:
-    description: 'Number of critical findings'
+    description: 'Number of new critical findings'
+    value: ${{ steps.scan.outputs.critical-count }}
   high-count:
-    description: 'Number of high findings'
+    description: 'Number of new high findings'
+    value: ${{ steps.scan.outputs.high-count }}
+  failed:
+    description: 'Whether the gate failed'
+    value: ${{ steps.scan.outputs.failed }}
   sarif-path:
-    description: 'Path to SARIF output file'
+    description: 'Path to the SARIF file'
+    value: ${{ runner.temp }}/trishul.sarif
 
 runs:
   using: 'composite'
   steps:
-    - name: Install Trishul
+    - name: Install trishul-ci
       shell: bash
-      run: curl -fsSL https://install.armur.ai | sh
+      env:
+        TRISHUL_VERSION: ${{ inputs.version }}
+        ACTION_REF: ${{ github.action_ref }}
+        ACTION_PATH: ${{ github.action_path }}
+      run: bash "$GITHUB_ACTION_PATH/scripts/action/install.sh"
 
-    - name: Run scan
+    - name: Fetch PR base
+      if: github.event.pull_request.base.sha != ''
       shell: bash
+      working-directory: ${{ inputs.path }}
+      env:
+        BASE_SHA: ${{ github.event.pull_request.base.sha }}
+      run: git fetch --no-tags --depth=1 origin "$BASE_SHA"
+
+    - name: Scan
       id: scan
+      shell: bash
+      working-directory: ${{ inputs.path }}
+      env:
+        BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        MIN_SEVERITY: ${{ inputs.min-severity }}
+        BASELINE: ${{ inputs.baseline }}
+        FAIL_ON: ${{ inputs.fail-on }}
+        INCLUDE_TESTS: ${{ inputs.include-tests }}
       run: |
-        trishul scan ${{ inputs.path }} \
-          --format ${{ inputs.output-format }} \
-          --min-severity ${{ inputs.min-severity }} \
-          --output trishul-results.sarif \
-          ${{ inputs.fail-on-severity != '' && format('--fail-on-severity {0}', inputs.fail-on-severity) || '' }}
-      continue-on-error: true
+        args=(--sarif "$RUNNER_TEMP/trishul.sarif" --markdown "$RUNNER_TEMP/trishul-comment.md" --json "$RUNNER_TEMP/trishul.json"
+              --min-severity "$MIN_SEVERITY" --baseline "$BASELINE"
+              --link-base "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/blob/$HEAD_SHA/")
+        [[ -n "$BASE_SHA" ]] && args+=(--base "$BASE_SHA")
+        [[ -n "$FAIL_ON" ]] && args+=(--fail-on "$FAIL_ON")
+        [[ "$INCLUDE_TESTS" == "true" ]] && args+=(--include-tests)
+        set +e
+        trishul-ci "${args[@]}" .
+        code=$?
+        set -e
+        echo "exit-code=$code" >> "$GITHUB_OUTPUT"
+        [[ $code -le 1 ]] || exit $code
 
     - name: Upload SARIF
-      if: inputs.upload-sarif == 'true' && always()
-      uses: github/codeql-action/upload-sarif@v3
+      if: inputs.upload-sarif == 'true' && always() && steps.scan.outputs.exit-code != ''
+      continue-on-error: true
+      uses: github/codeql-action/upload-sarif@v4
       with:
-        sarif_file: trishul-results.sarif
-        category: armur-security
+        sarif_file: ${{ runner.temp }}/trishul.sarif
+        category: trishul
+
+    - name: Comment on PR
+      if: github.event.pull_request.number != '' && inputs.comment != 'never' && always() && steps.scan.outputs.exit-code != ''
+      continue-on-error: true
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        REPO: ${{ github.repository }}
+        BODY_FILE: ${{ runner.temp }}/trishul-comment.md
+        NEW_COUNT: ${{ steps.scan.outputs.new-count }}
+        MODE: ${{ inputs.comment }}
+      run: bash "$GITHUB_ACTION_PATH/scripts/action/comment.sh"
+
+    - name: Enforce gate
+      if: steps.scan.outputs.exit-code == '1'
+      shell: bash
+      env:
+        FAIL_ON: ${{ inputs.fail-on }}
+      run: |
+        echo "::error::Trishul: this PR introduces findings at or above '$FAIL_ON'"
+        exit 1

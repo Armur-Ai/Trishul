@@ -87,8 +87,9 @@ var initCmd = &cobra.Command{
 
 scan:
   depth: %s                 # quick | deep
-%s  severity-threshold: %s    # minimum severity to include in output
-  fail-on-findings: %t      # exit with code 1 if findings at threshold or above
+%s
+severity-threshold: %s      # minimum severity to include in output
+fail-on-findings: %t        # fail CI / the Trishul PR check on findings at threshold or above
 
 exclude:
   - vendor/

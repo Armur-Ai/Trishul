@@ -259,8 +259,35 @@ Against our own reference target, [`examples/vibe-coded-app`](examples/vibe-code
 
 - **[Vibe Top 10 detection reference](docs/vibe-top-10.md)** — every analyzer, its check IDs, and how it holds down false positives.
 - **[AI Agent Supply-Chain Security](docs/agent-security.md)** — the flagship: threat model, the seven components, and attack-chain correlation.
+- **[PR gate: GitHub Action](docs/ci/github-actions.md)** &bull; **[GitHub App](docs/github-app.md)**: new-issues-only checks on every PR.
 - **[Authoring a built-in analyzer](docs/authoring-an-analyzer.md)** — the contract for adding your own read-only detector.
 - **[Roadmap](ROADMAP.md)** &bull; **[Changelog](CHANGELOG.md)**
+
+## On every pull request
+
+Trishul reports only the security issues a PR **introduces**. It diffs each PR against its merge base, so existing debt doesn't show up as noise. It never blocks unless you ask it to, and it posts one comment that's edited in place, and only when there is something to say.
+
+**Option 1: GitHub App (no YAML).** [Install Trishul](https://armur.ai/trishul-app/) on your org once and every repo gets a **Trishul** check with inline annotations. See [docs/github-app.md](docs/github-app.md).
+
+**Option 2: GitHub Action.** Run `trishul init github --pr`, or add:
+
+```yaml
+# .github/workflows/trishul.yml
+on: [pull_request]
+permissions: { contents: read, pull-requests: write, security-events: write }
+jobs:
+  trishul:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Armur-Ai/Trishul@v0.2.0
+        with:
+          fail-on: high   # optional: block merges on new high/critical issues
+```
+
+Already have findings you accept? Run `trishul-ci --write-baseline` and commit `.trishul-baseline.json`. Details: [docs/ci/github-actions.md](docs/ci/github-actions.md).
+
+**Badge** (with the App installed): `[![Trishul](https://armur.ai/trishul-app/badge/OWNER/REPO.svg)](https://github.com/Armur-Ai/Trishul)`
 
 ## Quick start
 
@@ -377,7 +404,7 @@ Trishul is honest about what works. If something here does not work as written, 
 | In-process scan engine (`engine.ScanLocal`, no server/Redis) | **Working** — used by the MCP tool; CLI `scan .` wiring is a follow-up |
 | Scanning a local directory from the CLI | **Not yet.** Scan a repository URL or a file. |
 | Published packages (Homebrew, npm, install script) | **Not yet.** Build from source. |
-| GitHub Action and pre-commit hook | **Not yet.** The files in this repo predate the rename and do not work. |
+| PR gate: `trishul-ci`, GitHub Action, GitHub App | **Working.** Diff-aware (only new findings), baseline file, SARIF, one comment edited in place, check-run annotations. Pre-commit hook: not yet. |
 | MCP server for Claude Code, Cursor and Windsurf | Implemented in `internal/mcp`, not yet wired to the CLI |
 | AI explanations and fixes, PR review | Implemented as packages, not yet wired to the CLI |
 | Sandboxed DAST, exploit simulation, attack paths | Implemented as packages, not yet wired. Returning as verification of static findings. |

@@ -1,0 +1,34 @@
+[Unit]
+Description=Trishul GitHub App (PR security gate)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=trishul
+Group=trishul
+EnvironmentFile=/etc/trishul-app/env
+ExecStart=/opt/trishul-app/trishul-app
+Restart=on-failure
+RestartSec=5
+
+# Scans run on untrusted repository content: keep the blast radius small.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+ReadWritePaths=/var/lib/trishul-app
+CapabilityBoundingSet=
+MemoryMax=1200M
+CPUQuota=120%
+TasksMax=256
+
+[Install]
+WantedBy=multi-user.target
