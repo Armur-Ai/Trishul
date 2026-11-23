@@ -6,6 +6,7 @@ import (
 	"github.com/Armur-Ai/Trishul/internal/agentsec"
 	"github.com/Armur-Ai/Trishul/internal/exploitability"
 	"github.com/Armur-Ai/Trishul/internal/findings"
+	"github.com/Armur-Ai/Trishul/internal/models"
 )
 
 func TestFromAgentFinding(t *testing.T) {
@@ -94,5 +95,53 @@ func TestFromExploitability(t *testing.T) {
 	}
 	if len(f.Evidence) != 4 { // condition + beyondSCA + 2 evidence
 		t.Errorf("evidence=%d", len(f.Evidence))
+	}
+}
+
+func TestFromModel(t *testing.T) {
+	m := models.Finding{
+		Tool:        "vibe",
+		RuleID:      "VIBE-007",
+		Category:    "broken_auth",
+		File:        "routes/api.ts",
+		Line:        20,
+		EndLine:     22,
+		Column:      3,
+		CWE:         "CWE-862",
+		OWASP:       "A01",
+		Severity:    models.SeverityHigh,
+		Confidence:  "medium",
+		Message:     "route lacks authorization middleware",
+		Snippet:     "router.get('/admin', handler)",
+		Remediation: "add requireAuth middleware",
+	}
+	f := FromModel(m)
+	if f.Analyzer != "vibe" || f.RuleID != "VIBE-007" {
+		t.Fatalf("bad: %+v", f)
+	}
+	if f.Confidence != 0.6 || f.Band != findings.BandMedium {
+		t.Errorf("conf/band %v/%q", f.Confidence, f.Band)
+	}
+	if f.Location.EndLine != 22 || f.Location.StartCol != 3 {
+		t.Errorf("loc %+v", f.Location)
+	}
+	if len(f.OWASP) != 1 || f.OWASP[0] != "A01" {
+		t.Errorf("owasp %v", f.OWASP)
+	}
+}
+
+func TestFromModel_ConfirmedIsFullConfidence(t *testing.T) {
+	f := FromModel(models.Finding{RuleID: "X", Confidence: "low", Confirmed: true, Severity: models.SeverityHigh})
+	if f.Confidence != 1.0 || f.Band != findings.BandHigh {
+		t.Errorf("confirmed should be full confidence, got %v/%q", f.Confidence, f.Band)
+	}
+	found := false
+	for _, tag := range f.Tags {
+		if tag == "confirmed" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("missing confirmed tag")
 	}
 }

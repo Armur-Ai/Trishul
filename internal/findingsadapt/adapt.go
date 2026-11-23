@@ -10,6 +10,7 @@ import (
 	"github.com/Armur-Ai/Trishul/internal/agentsec"
 	"github.com/Armur-Ai/Trishul/internal/exploitability"
 	"github.com/Armur-Ai/Trishul/internal/findings"
+	"github.com/Armur-Ai/Trishul/internal/models"
 )
 
 // confidenceFromBand maps a HIGH/MEDIUM/LOW band string to a numeric confidence
@@ -136,4 +137,51 @@ func FromExploitability(e exploitability.Finding) findings.Finding {
 		Remediation: findings.Remediation{Text: e.Remediation},
 		References:  refs,
 	})
+}
+
+// FromModel converts the legacy common models.Finding into a v2 finding. It is
+// the shared path for every analyzer that already emits models.Finding (the
+// Vibe rules, clientsecrets, supabase, firebase, attackpath). The model's real
+// Snippet feeds the fingerprint window, and Confirmed findings are pinned to
+// full confidence since they were verified (DAST/exploit simulation).
+func FromModel(m models.Finding) findings.Finding {
+	conf := confidenceFromBand(m.Confidence)
+	if m.Confirmed {
+		conf = 1.0
+	}
+	analyzer := firstNonEmpty(m.Tool, m.Source, "unknown")
+
+	var ev []findings.EvidenceStep
+	if strings.TrimSpace(m.Message) != "" {
+		ev = append(ev, findings.EvidenceStep{Path: m.File, Line: m.Line, Note: m.Message})
+	}
+
+	f := findings.Finding{
+		RuleID:      m.RuleID,
+		Analyzer:    analyzer,
+		Title:       firstNonEmpty(m.Category, m.RuleID),
+		Message:     m.Message,
+		Severity:    findings.Severity(strings.ToUpper(string(m.Severity))),
+		Confidence:  conf,
+		Category:    m.Category,
+		CWE:         splitList(m.CWE),
+		OWASP:       splitList(m.OWASP),
+		Location:    findings.Location{Path: m.File, StartLine: m.Line, EndLine: m.EndLine, StartCol: m.Column},
+		Snippet:     m.Snippet,
+		Evidence:    ev,
+		Remediation: findings.Remediation{Text: m.Remediation},
+	}
+	if m.Confirmed {
+		f.Tags = append(f.Tags, "confirmed")
+	}
+	return findings.New(f)
+}
+
+// FromModels converts a slice of legacy findings, preserving order.
+func FromModels(ms []models.Finding) []findings.Finding {
+	out := make([]findings.Finding, 0, len(ms))
+	for _, m := range ms {
+		out = append(out, FromModel(m))
+	}
+	return out
 }
