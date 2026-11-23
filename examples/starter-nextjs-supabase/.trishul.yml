@@ -1,0 +1,4 @@
+profile: default
+gate:
+  block_on: [CRITICAL, HIGH]
+  fail_on_new: true
