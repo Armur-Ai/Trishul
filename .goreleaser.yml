@@ -98,6 +98,42 @@ archives:
       - trishul-app
     name_template: "trishul-app_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
 
+dockers:
+  - id: trishul-amd64
+    ids: [trishul-cli]
+    goos: linux
+    goarch: amd64
+    dockerfile: Dockerfile.goreleaser
+    image_templates:
+      - "ghcr.io/armur-ai/trishul:{{ .Version }}-amd64"
+      - "ghcr.io/armur-ai/trishul:latest-amd64"
+    build_flag_templates:
+      - "--platform=linux/amd64"
+      - "--label=org.opencontainers.image.source=https://github.com/Armur-Ai/Trishul"
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+  - id: trishul-arm64
+    ids: [trishul-cli]
+    goos: linux
+    goarch: arm64
+    dockerfile: Dockerfile.goreleaser
+    image_templates:
+      - "ghcr.io/armur-ai/trishul:{{ .Version }}-arm64"
+      - "ghcr.io/armur-ai/trishul:latest-arm64"
+    build_flag_templates:
+      - "--platform=linux/arm64"
+      - "--label=org.opencontainers.image.source=https://github.com/Armur-Ai/Trishul"
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+
+docker_manifests:
+  - name_template: "ghcr.io/armur-ai/trishul:{{ .Version }}"
+    image_templates:
+      - "ghcr.io/armur-ai/trishul:{{ .Version }}-amd64"
+      - "ghcr.io/armur-ai/trishul:{{ .Version }}-arm64"
+  - name_template: "ghcr.io/armur-ai/trishul:latest"
+    image_templates:
+      - "ghcr.io/armur-ai/trishul:latest-amd64"
+      - "ghcr.io/armur-ai/trishul:latest-arm64"
+
 checksum:
   name_template: 'checksums.txt'
 

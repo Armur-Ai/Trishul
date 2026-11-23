@@ -1,0 +1,10 @@
+# Release image for the trishul CLI, built by GoReleaser from the prebuilt
+# binary (see .goreleaser.yml `dockers`). Distroless + non-root: no shell, no
+# package manager, minimal attack surface. Scanning is hermetic, so the image
+# needs nothing but the static binary.
+FROM gcr.io/distroless/static-debian12:nonroot
+COPY trishul /usr/bin/trishul
+USER nonroot:nonroot
+WORKDIR /src
+ENTRYPOINT ["/usr/bin/trishul"]
+CMD ["scan", "/src"]
