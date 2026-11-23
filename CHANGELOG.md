@@ -7,7 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-_Nothing yet._
+### Local-first architecture
+- **Trishul is local-first — your code never leaves your environment.** Scans run on your machine, in your CI (the GitHub Action), your editor or your agent; our servers never receive source.
+- The hosted **GitHub App is deprecated/frozen** (`cmd/trishul-app`): no new features, and it is **removed from the default release archives**. The binary still builds for tests. Use the GitHub Action instead.
 
 ## [0.2.0] - 2026-11-23
 

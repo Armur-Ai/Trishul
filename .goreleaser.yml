@@ -54,22 +54,10 @@ builds:
       - -X main.commit={{.ShortCommit}}
       - -X main.date={{.Date}}
 
-  # GitHub App server (webhook receiver + queue + worker).
-  - id: trishul-app
-    main: ./cmd/trishul-app
-    binary: trishul-app
-    env:
-      - CGO_ENABLED=0
-    goos:
-      - linux
-      - darwin
-    goarch:
-      - amd64
-      - arm64
-    ldflags:
-      - -s -w
-      - -X main.version={{.Version}}
-      - -X main.commit={{.ShortCommit}}
+  # NOTE: the GitHub App server (cmd/trishul-app) is intentionally NOT built or
+  # shipped here — per the 2026-11-23 LOCAL-FIRST decision (D-ARCH.1) the hosted
+  # App is frozen/deprecated and removed from the default release archives. The
+  # binary still builds via `go build ./cmd/trishul-app` for tests.
 
 archives:
   - id: cli-archive
@@ -93,10 +81,6 @@ archives:
       - trishul-server
     name_template: "trishul-server_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
 
-  - id: app-archive
-    ids:
-      - trishul-app
-    name_template: "trishul-app_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
 
 dockers:
   - id: trishul-amd64

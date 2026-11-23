@@ -267,9 +267,9 @@ Against our own reference target, [`examples/vibe-coded-app`](examples/vibe-code
 
 Trishul reports only the security issues a PR **introduces**. It diffs each PR against its merge base, so existing debt doesn't show up as noise. It never blocks unless you ask it to, and it posts one comment that's edited in place, and only when there is something to say.
 
-**Option 1: GitHub App (no YAML).** [Install Trishul](https://armur.ai/trishul-app/) on your org once and every repo gets a **Trishul** check with inline annotations. See [docs/github-app.md](docs/github-app.md).
+> **Your code never leaves your environment.** Trishul is local-first: the scan runs inside *your* CI, and GitHub's Security tab is your dashboard. We never receive your source. (The old hosted GitHub App is [deprecated](docs/github-app.md).)
 
-**Option 2: GitHub Action.** Run `trishul init github --pr`, or add:
+**GitHub Action.** Run `trishul init github --pr`, or add:
 
 ```yaml
 # .github/workflows/trishul.yml
@@ -287,7 +287,7 @@ jobs:
 
 Already have findings you accept? Run `trishul-ci --write-baseline` and commit `.trishul-baseline.json`. Details: [docs/ci/github-actions.md](docs/ci/github-actions.md).
 
-**Badge** (with the App installed): `[![Trishul](https://armur.ai/trishul-app/badge/OWNER/REPO.svg)](https://github.com/Armur-Ai/Trishul)`
+**Badge:** the Action writes a shields.io endpoint JSON into your repo (no Trishul servers involved) — `[![Trishul](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/OWNER/REPO/main/.trishul/badge.json)](https://github.com/OWNER/REPO/security/code-scanning)`. See [docs/ci/github-actions.md](docs/ci/github-actions.md).
 
 ## Quick start
 

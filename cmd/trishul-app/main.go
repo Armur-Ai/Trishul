@@ -1,5 +1,13 @@
 // Command trishul-app is the Trishul GitHub App server.
 //
+// DEPRECATED (2026-11-23, LOCAL-FIRST decision / D-ARCH.1): the hosted GitHub
+// App is frozen. Trishul never handles user code on our servers — scanning runs
+// on the user's machine, in their CI (the GitHub Action), their editor, or their
+// agent. This server-side scanning path receives no new features and is not
+// shipped in the default release archives. It is kept compiling and tested only
+// until the owner decides between a thin results-only App (D-ARCH.6) and removal.
+// Use the GitHub Action instead; see docs/github-app.md and docs/ci/.
+//
 // Install the app on an org once and every pull request in every repository
 // gets a "Trishul" check run with inline annotations, plus a single PR comment
 // that is edited in place, reporting only the security issues that PR

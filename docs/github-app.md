@@ -1,6 +1,13 @@
-# Trishul GitHub App
+# Trishul GitHub App (deprecated)
 
-Install once on an organization and every pull request in every selected repository gets:
+> **Deprecated — Trishul is local-first (2026-11-23).** The hosted GitHub App ran
+> scans on our servers. We no longer do that: **your code never leaves your
+> environment.** Use the **[GitHub Action](ci/github-actions.md)** instead — it runs
+> the identical hermetic scan inside your own CI, and GitHub's Security tab is your
+> free dashboard. The hosted App is frozen (no new features, not public) and this
+> page is kept for historical reference only.
+
+Historically, installing once on an organization gave every pull request in every selected repository:
 
 - a **Trishul** check run with inline annotations on the changed code;
 - one PR comment, posted only when the PR introduces an issue and then edited in place on each push;
