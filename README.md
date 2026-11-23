@@ -291,23 +291,50 @@ Already have findings you accept? Run `trishul-ci --write-baseline` and commit `
 
 ## Quick start
 
-Trishul is pre-release. There are no published packages yet, so you build it from source. You need Docker and Go 1.25 or newer.
+### Install
+
+> One static binary, no Redis, no Docker required. Published packages land with the **v0.2.0** release (in progress); until it's tagged, use **From source** below.
+
+```bash
+# Homebrew (macOS / Linux)
+brew install armur-ai/tap/trishul
+
+# npm / npx
+npx trishul-cli scan .
+
+# pipx / uvx
+pipx run trishul-cli scan .
+uvx  trishul-cli scan .
+
+# Docker (multi-arch, distroless)
+docker run --rm -v "$PWD:/src" ghcr.io/armur-ai/trishul scan /src
+
+# install script → ~/.local/bin (no sudo)
+curl -fsSL https://armur.ai/trishul/install.sh | sh
+
+# Go
+go install github.com/Armur-Ai/Trishul/cli@latest
+```
+
+Then: `trishul scan .` in any repo, or just `trishul` for a quick graded report.
+
+#### From source (works today)
+
+You need Go 1.25 or newer (and Docker only for the optional full scan engine).
 
 ```bash
 git clone https://github.com/Armur-Ai/trishul
 cd trishul
 
-# 1. Start the scan engine (first build takes a few minutes)
-docker compose up -d --build
-
-# 2. Build the CLI
+# Build the CLI (static, no dependencies)
 (cd cli && go build -o ../bin/trishul .)
 
-# 3. Scan a file
+# Scan a file or a repository (agent-security analyzers run on repo scans)
 ./bin/trishul scan examples/vibe-coded-app/server.js
-
-# 4. Or scan a repository (agent-security analyzers run on repo scans)
 ./bin/trishul scan https://github.com/you/your-app -l js
+
+# Optional: the full containerized scan engine (extra language tools)
+docker compose up -d --build
 ```
 
 Languages for `-l`: `go`, `py`, `js`, `rust`, `java`, `ruby`, `php`, `c`, `iac`, `sol`.
