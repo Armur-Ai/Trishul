@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "trishul": {
+      "command": "trishul",
+      "args": ["mcp"]
+    }
+  }
+}
