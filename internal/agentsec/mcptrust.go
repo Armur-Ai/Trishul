@@ -172,8 +172,10 @@ func mcpInspectServer(file string, lines []string, name string, raw json.RawMess
 		})
 	}
 
-	// AGENT-MCP-003: embedded secrets (reported REDACTED only).
-	for _, s := range mcpFindSecrets(raw) {
+	// AGENT-MCP-003: embedded secrets (reported REDACTED only). Example configs,
+	// docs, and golden test snapshots carry deliberately fake credentials, so a
+	// secret in one of those is not a real leak.
+	for _, s := range mcpFindSecretsIn(file, raw) {
 		line := mcpLine(lines, nameLine, fmt.Sprintf("%q", s.lastKey))
 		out = append(out, AgentFinding{
 			CheckID:          "AGENT-MCP-003",
@@ -368,6 +370,15 @@ type mcpSecret struct {
 	confidence string
 }
 
+// mcpFindSecretsIn walks the server definition and returns embedded credentials,
+// unless the file is an example/docs/golden snapshot whose "secrets" are fake.
+func mcpFindSecretsIn(file string, raw json.RawMessage) []mcpSecret {
+	if mcpIsExampleConfig(file) {
+		return nil
+	}
+	return mcpFindSecrets(raw)
+}
+
 // mcpFindSecrets walks the server definition and returns embedded credentials.
 func mcpFindSecrets(raw json.RawMessage) []mcpSecret {
 	var v interface{}
@@ -377,6 +388,28 @@ func mcpFindSecrets(raw json.RawMessage) []mcpSecret {
 	var found []mcpSecret
 	mcpWalkSecrets("", "", v, &found)
 	return found
+}
+
+// mcpIsExampleConfig reports whether a path holds documentation or fixture
+// credentials rather than a live config: an `*.example.json`/`*.sample.json`
+// file, anything under a docs/ directory, or a golden test snapshot.
+func mcpIsExampleConfig(file string) bool {
+	f := strings.ToLower(filepath.ToSlash(file))
+	base := strings.ToLower(filepath.Base(file))
+	if strings.Contains(base, ".example.") || strings.Contains(base, ".sample.") ||
+		strings.HasSuffix(base, ".example") || strings.HasSuffix(base, ".sample") {
+		return true
+	}
+	if strings.Contains(f, "golden") || strings.Contains(f, "snapshot") || strings.Contains(f, "__snapshots__") {
+		return true
+	}
+	for _, seg := range strings.Split(f, "/") {
+		switch seg {
+		case "docs", "example", "examples":
+			return true
+		}
+	}
+	return false
 }
 
 func mcpWalkSecrets(path, key string, v interface{}, found *[]mcpSecret) {
@@ -429,7 +462,11 @@ func mcpIsPlaceholder(val string) bool {
 		return true // <your-token-here>
 	}
 	lower := strings.ToLower(v)
-	for _, p := range []string{"changeme", "example", "redacted", "placeholder", "your-", "xxxx", "****"} {
+	// YOUR_TOKEN / your-token-here and similar fill-me-in markers.
+	if strings.HasPrefix(lower, "your") {
+		return true
+	}
+	for _, p := range []string{"changeme", "example", "redacted", "placeholder", "your-", "your_", "xxx", "****"} {
 		if strings.Contains(lower, p) {
 			return true
 		}

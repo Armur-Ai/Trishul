@@ -19,6 +19,12 @@ func mcpWrite(t *testing.T, dir, rel, content string) {
 	}
 }
 
+// jsonStr renders s as a JSON string literal (quoted, escaped) for embedding.
+func jsonStr(s string) string {
+	b, _ := json.Marshal(s)
+	return string(b)
+}
+
 func mcpHas(fs []AgentFinding, checkID string) *AgentFinding {
 	for i := range fs {
 		if fs[i].CheckID == checkID {
@@ -153,6 +159,63 @@ func TestScanMCPTrust_NonMCPJSONIgnored(t *testing.T) {
 	}
 	if len(fs) != 0 {
 		t.Fatalf("non-MCP JSON must be ignored, got %+v", fs)
+	}
+}
+
+func TestScanMCPTrust_MCP003_PlaceholdersNotFlagged(t *testing.T) {
+	placeholders := map[string]string{
+		"your_upper":  "YOUR_API_KEY_HERE",
+		"your_dash":   "your-token-here",
+		"angle":       "<your-token>",
+		"xxx":         "xxx",
+		"changeme":    "changeme",
+		"env_ref":     "${GITHUB_TOKEN}",
+		"env_dollar":  "$GITHUB_TOKEN",
+		"placeholder": "PLACEHOLDER",
+	}
+	for name, val := range placeholders {
+		dir := t.TempDir()
+		mcpWrite(t, dir, ".mcp.json", `{"mcpServers":{"s":{"command":"local","env":{"GITHUB_TOKEN":`+jsonStr(val)+`}}}}`)
+		fs, err := scanMCPTrust(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if f := mcpHas(fs, "AGENT-MCP-003"); f != nil {
+			t.Errorf("%s (%q): placeholder should not raise AGENT-MCP-003, got %+v", name, val, f)
+		}
+	}
+}
+
+func TestScanMCPTrust_MCP003_RealSecretFlagged(t *testing.T) {
+	dir := t.TempDir()
+	mcpWrite(t, dir, ".mcp.json", `{"mcpServers":{"s":{"command":"local","env":{"GITHUB_TOKEN":`+jsonStr(mcpPlantedSecret)+`}}}}`)
+	fs, err := scanMCPTrust(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if mcpHas(fs, "AGENT-MCP-003") == nil {
+		t.Fatalf("a real embedded secret must raise AGENT-MCP-003, got %+v", fs)
+	}
+}
+
+func TestScanMCPTrust_MCP003_ExampleAndDocsAndGoldenNotFlagged(t *testing.T) {
+	body := `{"mcpServers":{"s":{"command":"local","env":{"GITHUB_TOKEN":` + jsonStr(mcpPlantedSecret) + `}}}}`
+	for _, rel := range []string{
+		"mcp.example.json",
+		"config.sample.json",
+		"docs/setup/.mcp.json",
+		"internal/foo/testdata/golden/mcp.json",
+		"snapshots/mcp.json",
+	} {
+		dir := t.TempDir()
+		mcpWrite(t, dir, rel, body)
+		fs, err := scanMCPTrust(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if f := mcpHas(fs, "AGENT-MCP-003"); f != nil {
+			t.Errorf("%s: secret in example/docs/golden must not raise AGENT-MCP-003, got %+v", rel, f)
+		}
 	}
 }
 
