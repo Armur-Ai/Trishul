@@ -391,27 +391,72 @@ func execTitle(prefix string, hit execHit) string {
 	}
 }
 
-var execShellInterp = map[string]bool{
+// execShellRunsStdin lists interpreters that, when they appear at the receiving
+// end of a pipe, execute piped stdin AS CODE. A POSIX-family shell always runs
+// its standard input as commands.
+var execShellRunsStdin = map[string]bool{
 	"sh": true, "bash": true, "zsh": true, "dash": true, "ksh": true, "ash": true,
-	"python": true, "python2": true, "python3": true, "ruby": true, "perl": true,
-	"node": true, "nodejs": true, "php": true,
+	"iex": true, // PowerShell Invoke-Expression: `... | iex` runs the piped string
 }
 
-// execPipeToShell reports whether cmd pipes anything into a shell interpreter.
+// execScriptInterp lists language interpreters that run stdin as code only when
+// invoked in a stdin-as-script mode (`python -`, `node -`, bare interpreter) and
+// NOT when given a fixed program via -c/-e or a script file (then stdin is DATA).
+var execScriptInterp = map[string]bool{
+	"python": true, "python2": true, "python3": true,
+	"node": true, "nodejs": true, "ruby": true, "perl": true, "php": true,
+}
+
+// execPipeToShell reports whether cmd pipes data into an interpreter that will
+// execute that data AS CODE. It deliberately does NOT fire for pipe targets that
+// read stdin as DATA (jq, grep, tee, `node -e '<fixed>'`, `python3 -c "<fixed>"`,
+// `python file.py`, …) — only for a real remote-code-execution path.
 func execPipeToShell(cmd string) bool {
 	parts := strings.Split(cmd, "|")
 	for i := 1; i < len(parts); i++ {
-		fields := strings.Fields(parts[i])
-		if len(fields) == 0 {
-			continue
-		}
-		tok := fields[0]
-		if tok == "sudo" && len(fields) > 1 {
-			tok = fields[1]
-		}
-		if execShellInterp[filepath.Base(tok)] {
+		if execInterpRunsStdin(strings.Fields(parts[i])) {
 			return true
 		}
+	}
+	return false
+}
+
+// execInterpRunsStdin decides whether the pipe-target command (its token fields)
+// executes piped stdin as code.
+func execInterpRunsStdin(fields []string) bool {
+	if len(fields) == 0 {
+		return false
+	}
+	tok := fields[0]
+	args := fields[1:]
+	if tok == "sudo" && len(fields) > 1 {
+		tok = fields[1]
+		args = fields[2:]
+	}
+	base := filepath.Base(tok)
+	if execShellRunsStdin[base] {
+		// A shell runs stdin as commands unless handed a fixed -c program.
+		for _, a := range args {
+			if a == "-c" {
+				return false
+			}
+		}
+		return true
+	}
+	if execScriptInterp[base] {
+		for _, a := range args {
+			switch {
+			case a == "-c" || a == "-e":
+				return false // fixed program supplied; stdin is data
+			case a == "-":
+				return true // explicit "read script from stdin"
+			case strings.HasPrefix(a, "-"):
+				continue // some other flag (e.g. -u, -E)
+			default:
+				return false // a script file argument; stdin is data
+			}
+		}
+		return true // bare interpreter at a pipe end reads stdin as a script
 	}
 	return false
 }
