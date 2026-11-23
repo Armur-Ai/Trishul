@@ -1,0 +1,12 @@
+# Source and tooling — not shipped in the .vsix (we ship compiled ./out only).
+.vscode/**
+.vscode-test/**
+src/**
+node_modules/**
+**/tsconfig.json
+**/.eslintrc*
+**/*.map
+**/*.ts
+.gitignore
+.github/**
+# Keep: out/**, package.json, README.md, CHANGELOG.md, LICENSE, icon.png

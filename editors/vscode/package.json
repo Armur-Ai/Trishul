@@ -1,0 +1,106 @@
+{
+  "name": "trishul",
+  "displayName": "Trishul Security Scanner",
+  "description": "Run the Trishul security scanner locally and see findings inline. Local-first: shells out to your own trishul binary; nothing is sent to a server.",
+  "version": "0.1.0",
+  "publisher": "armur-ai",
+  "license": "MIT",
+  "icon": "icon.png",
+  "homepage": "https://github.com/Armur-Ai/trishul",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Armur-Ai/trishul.git",
+    "directory": "editors/vscode"
+  },
+  "bugs": {
+    "url": "https://github.com/Armur-Ai/trishul/issues"
+  },
+  "categories": [
+    "Linters",
+    "Programming Languages"
+  ],
+  "keywords": [
+    "security",
+    "sast",
+    "sarif",
+    "scanner",
+    "trishul"
+  ],
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "activationEvents": [
+    "onStartupFinished",
+    "onLanguage:javascript",
+    "onLanguage:javascriptreact",
+    "onLanguage:typescript",
+    "onLanguage:typescriptreact",
+    "onLanguage:python",
+    "onLanguage:go",
+    "onLanguage:rust",
+    "onLanguage:java",
+    "onLanguage:ruby",
+    "onLanguage:php",
+    "onLanguage:c",
+    "onLanguage:cpp",
+    "onLanguage:solidity"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "trishul.scanWorkspace",
+        "title": "Trishul: Scan Workspace",
+        "category": "Trishul"
+      },
+      {
+        "command": "trishul.scanFile",
+        "title": "Trishul: Scan Current File",
+        "category": "Trishul"
+      }
+    ],
+    "configuration": {
+      "title": "Trishul",
+      "properties": {
+        "trishul.path": {
+          "type": "string",
+          "default": "trishul",
+          "markdownDescription": "Path to the `trishul` binary. Defaults to `trishul`, which must be on your `PATH`. Set an absolute path if the binary lives elsewhere.",
+          "scope": "machine-overridable"
+        },
+        "trishul.runOnSave": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically scan a file when it is saved (only for supported languages)."
+        },
+        "trishul.format": {
+          "type": "string",
+          "enum": [
+            "sarif",
+            "json"
+          ],
+          "default": "sarif",
+          "markdownDescription": "Output format requested from `trishul scan`. SARIF is the recommended, well-defined contract; `json` is parsed best-effort."
+        },
+        "trishul.extraArgs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Additional arguments appended to every `trishul scan` invocation (e.g. [\"--min-severity\", \"medium\"])."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/node": "20.11.30",
+    "@types/vscode": "1.85.0",
+    "typescript": "5.4.5"
+  }
+}
