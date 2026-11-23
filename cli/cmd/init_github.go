@@ -44,7 +44,26 @@ jobs:
       - uses: Armur-Ai/Trishul@` + actionVersion + `
         with:
           min-severity: medium
-` + failLine
+` + failLine + `
+  # Optional: publish a self-hosted status badge committed to YOUR repo (no Trishul
+  # server). Enable by uncommenting; it needs contents:write on the push to main.
+  #  badge:
+  #    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+  #    needs: trishul
+  #    runs-on: ubuntu-latest
+  #    permissions: { contents: write }
+  #    steps:
+  #      - uses: actions/checkout@v4
+  #      - uses: Armur-Ai/Trishul@` + actionVersion + `
+  #        with: { command: "badge --write .trishul/badge.json" }
+  #      - run: |
+  #          git config user.name trishul-bot
+  #          git config user.email trishul-bot@users.noreply.github.com
+  #          git add .trishul/badge.json
+  #          git commit -m "chore: update Trishul badge" || exit 0
+  #          git push
+  # Badge markdown: ![Trishul](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/OWNER/REPO/main/.trishul/badge.json)
+`
 }
 
 var initGitHubCmd = &cobra.Command{
@@ -54,8 +73,8 @@ var initGitHubCmd = &cobra.Command{
 security issues. With --pr, commits it on a new branch, pushes, and opens a
 pull request using the GitHub CLI (gh).
 
-Prefer zero YAML? Install the Trishul GitHub App instead:
-  https://armur.ai/trishul-app/`,
+Trishul is local-first: the scan runs in YOUR CI with YOUR token, results land in
+your GitHub Security tab, and your code never leaves your environment.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		failOn, _ := cmd.Flags().GetString("fail-on")
 		openPR, _ := cmd.Flags().GetBool("pr")
