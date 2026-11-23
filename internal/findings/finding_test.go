@@ -45,3 +45,21 @@ func TestFinalize_ClampsConfidence(t *testing.T) {
 		t.Errorf("confidence not clamped low: %v", got)
 	}
 }
+
+func TestEnsureEvidence(t *testing.T) {
+	// no evidence -> synthesized from snippet
+	f := New(Finding{RuleID: "R", Snippet: "exec(x)", Message: "cmd injection", Location: Location{Path: "a.go", StartLine: 7}}).EnsureEvidence()
+	if len(f.Evidence) != 1 || f.Evidence[0].Note != "exec(x)" || f.Evidence[0].Line != 7 {
+		t.Fatalf("evidence not synthesized from snippet: %+v", f.Evidence)
+	}
+	// falls back to message when no snippet
+	g := New(Finding{RuleID: "R", Message: "boom"}).EnsureEvidence()
+	if g.Evidence[0].Note != "boom" {
+		t.Errorf("want message fallback, got %q", g.Evidence[0].Note)
+	}
+	// existing evidence preserved
+	h := Finding{Evidence: []EvidenceStep{{Note: "kept"}}}.EnsureEvidence()
+	if len(h.Evidence) != 1 || h.Evidence[0].Note != "kept" {
+		t.Errorf("existing evidence clobbered: %+v", h.Evidence)
+	}
+}

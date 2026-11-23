@@ -137,3 +137,30 @@ func (f Finding) Finalize() Finding {
 	f.FingerprintV2 = FingerprintV2(f.RuleID, f.Location.Path, f.Snippet)
 	return f
 }
+
+// EnsureEvidence guarantees the finding has at least one evidence step (P4.1):
+// a reviewer should always see *why* a finding fired, not just its message. When
+// Evidence is empty it synthesizes one step from the snippet (preferred, as it
+// is the matched construct) or the message, located at the finding. It is
+// idempotent and returns the updated finding.
+func (f Finding) EnsureEvidence() Finding {
+	if len(f.Evidence) > 0 {
+		return f
+	}
+	note := f.Snippet
+	if note == "" {
+		note = f.Message
+	}
+	if note == "" {
+		note = f.Title
+	}
+	if note == "" {
+		note = "matched " + f.RuleID
+	}
+	f.Evidence = []EvidenceStep{{
+		Path: f.Location.Path,
+		Line: f.Location.StartLine,
+		Note: note,
+	}}
+	return f
+}
