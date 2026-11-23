@@ -162,6 +162,181 @@ const client = new OpenAI({ apiKey, dangerouslyAllowBrowser: true });
 	}
 }
 
+// runLLM is a small helper that scans a single-file fixture and returns its
+// findings.
+func runLLM(t *testing.T, name, content string) []map[string]interface{} {
+	t.Helper()
+	dir := t.TempDir()
+	writeLLMFile(t, dir, name, content)
+	res, err := RunUnsafeLLMIntegration(dir)
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	return llmFindings(t, res)
+}
+
+// VIBE-LLM-002 must not treat `.exec()` method calls on non-child_process
+// objects (RegExp.prototype.exec, a db handle's .exec) as a shell sink.
+func TestRunUnsafeLLMIntegration_ExecSink_MethodCallsDoNotFire(t *testing.T) {
+	cases := []struct {
+		name string
+		src  string
+	}{
+		{"regexp.exec", `
+const openai = new OpenAI();
+const completion = await openai.chat.completions.create({ messages: [] });
+const text = completion.choices[0].message.content;
+const re = /danger/;
+const m = re.exec(text);
+`},
+		{"db.exec", `
+const openai = new OpenAI();
+const completion = await openai.chat.completions.create({ messages: [] });
+const sql = completion.choices[0].message.content;
+db.exec(sql);
+`},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			findings := runLLM(t, "f.js", c.src)
+			if f := findByCheckID(findings, "VIBE-LLM-002"); f != nil {
+				t.Fatalf("VIBE-LLM-002 should not fire on %s; got %v", c.name, f)
+			}
+		})
+	}
+}
+
+// A real child_process exec/spawn call reached by model output must fire.
+func TestRunUnsafeLLMIntegration_ExecSink_ChildProcessFires(t *testing.T) {
+	cases := []struct {
+		name string
+		src  string
+	}{
+		{"require destructure", `
+const { exec } = require("child_process");
+const openai = new OpenAI();
+const completion = await openai.chat.completions.create({ messages: [] });
+const cmd = completion.choices[0].message.content;
+exec(cmd);
+`},
+		{"require namespace", `
+const cp = require("node:child_process");
+const openai = new OpenAI();
+const completion = await openai.chat.completions.create({ messages: [] });
+const cmd = completion.choices[0].message.content;
+cp.execSync(cmd);
+`},
+		{"esm named import", `
+import { spawn } from "child_process";
+import OpenAI from "openai";
+const openai = new OpenAI();
+const completion = await openai.chat.completions.create({ messages: [] });
+const cmd = completion.choices[0].message.content;
+spawn(cmd);
+`},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			findings := runLLM(t, "f.js", c.src)
+			f := findByCheckID(findings, "VIBE-LLM-002")
+			if f == nil {
+				t.Fatalf("expected VIBE-LLM-002 on %s; got %v", c.name, findings)
+			}
+			if f["severity"] != "HIGH" {
+				t.Errorf("severity = %v, want HIGH", f["severity"])
+			}
+			if _, ok := f["experimental"]; ok {
+				t.Errorf("command sink should not be experimental; got %v", f["experimental"])
+			}
+		})
+	}
+}
+
+// A bare child_process exec binding not tainted by model output must not fire.
+func TestRunUnsafeLLMIntegration_ExecSink_UntaintedDoesNotFire(t *testing.T) {
+	findings := runLLM(t, "f.js", `
+const { exec } = require("child_process");
+exec("ls -la /tmp");
+`)
+	if f := findByCheckID(findings, "VIBE-LLM-002"); f != nil {
+		t.Fatalf("VIBE-LLM-002 should not fire without LLM taint; got %v", f)
+	}
+}
+
+// Python: exec()/subprocess(shell=True) reached by model output fire; a
+// subprocess call without a shell does not.
+func TestRunUnsafeLLMIntegration_ExecSink_Python(t *testing.T) {
+	t.Run("bare exec fires", func(t *testing.T) {
+		findings := runLLM(t, "h.py", `
+from openai import OpenAI
+client = OpenAI()
+
+def handle(user):
+    completion = client.chat.completions.create(model="gpt-4", messages=[])
+    code = completion.choices[0].message.content
+    exec(code)
+`)
+		if findByCheckID(findings, "VIBE-LLM-002") == nil {
+			t.Fatalf("expected VIBE-LLM-002 for Python exec(); got %v", findings)
+		}
+	})
+	t.Run("subprocess shell=True fires", func(t *testing.T) {
+		findings := runLLM(t, "h.py", `
+import subprocess
+from openai import OpenAI
+client = OpenAI()
+
+def handle():
+    completion = client.chat.completions.create(model="gpt-4", messages=[])
+    cmd = completion.choices[0].message.content
+    subprocess.run(cmd, shell=True)
+`)
+		if findByCheckID(findings, "VIBE-LLM-002") == nil {
+			t.Fatalf("expected VIBE-LLM-002 for subprocess shell=True; got %v", findings)
+		}
+	})
+	t.Run("subprocess without shell does not fire", func(t *testing.T) {
+		findings := runLLM(t, "h.py", `
+import subprocess
+from openai import OpenAI
+client = OpenAI()
+
+def handle():
+    completion = client.chat.completions.create(model="gpt-4", messages=[])
+    arg = completion.choices[0].message.content
+    subprocess.run(["echo", arg])
+`)
+		if f := findByCheckID(findings, "VIBE-LLM-002"); f != nil {
+			t.Fatalf("VIBE-LLM-002 should not fire for argv subprocess; got %v", f)
+		}
+	})
+}
+
+// Go: exec.Command reached by model output fires.
+func TestRunUnsafeLLMIntegration_ExecSink_Go(t *testing.T) {
+	findings := runLLM(t, "main.go", `
+package main
+
+import (
+	"os/exec"
+	anthropic "github.com/anthropics/anthropic-sdk-go"
+)
+
+func handle(client *anthropic.Client, ctx interface{}, params interface{}) {
+	resp, _ := client.Messages.New(ctx, params)
+	cmd := resp.Content[0].Text
+	exec.Command("sh", "-c", cmd).Run()
+}
+`)
+	f := findByCheckID(findings, "VIBE-LLM-002")
+	if f == nil {
+		t.Fatalf("expected VIBE-LLM-002 for Go exec.Command; got %v", findings)
+	}
+	if f["severity"] != "HIGH" {
+		t.Errorf("severity = %v, want HIGH", f["severity"])
+	}
+}
+
 func TestRunUnsafeLLMIntegration_Clean(t *testing.T) {
 	dir := t.TempDir()
 	writeLLMFile(t, dir, "safe.js", `
