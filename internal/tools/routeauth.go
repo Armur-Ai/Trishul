@@ -107,6 +107,10 @@ var raJSAuthTokens = []string{
 	"passport", "authorize", "checkauth", "validatesession", "req.user",
 	"request.user", "session.user", "ensureloggedin", "protect(", "auth(",
 	"ironsession", "nextauth", "supabase.auth", "getuser(", "permissionguard",
+	"requirerole", "hasrole", "checkrole", "requirepermission", "haspermission",
+	"assertauth", "ensureauthenticated", "getcurrentuser", "getsessionuser",
+	"verifysession", "getuserfromrequest", "clerkmiddleware", "auth.protect",
+	"authguard", "rbac", "authz",
 }
 
 var raPyAuthTokens = []string{
@@ -115,6 +119,9 @@ var raPyAuthTokens = []string{
 	"oauth2_scheme", "require_auth", "authenticate", "permission_classes",
 	"httpbearer", "token_required", "auth_required", "get_current_active_user",
 	"require_login", "depends(get_user", "depends(authenticate",
+	"require_role", "has_permission", "has_perm", "has_role", "check_permissions",
+	"require_scope", "requires_scopes", "is_staff", "is_superuser",
+	"user.is_authenticated", "request.user", "get_current_user_id",
 }
 
 // Data-layer tokens (lowercase substrings) indicating the handler reads/writes

@@ -357,6 +357,82 @@ def create_note():
 	}
 }
 
+// --- fix #2: whole-body auth scanning + configurable helpers ----------------
+
+// An auth helper that appears deep in the handler body (not in the first lines)
+// must still suppress the finding: the whole body is scanned.
+func TestRouteAuth_AuthHelperDeepInBody(t *testing.T) {
+	dir := t.TempDir()
+	raWrite(t, dir, "app/api/reports/route.ts", `
+import { prisma } from '@/lib/prisma';
+import { getServerSession } from 'next-auth';
+
+export async function POST(req: Request) {
+  // lots of setup work before the auth check
+  const body = await req.json();
+  const normalized = { ...body, createdAt: new Date() };
+  const parsed = JSON.parse(JSON.stringify(normalized));
+  const meta = computeMeta(parsed);
+  const tags = parsed.tags || [];
+  const draft = await buildDraft(parsed, meta, tags);
+  // auth check happens only here, well into the body:
+  const session = await getServerSession();
+  if (!session) return new Response('no', { status: 401 });
+  return Response.json(await prisma.report.create({ data: draft }));
+}
+`)
+	ids := raCheckIDs(raScan(t, dir))
+	if ids[raCheckUnauth] != 0 {
+		t.Fatalf("auth helper deep in the body must suppress %s, got %v", raCheckUnauth, ids)
+	}
+}
+
+// requireRole() (a built-in role helper) must be recognized as auth.
+func TestRouteAuth_RequireRoleRecognized(t *testing.T) {
+	dir := t.TempDir()
+	raWrite(t, dir, "app/api/admin/route.ts", `
+import { prisma } from '@/lib/prisma';
+import { requireRole } from '@/lib/rbac';
+export async function POST(req: Request) {
+  await requireRole(req, 'admin');
+  const body = await req.json();
+  return Response.json(await prisma.widget.create({ data: body }));
+}
+`)
+	ids := raCheckIDs(raScan(t, dir))
+	if ids[raCheckUnauth] != 0 {
+		t.Fatalf("requireRole must be recognized as auth, got %v", ids)
+	}
+}
+
+// A project-specific auth helper named in .trishul.yml must suppress findings;
+// without that config the same helper is unknown and the route is flagged.
+func TestRouteAuth_ConfigurableAuthHelper(t *testing.T) {
+	route := `
+import { prisma } from '@/lib/prisma';
+import { mustBeMember } from '@/lib/gate';
+export async function POST(req: Request) {
+  await mustBeMember(req);
+  const body = await req.json();
+  return Response.json(await prisma.thing.create({ data: body }));
+}
+`
+	// Without config: the custom helper is unknown => route is flagged.
+	noCfg := t.TempDir()
+	raWrite(t, noCfg, "app/api/things/route.ts", route)
+	if raCheckIDs(raScan(t, noCfg))[raCheckUnauth] == 0 {
+		t.Fatalf("control: an unknown custom helper should leave the route flagged")
+	}
+
+	// With config: declaring the helper suppresses the finding.
+	withCfg := t.TempDir()
+	raWrite(t, withCfg, ".trishul.yml", "routeauth:\n  auth_helpers:\n    - mustBeMember\n")
+	raWrite(t, withCfg, "app/api/things/route.ts", route)
+	if ids := raCheckIDs(raScan(t, withCfg)); ids[raCheckUnauth] != 0 {
+		t.Fatalf("a .trishul.yml auth_helper must suppress %s, got %v", raCheckUnauth, ids)
+	}
+}
+
 // Findings must be sorted deterministically by (path, line, check_id).
 func TestRouteAuth_Deterministic(t *testing.T) {
 	dir := t.TempDir()
