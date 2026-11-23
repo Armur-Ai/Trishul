@@ -357,6 +357,245 @@ func TestScanFirebase_InlineFirebaseJSON(t *testing.T) {
 	}
 }
 
+func TestRunFirebaseRules_ContextGate_NonFirebaseRepo(t *testing.T) {
+	// A repo with no Firebase signal at all — some source, an unrelated
+	// package.json — must produce zero Firebase findings even if an insecure
+	// rule-looking snippet is present in a non-rules file.
+	dir := t.TempDir()
+	writeRules(t, dir, "main.go", "package main\n\nfunc main() { allow read, write: if true }\n")
+	writeRules(t, dir, "package.json", `{"name":"app","dependencies":{"express":"^4.0.0"}}`)
+
+	if isFirebaseProject(dir) {
+		t.Fatalf("non-firebase repo must not be detected as a firebase project")
+	}
+
+	res, err := RunFirebaseRules(dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	raw, ok := res[utils.INFRA_SECURITY]
+	if !ok {
+		return // category absent entirely is also zero findings
+	}
+	if list, ok := raw.([]interface{}); ok && len(list) != 0 {
+		t.Errorf("expected 0 firebase findings for non-firebase repo, got %d: %v", len(list), list)
+	}
+}
+
+func TestRunFirebaseRules_ContextGate_GenericRulesNotFirebase(t *testing.T) {
+	// A generic `.rules` file that is NOT a Firebase rules file (no rules_version
+	// / service declaration) must neither gate the repo in nor be scanned, even
+	// though it textually contains an `allow read, write: if true;` line.
+	dir := t.TempDir()
+	writeRules(t, dir, "iptables.rules", "# firewall rules\nallow read, write: if true;\n-A INPUT -j ACCEPT\n")
+
+	if isFirebaseProject(dir) {
+		t.Fatalf("a non-firebase .rules file must not qualify the repo as firebase")
+	}
+
+	// Even scanned directly, a generic non-firebase .rules file yields nothing.
+	findings, err := scanFirebaseDir(dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(findings) != 0 {
+		t.Errorf("expected 0 findings from a non-firebase .rules file, got %d: %v", len(findings), findings)
+	}
+}
+
+func TestRunFirebaseRules_ContextGate_Signals(t *testing.T) {
+	// Each individual signal should independently qualify the repo.
+	t.Run("firebase.json", func(t *testing.T) {
+		dir := t.TempDir()
+		writeRules(t, dir, "firebase.json", `{"firestore":{"rules":"firestore.rules"}}`)
+		if !isFirebaseProject(dir) {
+			t.Errorf("firebase.json should qualify the repo")
+		}
+	})
+	t.Run("named firestore.rules", func(t *testing.T) {
+		dir := t.TempDir()
+		writeRules(t, dir, "firestore.rules", "service cloud.firestore {}\n")
+		if !isFirebaseProject(dir) {
+			t.Errorf("firestore.rules should qualify the repo")
+		}
+	})
+	t.Run("generic .rules with service signal", func(t *testing.T) {
+		dir := t.TempDir()
+		writeRules(t, dir, "my.rules", "rules_version = '2';\nservice cloud.firestore {}\n")
+		if !isFirebaseProject(dir) {
+			t.Errorf("a .rules file carrying a firebase signal should qualify the repo")
+		}
+	})
+	t.Run("firebase dependency", func(t *testing.T) {
+		dir := t.TempDir()
+		writeRules(t, dir, "package.json", `{"dependencies":{"firebase":"^10.0.0"}}`)
+		if !isFirebaseProject(dir) {
+			t.Errorf("a firebase dependency should qualify the repo")
+		}
+	})
+	t.Run("@firebase scoped dependency", func(t *testing.T) {
+		dir := t.TempDir()
+		writeRules(t, dir, "package.json", `{"dependencies":{"@firebase/app":"^0.9.0"}}`)
+		if !isFirebaseProject(dir) {
+			t.Errorf("an @firebase/* dependency should qualify the repo")
+		}
+	})
+}
+
+func TestScanFirebase_EffectiveSeparateReadWrite001(t *testing.T) {
+	// Two SEPARATE always-true allows (read in one statement, write in another)
+	// combine into an effective world read+write block. A per-statement view
+	// would miss this entirely (neither statement covers both methods); the
+	// effective-rule evaluation must raise exactly one FIREBASE-001.
+	dir := t.TempDir()
+	writeRules(t, dir, "firestore.rules", `
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /posts/{postId} {
+      allow read: if true;
+      allow write: if true;
+    }
+  }
+}
+`)
+	findings, err := scanFirebaseDir(dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	byCheck := fbFindingsByCheck(findings)
+	if len(byCheck["FIREBASE-001"]) != 1 {
+		t.Fatalf("expected exactly one FIREBASE-001 for combined read+write allows, got %d: %v", len(byCheck["FIREBASE-001"]), findings)
+	}
+	if len(findings) != 1 {
+		t.Errorf("expected exactly one finding for the block, got %d: %v", len(findings), findings)
+	}
+}
+
+func TestScanFirebase_CatchAllSplitNotDoubleCounted(t *testing.T) {
+	// A {document=**} catch-all split into two always-true allows must produce a
+	// single finding, not one per statement. Because the effective access is both
+	// read and write, it escalates to the CRITICAL FIREBASE-001 rather than two
+	// FIREBASE-004s.
+	dir := t.TempDir()
+	writeRules(t, dir, "firestore.rules", `
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read: if true;
+      allow write: if true;
+    }
+  }
+}
+`)
+	findings, err := scanFirebaseDir(dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(findings) != 1 {
+		t.Fatalf("expected exactly one finding for the catch-all block, got %d: %v", len(findings), findings)
+	}
+	if findings[0]["check_id"] != "FIREBASE-001" {
+		t.Errorf("expected FIREBASE-001 for world read+write catch-all, got %v", findings[0]["check_id"])
+	}
+}
+
+func TestScanFirebase_ParenthesizedTrueFlagged(t *testing.T) {
+	// `if (true)` is still an unconditional allow and must be flagged like `if true`.
+	dir := t.TempDir()
+	writeRules(t, dir, "firestore.rules", `
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /posts/{id} {
+      allow read, write: if (true);
+    }
+  }
+}
+`)
+	findings, err := scanFirebaseDir(dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(fbFindingsByCheck(findings)["FIREBASE-001"]) == 0 {
+		t.Errorf("expected FIREBASE-001 for `if (true)`, got none: %v", findings)
+	}
+}
+
+func TestScanFirebase_NonTrivialConditionClean(t *testing.T) {
+	// A non-trivial condition (ownership / custom predicate) is NOT a finding,
+	// even on a {document=**} catch-all and even when it mentions request.auth.
+	dir := t.TempDir()
+	writeRules(t, dir, "firestore.rules", `
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == resource.data.ownerId;
+    }
+    match /rooms/{roomId} {
+      allow read: if resource.data.visibility == 'public';
+      allow write: if request.auth.uid in resource.data.members;
+    }
+  }
+}
+`)
+	findings, err := scanFirebaseDir(dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(findings) != 0 {
+		t.Errorf("expected 0 findings for guarded conditions, got %d: %v", len(findings), findings)
+	}
+}
+
+func TestScanFirebase_GuardedDocWildClean(t *testing.T) {
+	// A {document=**} catch-all with a guarded condition is not automatically
+	// insecure and must not raise FIREBASE-004.
+	dir := t.TempDir()
+	writeRules(t, dir, "firestore.rules", `
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if request.auth.uid == resource.data.ownerId;
+    }
+  }
+}
+`)
+	findings, err := scanFirebaseDir(dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(fbFindingsByCheck(findings)["FIREBASE-004"]) != 0 {
+		t.Errorf("guarded {document=**} must not raise FIREBASE-004: %v", findings)
+	}
+	if len(findings) != 0 {
+		t.Errorf("expected 0 findings for guarded catch-all, got %d: %v", len(findings), findings)
+	}
+}
+
+func TestScanFirebase_MixedPermissiveAndSafeAllow(t *testing.T) {
+	// A block where read is world-open (if true) but write is properly owned must
+	// NOT be flagged as world read+write FIREBASE-001 (write is safe). The block
+	// is not a catch-all, so on firestore a read-only always grant yields nothing,
+	// matching the detector's conservative stance on read-only public data.
+	dir := t.TempDir()
+	writeRules(t, dir, "firestore.rules", `
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /articles/{id} {
+      allow read: if true;
+      allow write: if request.auth.uid == resource.data.authorId;
+    }
+  }
+}
+`)
+	findings, err := scanFirebaseDir(dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(fbFindingsByCheck(findings)["FIREBASE-001"]) != 0 {
+		t.Errorf("read-open/write-owned block must not raise FIREBASE-001: %v", findings)
+	}
+}
+
 func TestScanFirebase_LineNumbers(t *testing.T) {
 	dir := t.TempDir()
 	writeRules(t, dir, "firestore.rules", "service cloud.firestore {\n  match /databases/{database}/documents {\n    match /x/{id} {\n      allow read, write: if true;\n    }\n  }\n}\n")
