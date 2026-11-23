@@ -63,6 +63,26 @@ type Result struct {
 	Locations           []Location             `json:"locations,omitempty"`
 	PartialFingerprints map[string]string      `json:"partialFingerprints,omitempty"`
 	Properties          map[string]interface{} `json:"properties,omitempty"`
+	Fixes               []Fix                  `json:"fixes,omitempty"`
+}
+
+// Fix is a suggested change for a result (SARIF fixes[]), which GitHub code
+// scanning can offer to apply.
+type Fix struct {
+	Description     *Message         `json:"description,omitempty"`
+	ArtifactChanges []ArtifactChange `json:"artifactChanges"`
+}
+
+// ArtifactChange is the set of replacements in one file.
+type ArtifactChange struct {
+	ArtifactLocation ArtifactLocation `json:"artifactLocation"`
+	Replacements     []Replacement    `json:"replacements"`
+}
+
+// Replacement deletes a region and inserts content in its place.
+type Replacement struct {
+	DeletedRegion   Region                    `json:"deletedRegion"`
+	InsertedContent *MultiformatMessageString `json:"insertedContent,omitempty"`
 }
 
 // fingerprint computes a stable, line-insensitive identity for a finding so
@@ -188,6 +208,8 @@ type ArtifactLocation struct {
 type Region struct {
 	StartLine   int `json:"startLine,omitempty"`
 	StartColumn int `json:"startColumn,omitempty"`
+	EndLine     int `json:"endLine,omitempty"`
+	EndColumn   int `json:"endColumn,omitempty"`
 }
 
 // Message holds the human-readable finding text.
