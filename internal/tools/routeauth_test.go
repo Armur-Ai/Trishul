@@ -512,6 +512,60 @@ export async function POST(req: Request) {
 	}
 }
 
+// --- fix #4: IDOR (VIBE-AUTHZ-002) precision --------------------------------
+
+// A route that lives under an [id] segment but never consumes that id (it
+// fetches a fixed record) must NOT be flagged as IDOR.
+func TestRouteAuth_IDORPathIDUnusedNotFlagged(t *testing.T) {
+	dir := t.TempDir()
+	raWrite(t, dir, "app/api/reports/[reportId]/route.ts", `
+import { prisma } from '@/lib/prisma';
+const LATEST_ID = 'latest';
+export async function GET() {
+  const latest = await prisma.report.findFirst({ where: { id: LATEST_ID } });
+  return Response.json(latest);
+}
+`)
+	ids := raCheckIDs(raScan(t, dir))
+	if ids[raCheckIDOR] != 0 {
+		t.Fatalf("must not flag IDOR when the path id is never consumed, got %v", ids)
+	}
+}
+
+// An id lookup scoped by a non-user ownership column (customerId) must NOT be
+// flagged; the same lookup without that scoping must be.
+func TestRouteAuth_IDOROwnershipByCustomerID(t *testing.T) {
+	scoped := t.TempDir()
+	raWrite(t, scoped, "app/api/invoices/[id]/route.ts", `
+import { getServerSession } from 'next-auth';
+import { prisma } from '@/lib/prisma';
+export async function GET(req: Request, { params }: { params: { id: string } }) {
+  const session = await getServerSession();
+  const inv = await prisma.invoice.findUnique({
+    where: { id: params.id, customerId: session.customerId },
+  });
+  return Response.json(inv);
+}
+`)
+	if ids := raCheckIDs(raScan(t, scoped)); ids[raCheckIDOR] != 0 {
+		t.Fatalf("a customerId-scoped lookup must not be flagged as IDOR, got %v", ids)
+	}
+
+	unscoped := t.TempDir()
+	raWrite(t, unscoped, "app/api/invoices/[id]/route.ts", `
+import { getServerSession } from 'next-auth';
+import { prisma } from '@/lib/prisma';
+export async function GET(req: Request, { params }: { params: { id: string } }) {
+  const session = await getServerSession();
+  const inv = await prisma.invoice.findUnique({ where: { id: params.id } });
+  return Response.json(inv);
+}
+`)
+	if ids := raCheckIDs(raScan(t, unscoped)); ids[raCheckIDOR] == 0 {
+		t.Fatalf("an owner-less id lookup must still be flagged as IDOR, got %v", ids)
+	}
+}
+
 // Findings must be sorted deterministically by (path, line, check_id).
 func TestRouteAuth_Deterministic(t *testing.T) {
 	dir := t.TempDir()

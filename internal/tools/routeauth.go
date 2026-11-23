@@ -154,14 +154,16 @@ var (
 	raReFirstStr   = regexp.MustCompile(`['"]([^'"]*)['"]`)
 
 	// IDOR building blocks.
-	raReIDPath = regexp.MustCompile(`(?i)(\[\.*\w*id\]|\{\.*\w*id\}|:\w*id\b)`)
 	raReIDBody = regexp.MustCompile(`(?i)(\b(?:params|query|body)\s*\.\s*\w*id\b|\b(?:params|query|body)\s*\[\s*['"]\w*id['"]\s*\]|req\.params|searchparams\.get\(\s*['"]\w*id['"]|(?:args|query_params)\.get\(\s*['"]\w*id['"])`)
 	raReByID   = regexp.MustCompile(`(?i)(findunique\s*\(|findbyid\s*\(|find_by_id|where\s*:\s*\{[^}{]{0,120}\bid\b|\.get\(\s*\w*id\b|filter_by\(\s*\w*id\s*=|\.filter\([^()]{0,120}\.id\s*==|query\.get\(|where\s+\w*id\s*=)`)
+	// Captures the identifier name inside a dynamic path segment ([id], {order_id},
+	// :userId) so we can confirm it is actually consumed by the handler body.
+	raReIDName = regexp.MustCompile(`(?i)(?:\[\.*(\w*id)\]|\{\.*(\w*id)\}|:(\w*id)\b)`)
 	// Owner/tenant SCOPING predicates. Note: an authenticated principal such as
 	// `current_user` or `req.user` on its own is NOT an ownership predicate — the
 	// query must be scoped by the owner — so those are deliberately excluded here
 	// (an authenticated handler that fetches by id without owner scoping is IDOR).
-	raReOwner = regexp.MustCompile(`(?i)(user_?id|owner_?id|org_?id|team_?id|tenant_?id|account_?id|\buserid\b|created_?by|author_?id|user\s*\.\s*id|owner\s*\.\s*id|filter_by\([^)]*\buser|where[^}]*\buser|\.eq\(\s*['"][a-z_]*id['"])`)
+	raReOwner = regexp.MustCompile(`(?i)(user_?id|owner_?id|org_?id|team_?id|tenant_?id|account_?id|customer_?id|member_?id|profile_?id|clerk_?id|\buserid\b|created_?by|author_?id|user\s*\.\s*id|owner\s*\.\s*id|session\s*\.\s*user|filter_by\([^)]*\b(?:user|owner|org|tenant|account)|where[^}]*\b(?:user|owner|org|tenant|account)|\.eq\(\s*['"][a-z_]*(?:user|owner|org|tenant|account)[a-z_]*['"])`)
 )
 
 // raHandler is one route/handler candidate extracted from a file.
@@ -351,7 +353,7 @@ func raEvaluate(handlers []raHandler, rel string, fileHasAuth bool, authTokens, 
 		// VIBE-AUTHZ-002: IDOR heuristic. Independent of auth — an authenticated
 		// handler that fetches by a request-supplied id without an owner predicate
 		// is the classic IDOR.
-		idRead := raReIDBody.MatchString(h.body) || raReIDPath.MatchString(rel) || raReIDPath.MatchString(h.routePath)
+		idRead := raIDRequestRead(h.body, rel, h.routePath)
 		if idRead && raReByID.MatchString(h.body) && !raReOwner.MatchString(h.body) {
 			out = append(out, raFinding(rel, h.line, raCheckIDOR, raCWEIDOR,
 				"Handler looks up a record by a request-supplied id with no owner/user predicate; "+
@@ -718,6 +720,42 @@ var raWebhookSigTokens = []string{
 // signature (lowerBody is the already-lowercased handler text).
 func raSignedWebhook(lowerBody string) bool {
 	return raContainsAny(lowerBody, raWebhookSigTokens)
+}
+
+// raIDRequestRead reports whether the handler actually consumes a
+// request-supplied id. A direct body reference (req.params.id,
+// searchParams.get('id'), params['id'], …) always counts. When the id is only
+// evident from a dynamic path segment, we additionally require the handler body
+// to mention that specific parameter name, so a route that merely lives under
+// an [id] segment but never uses it is not mistaken for an id lookup (a
+// VIBE-AUTHZ-002 false positive).
+func raIDRequestRead(body, rel, routePath string) bool {
+	if raReIDBody.MatchString(body) {
+		return true
+	}
+	lower := strings.ToLower(body)
+	for _, name := range raPathIDNames(rel, routePath) {
+		if name != "" && strings.Contains(lower, name) {
+			return true
+		}
+	}
+	return false
+}
+
+// raPathIDNames extracts the id parameter names from dynamic path segments
+// (e.g. [orderId], {order_id}, :userId) across the given path strings.
+func raPathIDNames(parts ...string) []string {
+	var out []string
+	for _, p := range parts {
+		for _, m := range raReIDName.FindAllStringSubmatch(p, -1) {
+			for _, g := range m[1:] {
+				if g != "" {
+					out = append(out, strings.ToLower(g))
+				}
+			}
+		}
+	}
+	return out
 }
 
 func raSegments(s string) []string {
