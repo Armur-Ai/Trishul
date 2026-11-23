@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"sort"
+	"time"
 
 	"github.com/Armur-Ai/Trishul/internal/prgate"
 )
@@ -71,11 +72,14 @@ func topFindings(fs []prgate.Finding, n int) []prgate.Finding {
 }
 
 // maybeFirstRun is the rootCmd RunE: no args → first-run report; otherwise show
-// help (cobra routes real subcommands before reaching here).
+// help (cobra routes real subcommands before reaching here). It also runs the
+// opt-in, once-a-day update check (never in CI) after the report.
 func maybeFirstRun() int {
 	dir, err := os.Getwd()
 	if err != nil {
 		dir = "."
 	}
-	return runFirstRun(dir, os.Stdout)
+	code := runFirstRun(dir, os.Stdout)
+	maybeNotifyUpdate(Version, os.Getenv, time.Now(), latestReleaseTag, os.Stdout)
+	return code
 }
