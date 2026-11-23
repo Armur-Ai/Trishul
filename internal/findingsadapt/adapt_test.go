@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/Armur-Ai/Trishul/internal/agentsec"
+	"github.com/Armur-Ai/Trishul/internal/exploitability"
 	"github.com/Armur-Ai/Trishul/internal/findings"
 )
 
@@ -63,5 +64,35 @@ func TestSplitList(t *testing.T) {
 	}
 	if splitList("  ") != nil {
 		t.Error("blank should be nil")
+	}
+}
+
+func TestFromExploitability(t *testing.T) {
+	e := exploitability.Finding{
+		CheckID:     "EXPLOIT-SPRING-ACTUATOR-001",
+		CVE:         "CVE-2022-22965",
+		Title:       "Actuator env endpoint exposed",
+		Severity:    "CRITICAL",
+		Confidence:  "HIGH",
+		File:        "application.yml",
+		Line:        7,
+		Condition:   "management.endpoints.web.exposure.include=*",
+		BeyondSCA:   "SCA sees the dep; this proves the endpoint is actually exposed",
+		Evidence:    []string{"actuator on classpath", "exposure include = *"},
+		Remediation: "restrict actuator exposure",
+		CWE:         "CWE-200",
+	}
+	f := FromExploitability(e)
+	if f.Analyzer != "exploitability" || f.RuleID != "EXPLOIT-SPRING-ACTUATOR-001" {
+		t.Fatalf("bad: %+v", f)
+	}
+	if f.Severity != findings.SeverityCritical || f.Band != findings.BandHigh {
+		t.Errorf("sev/band: %q/%q", f.Severity, f.Band)
+	}
+	if len(f.References) != 1 || f.References[0] != "https://nvd.nist.gov/vuln/detail/CVE-2022-22965" {
+		t.Errorf("refs=%v", f.References)
+	}
+	if len(f.Evidence) != 4 { // condition + beyondSCA + 2 evidence
+		t.Errorf("evidence=%d", len(f.Evidence))
 	}
 }

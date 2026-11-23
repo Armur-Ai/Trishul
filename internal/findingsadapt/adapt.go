@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/Armur-Ai/Trishul/internal/agentsec"
+	"github.com/Armur-Ai/Trishul/internal/exploitability"
 	"github.com/Armur-Ai/Trishul/internal/findings"
 )
 
@@ -91,5 +92,48 @@ func FromAgentFinding(a agentsec.AgentFinding) findings.Finding {
 		Snippet:     pseudoSnippet,
 		Evidence:    ev,
 		Remediation: findings.Remediation{Text: a.Remediation},
+	})
+}
+
+// FromExploitability converts an exploitability.Finding into a v2 finding. The
+// proven exploitability condition and the "what SCA misses" note are kept as
+// leading evidence so a reviewer sees why this is reachable, not just that a
+// vulnerable version is present. CVE(s) go into References as CVE URLs.
+func FromExploitability(e exploitability.Finding) findings.Finding {
+	var ev []findings.EvidenceStep
+	if strings.TrimSpace(e.Condition) != "" {
+		ev = append(ev, findings.EvidenceStep{Path: e.File, Line: e.Line, Note: "exploitability condition: " + e.Condition})
+	}
+	if strings.TrimSpace(e.BeyondSCA) != "" {
+		ev = append(ev, findings.EvidenceStep{Path: e.File, Line: e.Line, Note: "beyond SCA: " + e.BeyondSCA})
+	}
+	for _, s := range e.Evidence {
+		ev = append(ev, findings.EvidenceStep{Path: e.File, Line: e.Line, Note: s})
+	}
+
+	var refs []string
+	for _, cve := range splitList(e.CVE) {
+		if strings.HasPrefix(strings.ToUpper(cve), "CVE-") {
+			refs = append(refs, "https://nvd.nist.gov/vuln/detail/"+strings.ToUpper(cve))
+		}
+	}
+
+	// Distinguish occurrences by the proven condition so repeated CheckIDs in a
+	// file separate; exploitability supplies no raw source window.
+	snippet := strings.Join([]string{e.CheckID, e.Condition, firstNonEmpty(e.Evidence...)}, "|")
+
+	return findings.New(findings.Finding{
+		RuleID:      e.CheckID,
+		Analyzer:    "exploitability",
+		Title:       e.Title,
+		Message:     firstNonEmpty(e.Condition, e.Title),
+		Severity:    findings.Severity(strings.ToUpper(strings.TrimSpace(e.Severity))),
+		Confidence:  confidenceFromBand(e.Confidence),
+		CWE:         splitList(e.CWE),
+		Location:    findings.Location{Path: e.File, StartLine: e.Line},
+		Snippet:     snippet,
+		Evidence:    ev,
+		Remediation: findings.Remediation{Text: e.Remediation},
+		References:  refs,
 	})
 }
