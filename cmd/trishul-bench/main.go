@@ -12,8 +12,11 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
+	"io"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/Armur-Ai/Trishul/internal/precision"
@@ -31,6 +34,8 @@ func main() {
 		err = runReport(os.Args[2:])
 	case "scan":
 		err = runScan(os.Args[2:])
+	case "label":
+		err = runLabel(os.Args[2:])
 	case "-h", "--help", "help":
 		usage()
 		return
@@ -50,6 +55,9 @@ func usage() {
 usage:
   trishul-bench report --labels FILE [--rules R1,R2] [--md FILE] [--json FILE]
   trishul-bench scan   --dir DIR --labels FILE [--rules R1,R2] [--md FILE] [--json FILE]
+  trishul-bench label  --dir DIR --labels FILE [--rules R1,R2]
+      interactively label each unlabeled finding (reads "<verdict> <reason>" per
+      finding from stdin; verdict is tp|tp_benign|fp|unclear, blank line skips)
 `)
 }
 
@@ -200,4 +208,97 @@ func emit(stats []precision.RuleStats, f flags) error {
 		}
 	}
 	return nil
+}
+
+// runLabel scans a dir, then walks the unlabeled findings (ordered by the
+// labeling queue), shows each with redacted context, reads a verdict + reason
+// from stdin, and appends labels to the labels file.
+func runLabel(args []string) error {
+	f, err := parse(args)
+	if err != nil {
+		return err
+	}
+	if f.dir == "" || f.labels == "" {
+		return fmt.Errorf("label requires --dir and --labels")
+	}
+	existing, err := loadLabels(f.labels)
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	scan, err := prgate.ScanDir(f.dir)
+	if err != nil {
+		return err
+	}
+	var found []precision.Found
+	for _, fn := range scan.Findings {
+		if f.rules != "" && !ruleSelected(fn.RuleID, f.rules) {
+			continue
+		}
+		found = append(found, precision.Found{RuleID: fn.RuleID, Path: fn.Path, Line: fn.Line, Fingerprint: fn.Fingerprint})
+	}
+	_, unlabeled := precision.Resolve(found, existing)
+
+	sink, err := os.OpenFile(f.labels, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = sink.Close() }()
+
+	n, err := labelLoop(f.dir, unlabeled, bufio.NewScanner(os.Stdin), os.Stdout, sink)
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(os.Stderr, "\nlabeled %d finding(s)\n", n)
+	return nil
+}
+
+// labelLoop drives the labeling interaction over provided readers/writers so it
+// is testable without a TTY. For each unlabeled finding it prints redacted
+// context and reads one line "<verdict> <reason...>"; a blank line skips.
+func labelLoop(dir string, unlabeled []precision.Found, in *bufio.Scanner, out io.Writer, sink io.Writer) (int, error) {
+	srcCache := map[string]string{}
+	srcFor := func(path string) string {
+		if s, ok := srcCache[path]; ok {
+			return s
+		}
+		b, _ := os.ReadFile(filepath.Join(dir, path))
+		srcCache[path] = string(b)
+		return srcCache[path]
+	}
+
+	labeled := 0
+	for _, u := range unlabeled {
+		fmt.Fprintf(out, "\n[%s] %s:%d\n%s", u.RuleID, u.Path, u.Line, precision.Context(srcFor(u.Path), u.Line, 3))
+		fmt.Fprint(out, "verdict (tp|tp_benign|fp|unclear) reason> ")
+		if !in.Scan() {
+			break
+		}
+		line := strings.TrimSpace(in.Text())
+		if line == "" {
+			continue
+		}
+		parts := strings.SplitN(line, " ", 2)
+		verdict := parts[0]
+		if !precision.ValidVerdict(verdict) {
+			fmt.Fprintf(out, "  ! ignored: %q is not a verdict\n", verdict)
+			continue
+		}
+		reason := ""
+		if len(parts) == 2 {
+			reason = strings.TrimSpace(parts[1])
+		}
+		l := precision.Label{
+			FingerprintV2: u.Fingerprint,
+			RuleID:        u.RuleID,
+			Path:          u.Path,
+			Line:          u.Line,
+			Verdict:       precision.Verdict(verdict),
+			Reason:        reason,
+		}
+		if err := precision.AppendLabel(sink, l); err != nil {
+			return labeled, err
+		}
+		labeled++
+	}
+	return labeled, nil
 }
