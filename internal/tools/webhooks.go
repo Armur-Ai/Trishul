@@ -57,9 +57,17 @@ var (
 	// Python raw body accessors (Flask / Django / FastAPI).
 	reRawBodyPy = regexp.MustCompile(`\brequest\.(?:data\b|get_data\s*\(|stream\b|body\b)`)
 
-	// A webhook context: the token "webhook" anywhere in the file. Conservative
-	// on purpose — a file that never mentions webhooks is not flagged for 001.
-	reWebhookCtx = regexp.MustCompile(`(?i)webhook`)
+	// Webhook RECEIVER signals. VIBE-WEBHOOK-001 only fires on a route that is
+	// actually a webhook receiver — not merely any file that happens to mention
+	// the word "webhook" (a comment, a variable, a client that SENDS webhooks).
+	//
+	// reWebhookRoutePath matches a slash-rooted path literal that names a
+	// webhook/hook/callback endpoint, e.g. '/webhook/stripe', "/hooks/github",
+	// `/stripe/callback`. reWebhookFileName matches a source path that names such
+	// a route (e.g. Next.js app/api/webhook/route.ts, pages/api/hooks/stripe.ts,
+	// stripe_webhook.js).
+	reWebhookRoutePath = regexp.MustCompile("(?i)['\"`]/[^'\"`\n]*(?:web[-_]?hook|hook|callback)")
+	reWebhookFileName  = regexp.MustCompile(`(?i)(?:webhook|callback|(?:^|[\\/_.\-])hooks?(?:[\\/_.\-]|$))`)
 
 	// Known webhook providers, used only to make the finding message specific.
 	webhookProviders = []struct {
@@ -82,6 +90,8 @@ var (
 		`constructEvent`,         // stripe.webhooks.constructEvent
 		`verifyWebhookSignature`, // paypal / generic
 		`verifyWebhook\b`,        // clerk helper
+		`verifySignature`,        // generic helper name
+		`verify_signature`,       // python / snake_case helper
 		`\.verify\s*\(`,          // svix: new Webhook(secret).verify(...)
 		`createHmac`,             // node crypto HMAC compare
 		`timingSafeEqual`,        // node constant-time compare
@@ -205,7 +215,7 @@ func scanWebhookFile(relPath string, content []byte) []map[string]interface{} {
 // body, and (c) contains NO signature verification or signature-header check
 // anywhere. The finding is anchored on the first raw-body read.
 func detectUnverifiedWebhook(relPath, text, lower string, lines []string) []map[string]interface{} {
-	if !reWebhookCtx.MatchString(lower) {
+	if !isWebhookReceiver(relPath, text, lines) {
 		return nil
 	}
 	if reVerifyOrSig.MatchString(text) {
@@ -237,6 +247,31 @@ func detectUnverifiedWebhook(relPath, text, lower string, lines []string) []map[
 	return []map[string]interface{}{
 		webhookFinding(relPath, line, checkUnverifiedWebhook, "CWE-345", msg, remediation),
 	}
+}
+
+// isWebhookReceiver reports whether a file is an actual webhook-receiving route,
+// as opposed to any file that merely mentions the word "webhook". A receiver is
+// recognized when (a) its source path names a webhook/hook/callback route, (b) a
+// slash-rooted route path literal names one, or (c) a provider SDK's
+// construct-event / signature-verify pattern appears (that only happens in code
+// that receives and verifies webhooks).
+func isWebhookReceiver(relPath, text string, lines []string) bool {
+	if reWebhookFileName.MatchString(relPath) {
+		return true
+	}
+	if reVerifyOrSig.MatchString(text) {
+		return true
+	}
+	for _, raw := range lines {
+		line := strings.TrimSpace(raw)
+		if isCommentLine(line) {
+			continue
+		}
+		if reWebhookRoutePath.MatchString(line) {
+			return true
+		}
+	}
+	return false
 }
 
 // detectClientTrustedPayment implements VIBE-WEBHOOK-002. Each line that reads a

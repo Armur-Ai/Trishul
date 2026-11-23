@@ -198,6 +198,35 @@ func TestDepProvenance_CleanSemverWithLockfile(t *testing.T) {
 	}
 }
 
+func TestDepProvenance_WorkspaceProtocolsNotFloating(t *testing.T) {
+	dir := t.TempDir()
+	// workspace:/portal:/catalog: are monorepo-local protocols pinned to the
+	// workspace, NOT floating registry specs — they must not be flagged even with
+	// no lockfile. A genuine floating range alongside them must still fire so the
+	// suppression stays targeted.
+	depWriteFile(t, dir, "package.json", `{
+  "dependencies": {
+    "ui": "workspace:*",
+    "shared": "workspace:^1.2.3",
+    "lib": "portal:../lib",
+    "cat": "catalog:",
+    "floaty": "^1.0.0"
+  }
+}`)
+	res, err := RunDependencyProvenance(dir)
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	findings := depFindings(t, res)
+	counts := depCheckIDs(t, findings)
+	if counts["VIBE-DEP-001"] != 0 {
+		t.Fatalf("workspace/portal/catalog specs must not be non-registry findings, got %d (counts=%v)", counts["VIBE-DEP-001"], counts)
+	}
+	if counts["VIBE-DEP-002"] != 1 {
+		t.Fatalf("want exactly 1 VIBE-DEP-002 (only the ^1.0.0 range floats), got %d (counts=%v)", counts["VIBE-DEP-002"], counts)
+	}
+}
+
 func TestDepProvenance_EmptyDir(t *testing.T) {
 	dir := t.TempDir()
 	res, err := RunDependencyProvenance(dir)

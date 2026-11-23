@@ -170,6 +170,73 @@ app.post('/webhook/stripe', express.raw({ type: 'application/json' }), (req, res
 	}
 }
 
+func TestRunWebhookVerification_CallbackReceiverNoVerify_Flags(t *testing.T) {
+	dir := t.TempDir()
+	// A receiver recognized by its slash-rooted /callback path (custom provider),
+	// reading the raw body with no signature verification anywhere.
+	writeWebhookFile(t, dir, "payments.js", `
+app.post('/payments/callback', (req, res) => {
+  const event = req.body;
+  processEvent(event);
+  res.sendStatus(200);
+});
+`)
+
+	res, err := RunWebhookVerification(dir)
+	if err != nil {
+		t.Fatalf("RunWebhookVerification: %v", err)
+	}
+	if checkIDs(vibeFindings(t, res))[checkUnverifiedWebhook] == 0 {
+		t.Fatalf("expected %s for an unverified /callback receiver, got %v", checkUnverifiedWebhook, vibeFindings(t, res))
+	}
+}
+
+func TestRunWebhookVerification_VerifySignatureAnywhere_Clean(t *testing.T) {
+	dir := t.TempDir()
+	// A genuine webhook receiver that verifies the signature via a helper named
+	// verifySignature anywhere in the handler must NOT be flagged.
+	writeWebhookFile(t, dir, "hooks.js", `
+app.post('/webhook/custom', (req, res) => {
+  const raw = req.rawBody;
+  if (!verifySignature(raw, req.headers['x-sig'], SECRET)) {
+    return res.status(401).send('bad sig');
+  }
+  handle(req.body);
+  res.sendStatus(200);
+});
+`)
+
+	res, err := RunWebhookVerification(dir)
+	if err != nil {
+		t.Fatalf("RunWebhookVerification: %v", err)
+	}
+	if findings := vibeFindings(t, res); len(findings) != 0 {
+		t.Fatalf("receiver with verifySignature should be clean, got %v", findings)
+	}
+}
+
+func TestRunWebhookVerification_MentionsWebhookButNotReceiver_Clean(t *testing.T) {
+	dir := t.TempDir()
+	// A normal route whose file only MENTIONS webhooks in a comment is not a
+	// receiver, even though it reads the raw body -> no VIBE-WEBHOOK-001.
+	writeWebhookFile(t, dir, "notes.js", `
+// Note: webhook dispatch to subscribers happens in a separate worker.
+app.post('/notes', (req, res) => {
+  const note = req.body;
+  db.notes.insert(note);
+  res.sendStatus(201);
+});
+`)
+
+	res, err := RunWebhookVerification(dir)
+	if err != nil {
+		t.Fatalf("RunWebhookVerification: %v", err)
+	}
+	if findings := vibeFindings(t, res); len(findings) != 0 {
+		t.Fatalf("a non-receiver that only mentions webhooks should be clean, got %v", findings)
+	}
+}
+
 func TestRunWebhookVerification_RolePythonHandler(t *testing.T) {
 	dir := t.TempDir()
 	writeWebhookFile(t, dir, "admin.py", `

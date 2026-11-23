@@ -278,6 +278,14 @@ func depIsNonRegistry(spec string) bool {
 // called only for specs that are NOT non-registry.
 func depIsFloating(spec string) bool {
 	s := strings.ToLower(strings.TrimSpace(spec))
+	// Monorepo/local protocols pin to the workspace itself, not to a floating
+	// registry range, so they are never a reproducibility risk and must not be
+	// reported as VIBE-DEP-002 (this was a false positive).
+	for _, p := range []string{"workspace:", "portal:", "catalog:", "catalogs:"} {
+		if strings.HasPrefix(s, p) {
+			return false
+		}
+	}
 	// Resolve `npm:` aliases to their version component before judging the pin.
 	if strings.HasPrefix(s, "npm:") {
 		if at := strings.LastIndex(s, "@"); at > len("npm:")-1 {

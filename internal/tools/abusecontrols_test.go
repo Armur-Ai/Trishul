@@ -101,6 +101,64 @@ app.post('/chat', async (req, res) => {
 	}
 }
 
+func TestScanAbuse_PublicGetAndLLMImport_NoFinding001(t *testing.T) {
+	dir := t.TempDir()
+	// A generic public GET route is NOT a sensitive endpoint -> must not fire 001.
+	writeSrc(t, dir, "routes/products.js", `
+app.get('/products', async (req, res) => {
+	const items = await db.products.findMany();
+	res.json(items);
+});
+
+app.get('/api/health-ish/data', (req, res) => res.json({ ok: true }));
+`)
+	// A bare LLM import with NO call site is not an exposed surface -> no 001.
+	writeSrc(t, dir, "lib/ai.js", `
+const OpenAI = require('openai');
+import anthropic from '@anthropic-ai/sdk';
+const client = new OpenAI();
+module.exports = { client };
+`)
+
+	findings, err := scanAbuseControls(dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	by := abuseByCheck(findings)
+	if len(by["VIBE-ABUSE-001"]) != 0 {
+		t.Errorf("expected no VIBE-ABUSE-001 for a public GET / bare LLM import, got %d: %v", len(by["VIBE-ABUSE-001"]), by["VIBE-ABUSE-001"])
+	}
+}
+
+func TestScanAbuse_EmailEndpointNoLimiter_Flags001(t *testing.T) {
+	dir := t.TempDir()
+	writeSrc(t, dir, "routes/contact.js", `
+const nodemailer = require('nodemailer');
+const transporter = nodemailer.createTransport({ host: 'smtp.example.com' });
+
+app.post('/contact', async (req, res) => {
+	await transporter.sendMail({ to: req.body.to, subject: 'hi', text: req.body.msg });
+	res.json({ sent: true });
+});
+`)
+
+	findings, err := scanAbuseControls(dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	by := abuseByCheck(findings)
+	if len(by["VIBE-ABUSE-001"]) == 0 {
+		t.Fatalf("expected VIBE-ABUSE-001 for an unrate-limited email-sending endpoint, got none: %v", findings)
+	}
+	// Email findings carry the generic rate-limit CWE (not the auth-specific 307).
+	for _, f := range by["VIBE-ABUSE-001"] {
+		cwes, _ := f["cwe"].([]string)
+		if len(cwes) != 1 || cwes[0] != "CWE-770" {
+			t.Errorf("email finding expected [CWE-770], got %v", cwes)
+		}
+	}
+}
+
 func TestScanAbuse_RateLimiterPresent_Clean(t *testing.T) {
 	dir := t.TempDir()
 	// Limiter declared in one file...
