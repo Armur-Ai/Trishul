@@ -7,8 +7,9 @@ package rules
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
-	"path/filepath"
+	"path"
 	"sort"
 	"strings"
 
@@ -72,10 +73,17 @@ type Catalog struct {
 	order []string
 }
 
-// LoadCatalog reads every *.yaml/*.yml file under dir (non-recursively) and
-// returns the merged catalog. Duplicate IDs are an error.
+// LoadCatalog reads every *.yaml/*.yml file under dir (non-recursively) from the
+// OS filesystem and returns the merged catalog. Duplicate IDs are an error.
 func LoadCatalog(dir string) (*Catalog, error) {
-	entries, err := os.ReadDir(dir)
+	return LoadCatalogFS(os.DirFS(dir), ".")
+}
+
+// LoadCatalogFS is like LoadCatalog but reads from any fs.FS (e.g. an embedded
+// filesystem), so a shipped binary can carry the catalog with go:embed. dir is
+// the directory within fsys ("." for the root of an embed.FS subtree).
+func LoadCatalogFS(fsys fs.FS, dir string) (*Catalog, error) {
+	entries, err := fs.ReadDir(fsys, dir)
 	if err != nil {
 		return nil, fmt.Errorf("read rules dir: %w", err)
 	}
@@ -88,7 +96,7 @@ func LoadCatalog(dir string) (*Catalog, error) {
 		if !strings.HasSuffix(name, ".yaml") && !strings.HasSuffix(name, ".yml") {
 			continue
 		}
-		data, err := os.ReadFile(filepath.Join(dir, name))
+		data, err := fs.ReadFile(fsys, path.Join(dir, name))
 		if err != nil {
 			return nil, err
 		}
