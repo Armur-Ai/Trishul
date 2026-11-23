@@ -113,12 +113,75 @@ func Check(cfgs []Config) []Finding {
 			}
 		}
 	}
+	out = append(out, checkTrifecta(cfgs)...)
+
 	sort.SliceStable(out, func(i, j int) bool {
 		if out[i].Severity != out[j].Severity {
 			return sevRank(out[i].Severity) > sevRank(out[j].Severity)
 		}
 		return out[i].CheckID < out[j].CheckID
 	})
+	return out
+}
+
+// capability keywords used to classify an MCP server's role for the lethal-
+// trifecta check (private data access + untrusted content + an exfil channel).
+var (
+	privateDataKw = []string{"filesystem", "postgres", "mysql", "sqlite", "secret", "vault", "keychain", "env", "gdrive", "notion", "github", "gitlab"}
+	untrustedKw   = []string{"fetch", "browser", "puppeteer", "playwright", "web", "scrape", "http", "url", "rss", "email", "slack", "discord"}
+	exfilKw       = []string{"fetch", "http", "email", "slack", "discord", "webhook", "s3", "upload", "post", "send", "browser"}
+)
+
+func matchesAny(s string, kws []string) bool {
+	l := strings.ToLower(s)
+	for _, k := range kws {
+		if strings.Contains(l, k) {
+			return true
+		}
+	}
+	return false
+}
+
+// checkTrifecta flags a setup that combines, across its servers, access to
+// private data + exposure to untrusted content + a channel to send data out —
+// the "lethal trifecta" that turns prompt injection into data exfiltration.
+func checkTrifecta(cfgs []Config) []Finding {
+	var privateS, untrustedS, exfilS []string
+	for _, cfg := range cfgs {
+		for _, s := range cfg.Servers {
+			id := s.Name + " " + s.Command + " " + strings.Join(s.Args, " ") + " " + s.URL
+			if matchesAny(id, privateDataKw) {
+				privateS = append(privateS, s.Name)
+			}
+			if matchesAny(id, untrustedKw) {
+				untrustedS = append(untrustedS, s.Name)
+			}
+			if matchesAny(id, exfilKw) {
+				exfilS = append(exfilS, s.Name)
+			}
+		}
+	}
+	if len(privateS) > 0 && len(untrustedS) > 0 && len(exfilS) > 0 {
+		return []Finding{{
+			CheckID: "AUDIT-MCP-TRIFECTA", Severity: "HIGH",
+			Title:  "Lethal trifecta: private data + untrusted content + exfil channel",
+			Server: strings.Join(dedupe(privateS), ",") + " | " + strings.Join(dedupe(untrustedS), ",") + " | " + strings.Join(dedupe(exfilS), ","),
+			Detail: "These servers together let injected content read private data and send it out.",
+			Fix:    "Isolate data-access servers from ones that fetch untrusted content or can send data externally; gate tool calls.",
+		}}
+	}
+	return nil
+}
+
+func dedupe(xs []string) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, x := range xs {
+		if !seen[x] {
+			seen[x] = true
+			out = append(out, x)
+		}
+	}
 	return out
 }
 

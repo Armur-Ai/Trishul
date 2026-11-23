@@ -94,3 +94,31 @@ func TestGrade(t *testing.T) {
 		t.Error("medium => B")
 	}
 }
+
+func TestCheck_LethalTrifecta(t *testing.T) {
+	cfg := Config{Source: "c", Servers: []Server{
+		{Name: "fs", Command: "server-filesystem@1"}, // private data
+		{Name: "web", Command: "server-fetch@1"},     // untrusted content + exfil
+		{Name: "mail", Command: "server-email@1"},    // exfil channel
+	}}
+	fs := Check([]Config{cfg})
+	found := false
+	for _, f := range fs {
+		if f.CheckID == "AUDIT-MCP-TRIFECTA" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("lethal trifecta not flagged: %+v", fs)
+	}
+}
+
+func TestCheck_NoTrifectaWhenIsolated(t *testing.T) {
+	// only private-data server, no untrusted/exfil -> no trifecta
+	cfg := Config{Source: "c", Servers: []Server{{Name: "fs", Command: "server-filesystem@1"}}}
+	for _, f := range Check([]Config{cfg}) {
+		if f.CheckID == "AUDIT-MCP-TRIFECTA" {
+			t.Error("trifecta flagged with only one leg")
+		}
+	}
+}
