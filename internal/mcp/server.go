@@ -10,12 +10,18 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
-	"github.com/Armur-Ai/Trishul/internal/ai"
-	"github.com/Armur-Ai/Trishul/internal/models"
 	"github.com/Armur-Ai/Trishul/engine"
+	"github.com/Armur-Ai/Trishul/internal/ai"
+	"github.com/Armur-Ai/Trishul/internal/autofix"
+	"github.com/Armur-Ai/Trishul/internal/findings"
+	"github.com/Armur-Ai/Trishul/internal/mcpaudit"
+	"github.com/Armur-Ai/Trishul/internal/models"
+	"github.com/Armur-Ai/Trishul/internal/prgate"
+	"github.com/Armur-Ai/Trishul/internal/redact"
 	"github.com/Armur-Ai/Trishul/internal/tasks"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -37,6 +43,9 @@ func StartMCPServer() error {
 	registerCheckDependencyTool(s)
 	registerExplainFindingTool(s)
 	registerGetHistoryTool(s)
+	registerAuditMCPConfigTool(s)
+	registerSuggestFixTool(s)
+	registerScanDiffTool(s)
 	registerResources(s)
 
 	return server.ServeStdio(s)
@@ -50,6 +59,43 @@ func getArg(request mcp.CallToolRequest, key string) string {
 	return ""
 }
 
+// maxFindings caps how many findings any tool echoes back, so a huge scan can't
+// flood the MCP transport. Callers report the true total alongside the subset.
+const maxFindings = 50
+
+// reLongToken matches a long contiguous run of non-space characters, the shape
+// of a leaked secret/token pasted into a snippet or message.
+var reLongToken = regexp.MustCompile(`\S{24,}`)
+
+// maskLongTokens redacts any long token in s via redact.Mask, so secrets echoed
+// back in a snippet or message never leave in plaintext.
+func maskLongTokens(s string) string {
+	return reLongToken.ReplaceAllStringFunc(s, redact.Mask)
+}
+
+// workspacePath confines a user-supplied path to the current working directory.
+// It resolves input (relative to cwd when not absolute) and rejects anything
+// that escapes the workspace via an absolute path elsewhere or ".." traversal.
+func workspacePath(input string) (string, error) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return "", fmt.Errorf("failed to determine working directory: %s", err)
+	}
+	abs := input
+	if !filepath.IsAbs(abs) {
+		abs = filepath.Join(cwd, abs)
+	}
+	abs = filepath.Clean(abs)
+	rel, err := filepath.Rel(cwd, abs)
+	if err != nil {
+		return "", fmt.Errorf("invalid path %q", input)
+	}
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("path %q escapes the workspace", input)
+	}
+	return abs, nil
+}
+
 // languageExtension maps language names to file extensions for temp file creation.
 var languageExtension = map[string]string{
 	"go":         ".go",
@@ -58,7 +104,7 @@ var languageExtension = map[string]string{
 	"py":         ".py",
 	"javascript": ".js",
 	"js":         ".js",
-	"typescript":  ".ts",
+	"typescript": ".ts",
 	"ts":         ".ts",
 	"rust":       ".rs",
 	"rs":         ".rs",
@@ -83,7 +129,7 @@ var normalizeLanguage = map[string]string{
 	"py":         "py",
 	"javascript": "js",
 	"js":         "js",
-	"typescript":  "js",
+	"typescript": "js",
 	"ts":         "js",
 	"rust":       "rust",
 	"rs":         "rust",
@@ -582,6 +628,203 @@ func registerGetHistoryTool(s *server.MCPServer) {
 
 		return mcp.NewToolResultText(sb.String()), nil
 	})
+}
+
+func registerAuditMCPConfigTool(s *server.MCPServer) {
+	tool := mcp.NewTool("trishul_audit_mcp_config",
+		mcp.WithDescription("Audit MCP/agent client configuration for security issues (unpinned servers, plaintext tokens, overbroad permissions, insecure remote servers). Read-only."),
+		mcp.WithString("path", mcp.Description("Optional config file or directory within the workspace to audit; when empty, discovers configs under the home directory")),
+	)
+	s.AddTool(tool, handleAuditMCPConfig)
+}
+
+func handleAuditMCPConfig(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	path := getArg(request, "path")
+
+	var fs []mcpaudit.Finding
+	if path != "" {
+		abs, err := workspacePath(path)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		if _, err := os.Stat(abs); err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("path not found: %s", err)), nil
+		}
+		fs, _ = mcpaudit.AuditHome("", abs)
+	} else {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("failed to determine home directory: %s", err)), nil
+		}
+		fs, _ = mcpaudit.AuditHome(home, "")
+	}
+
+	grade := mcpaudit.Grade(fs)
+	total := len(fs)
+	truncated := false
+	if len(fs) > maxFindings {
+		fs = fs[:maxFindings]
+		truncated = true
+	}
+
+	output := struct {
+		Grade        string             `json:"grade"`
+		FindingCount int                `json:"finding_count"`
+		Returned     int                `json:"returned"`
+		Truncated    bool               `json:"truncated,omitempty"`
+		Findings     []mcpaudit.Finding `json:"findings"`
+	}{
+		Grade:        grade,
+		FindingCount: total,
+		Returned:     len(fs),
+		Truncated:    truncated,
+		Findings:     fs,
+	}
+
+	jsonBytes, err := json.MarshalIndent(output, "", "  ")
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to marshal results: %s", err)), nil
+	}
+	return mcp.NewToolResultText(string(jsonBytes)), nil
+}
+
+func registerSuggestFixTool(s *server.MCPServer) {
+	tool := mcp.NewTool("trishul_suggest_fix",
+		mcp.WithDescription("Suggest a deterministic, local fix for a finding, when one is available. Read-only (returns a patch; does not write files)."),
+		mcp.WithString("rule_id", mcp.Required(), mcp.Description("Rule ID of the finding (e.g., SUPABASE-RLS-001)")),
+		mcp.WithString("path", mcp.Required(), mcp.Description("File path (within the workspace) the finding is in")),
+		mcp.WithNumber("line", mcp.Description("1-based line of the finding")),
+		mcp.WithString("message", mcp.Description("Finding message (some fixers read details from it)")),
+		mcp.WithString("snippet", mcp.Description("Optional code snippet; used as source when the file cannot be read")),
+	)
+	s.AddTool(tool, handleSuggestFix)
+}
+
+func handleSuggestFix(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	ruleID := getArg(request, "rule_id")
+	path := getArg(request, "path")
+	message := getArg(request, "message")
+	snippet := getArg(request, "snippet")
+	line := request.GetInt("line", 0)
+
+	if ruleID == "" || path == "" {
+		return mcp.NewToolResultError("rule_id and path are required"), nil
+	}
+
+	abs, err := workspacePath(path)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	// Prefer the on-disk file (confined to the workspace); fall back to the
+	// provided snippet when the file cannot be read.
+	var src string
+	if data, readErr := os.ReadFile(abs); readErr == nil {
+		src = string(data)
+	} else if snippet != "" {
+		src = snippet
+	} else {
+		return mcp.NewToolResultError(fmt.Sprintf("could not read file and no snippet provided: %s", readErr)), nil
+	}
+
+	f := findings.New(findings.Finding{
+		RuleID:   ruleID,
+		Message:  message,
+		Snippet:  snippet,
+		Location: findings.Location{Path: path, StartLine: line},
+	})
+
+	patch, ok := autofix.FixFor(f, src)
+	if !ok {
+		return mcp.NewToolResultText("no deterministic fix available"), nil
+	}
+
+	output := struct {
+		RuleID      string `json:"rule_id"`
+		Path        string `json:"path"`
+		StartLine   int    `json:"start_line"`
+		EndLine     int    `json:"end_line"`
+		Replacement string `json:"replacement"`
+	}{
+		RuleID:      ruleID,
+		Path:        patch.Path,
+		StartLine:   patch.StartLine,
+		EndLine:     patch.EndLine,
+		Replacement: maskLongTokens(patch.Replacement),
+	}
+
+	jsonBytes, err := json.MarshalIndent(output, "", "  ")
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to marshal results: %s", err)), nil
+	}
+	return mcp.NewToolResultText(string(jsonBytes)), nil
+}
+
+func registerScanDiffTool(s *server.MCPServer) {
+	tool := mcp.NewTool("trishul_scan_diff",
+		mcp.WithDescription("Scan a git checkout and report only the findings introduced relative to a base ref (the PR-gate diff). Read-only."),
+		mcp.WithString("dir", mcp.Required(), mcp.Description("Git repository directory within the workspace")),
+		mcp.WithString("base_ref", mcp.Required(), mcp.Description("Base git ref to diff against (e.g., origin/main, a commit SHA)")),
+	)
+	s.AddTool(tool, handleScanDiff)
+}
+
+func handleScanDiff(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	dir := getArg(request, "dir")
+	baseRef := getArg(request, "base_ref")
+
+	if dir == "" || baseRef == "" {
+		return mcp.NewToolResultError("dir and base_ref are required"), nil
+	}
+
+	abs, err := workspacePath(dir)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	if info, statErr := os.Stat(abs); statErr != nil || !info.IsDir() {
+		return mcp.NewToolResultError(fmt.Sprintf("directory not found: %s", dir)), nil
+	}
+
+	headScan, err := prgate.ScanDir(abs)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("head scan failed: %s", err)), nil
+	}
+	baseScan, err := prgate.ScanGitRef(abs, baseRef)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("base scan failed: %s", err)), nil
+	}
+
+	introduced, _ := prgate.Diff(headScan.Findings, baseScan.Findings)
+	total := len(introduced)
+	truncated := false
+	if len(introduced) > maxFindings {
+		introduced = introduced[:maxFindings]
+		truncated = true
+	}
+	// Redact any secret-shaped token echoed back in a finding message.
+	for i := range introduced {
+		introduced[i].Message = maskLongTokens(introduced[i].Message)
+	}
+
+	output := struct {
+		BaseRef         string           `json:"base_ref"`
+		IntroducedCount int              `json:"introduced_count"`
+		Returned        int              `json:"returned"`
+		Truncated       bool             `json:"truncated,omitempty"`
+		Introduced      []prgate.Finding `json:"introduced"`
+	}{
+		BaseRef:         baseRef,
+		IntroducedCount: total,
+		Returned:        len(introduced),
+		Truncated:       truncated,
+		Introduced:      introduced,
+	}
+
+	jsonBytes, err := json.MarshalIndent(output, "", "  ")
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to marshal results: %s", err)), nil
+	}
+	return mcp.NewToolResultText(string(jsonBytes)), nil
 }
 
 func registerResources(s *server.MCPServer) {
