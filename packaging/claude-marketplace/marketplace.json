@@ -1,0 +1,33 @@
+{
+  "name": "armur-claude-plugins",
+  "owner": {
+    "name": "Armur-Ai",
+    "url": "https://armur.ai"
+  },
+  "metadata": {
+    "description": "Armur-Ai security tooling for Claude Code.",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "trishul",
+      "source": "./plugins/trishul",
+      "description": "Real-time, local-first security guardrails for Claude Code: scans every edit as it lands, flags dangerous shell commands before they run, audits your MCP setup, and exposes Trishul's scanner over MCP.",
+      "version": "0.1.0",
+      "author": {
+        "name": "Armur-Ai",
+        "url": "https://armur.ai"
+      },
+      "homepage": "https://github.com/Armur-Ai/Trishul",
+      "license": "Apache-2.0",
+      "keywords": [
+        "security",
+        "sast",
+        "agent-security",
+        "mcp",
+        "guardrails",
+        "local-first"
+      ]
+    }
+  ]
+}
