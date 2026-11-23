@@ -225,6 +225,138 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
 	}
 }
 
+// --- fix #1: app-wide / middleware auth resolution --------------------------
+
+// An Express route with no per-route guard but an app-wide `app.use(authMiddleware)`
+// must NOT be flagged: the middleware protects every route beneath it.
+func TestRouteAuth_ExpressAppUseGuardClean(t *testing.T) {
+	dir := t.TempDir()
+	raWrite(t, dir, "src/server.js", `
+const express = require('express');
+const app = express();
+const authGuard = require('./middleware/authGuard');
+
+app.use(express.json());
+app.use(authGuard);
+
+app.post('/api/notes', async (req, res) => {
+  const note = await db.query('INSERT INTO notes ...');
+  res.json(note);
+});
+`)
+	findings := raScan(t, dir)
+	if len(findings) != 0 {
+		t.Fatalf("expected 0 findings behind an app-wide auth guard, got %d: %v", len(findings), findings)
+	}
+}
+
+// A generic (non-auth) app.use middleware must NOT suppress an otherwise
+// unauthenticated data route.
+func TestRouteAuth_ExpressAppUseGenericStillFlagged(t *testing.T) {
+	dir := t.TempDir()
+	raWrite(t, dir, "src/server.js", `
+const express = require('express');
+const cors = require('cors');
+const app = express();
+app.use(express.json());
+app.use(cors({ origin: '*' }));
+
+app.post('/api/notes', async (req, res) => {
+  const note = await db.query('INSERT INTO notes ...');
+  res.json(note);
+});
+`)
+	ids := raCheckIDs(raScan(t, dir))
+	if ids[raCheckUnauth] == 0 {
+		t.Fatalf("expected %s: generic (json/cors) middleware must not count as auth, got %v", raCheckUnauth, ids)
+	}
+}
+
+// A NestJS controller guarded with @UseGuards must NOT be flagged.
+func TestRouteAuth_NestUseGuardsClean(t *testing.T) {
+	dir := t.TempDir()
+	raWrite(t, dir, "src/notes.controller.ts", `
+import { Controller, Post, Body, UseGuards } from '@nestjs/common';
+import { JwtAuthGuard } from './jwt.guard';
+
+@Controller('notes')
+@UseGuards(JwtAuthGuard)
+export class NotesController {
+  @Post()
+  async create(@Body() dto: any) {
+    return this.repository.save(dto);
+  }
+}
+`)
+	findings := raScan(t, dir)
+	if len(findings) != 0 {
+		t.Fatalf("expected 0 findings behind @UseGuards, got %d: %v", len(findings), findings)
+	}
+}
+
+// A Next.js App Router route with no in-handler auth is NOT flagged when a
+// middleware.ts authenticates and its matcher covers the route; a route the
+// matcher does NOT cover is still flagged.
+func TestRouteAuth_NextMiddlewareCoverage(t *testing.T) {
+	dir := t.TempDir()
+	raWrite(t, dir, "middleware.ts", `
+import { withAuth } from 'next-auth/middleware';
+export default withAuth(function middleware(req) {});
+export const config = { matcher: ['/api/:path*'] };
+`)
+	// Covered by matcher => clean.
+	raWrite(t, dir, "app/api/notes/route.ts", `
+import { prisma } from '@/lib/prisma';
+export async function POST(req: Request) {
+  const body = await req.json();
+  return Response.json(await prisma.note.create({ data: body }));
+}
+`)
+	// Outside the matcher => still flagged.
+	raWrite(t, dir, "app/dashboard/stats/route.ts", `
+import { prisma } from '@/lib/prisma';
+export async function POST(req: Request) {
+  const body = await req.json();
+  return Response.json(await prisma.stat.create({ data: body }));
+}
+`)
+	findings := raScan(t, dir)
+	for _, f := range findings {
+		if p, _ := f["path"].(string); p == "app/api/notes/route.ts" {
+			t.Fatalf("route covered by middleware matcher must not be flagged: %v", f)
+		}
+	}
+	ids := raCheckIDs(findings)
+	if ids[raCheckUnauth] == 0 {
+		t.Fatalf("expected %s on the route outside the middleware matcher, got %v", raCheckUnauth, ids)
+	}
+}
+
+// A Flask blueprint with a before_request auth hook protects its routes.
+func TestRouteAuth_FlaskBeforeRequestClean(t *testing.T) {
+	dir := t.TempDir()
+	raWrite(t, dir, "api/notes.py", `
+from flask import Blueprint, request
+
+bp = Blueprint("notes", __name__)
+
+@bp.before_request
+def require_login():
+    if not session.get("user"):
+        abort(401)
+
+@bp.route("/notes", methods=["POST"])
+def create_note():
+    db.session.add(Note(**request.json))
+    db.session.commit()
+    return "ok"
+`)
+	findings := raScan(t, dir)
+	if len(findings) != 0 {
+		t.Fatalf("expected 0 findings behind a Flask before_request guard, got %d: %v", len(findings), findings)
+	}
+}
+
 // Findings must be sorted deterministically by (path, line, check_id).
 func TestRouteAuth_Deterministic(t *testing.T) {
 	dir := t.TempDir()
