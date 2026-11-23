@@ -203,20 +203,25 @@ var execRunRe = regexp.MustCompile(`^(\s*)(?:-\s+)?run:\s*(.*)$`)
 
 func execScanWorkflow(rel string, content []byte) []AgentFinding {
 	lines := SplitLines(content)
-	lc := strings.ToLower(string(content))
+	// YAML comments are not executed, so classify against a comment-stripped copy.
+	clean := strings.ToLower(execStripYAMLComments(content))
 	var out []AgentFinding
 
 	// pull_request_target that checks out the untrusted PR head and then runs it:
 	// the workflow executes attacker-controlled code with access to repo secrets.
-	if strings.Contains(lc, "pull_request_target") && strings.Contains(lc, "actions/checkout") &&
-		(strings.Contains(lc, "pull_request.head") || strings.Contains(lc, "head.ref") ||
-			strings.Contains(lc, "head.sha") || strings.Contains(lc, "github.head_ref")) {
+	// Only a checkout of the PR head (not the trusted base) that then runs code
+	// WITHOUT an environment-approval gate is dangerous.
+	if strings.Contains(clean, "pull_request_target") && strings.Contains(clean, "actions/checkout") &&
+		(strings.Contains(clean, "pull_request.head") || strings.Contains(clean, "head.ref") ||
+			strings.Contains(clean, "head.sha") || strings.Contains(clean, "head_ref")) &&
+		strings.Contains(clean, "run:") && // executes the checked-out PR code
+		!strings.Contains(clean, "environment:") { // no environment-approval gate
 		out = append(out, execFinding("AGENT-EXEC-003",
 			"pull_request_target workflow checks out and runs untrusted PR code",
 			"HIGH", "MEDIUM", rel, "an AI agent runs tests or builds",
 			"runs code from an attacker-controlled pull request with access to repository secrets",
 			"CWE-829", rel, execLineContains(lines, "pull_request_target"),
-			"on: pull_request_target with checkout of the PR head followed by run steps", ""))
+			"on: pull_request_target with checkout of the PR head followed by run steps, and no environment-approval gate", ""))
 	}
 
 	for i := 0; i < len(lines); {
@@ -255,6 +260,47 @@ func execScanWorkflow(rel string, content []byte) []AgentFinding {
 	return out
 }
 
+// execStripYAMLComments returns content with every line's trailing comment
+// removed, so a commented-out directive is never matched as live configuration.
+func execStripYAMLComments(content []byte) string {
+	var b strings.Builder
+	for _, ln := range SplitLines(content) {
+		b.WriteString(execStripComment(ln))
+		b.WriteByte('\n')
+	}
+	return b.String()
+}
+
+// execStripComments drops/trims comment text from each line of a run block (shell
+// comments inside the script are not executed either).
+func execStripComments(block string) string {
+	var keep []string
+	for _, ln := range strings.Split(block, "\n") {
+		if s := execStripComment(ln); strings.TrimSpace(s) != "" {
+			keep = append(keep, s)
+		}
+	}
+	return strings.Join(keep, "\n")
+}
+
+// execStripComment removes a trailing comment introduced by an unquoted '#' that
+// begins the line or is preceded by whitespace. A '#' inside quotes or glued to a
+// non-space character (e.g. a URL fragment) is kept.
+func execStripComment(line string) string {
+	inS, inD := false, false
+	for i := 0; i < len(line); i++ {
+		switch c := line[i]; {
+		case c == '\'' && !inD:
+			inS = !inS
+		case c == '"' && !inS:
+			inD = !inD
+		case c == '#' && !inS && !inD && (i == 0 || line[i-1] == ' ' || line[i-1] == '\t'):
+			return line[:i]
+		}
+	}
+	return line
+}
+
 func execIsBlockScalar(rest string) bool {
 	switch rest {
 	case "", "|", ">", "|-", ">-", "|+", ">+":
@@ -264,6 +310,7 @@ func execIsBlockScalar(rest string) bool {
 }
 
 func execAnalyzeRun(rel, block string, line int) []AgentFinding {
+	block = execStripComments(block)
 	if strings.TrimSpace(block) == "" {
 		return nil
 	}
