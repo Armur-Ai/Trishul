@@ -50,6 +50,7 @@ type Rule struct {
 	Name             string                    `json:"name,omitempty"`
 	ShortDescription *MultiformatMessageString `json:"shortDescription,omitempty"`
 	FullDescription  *MultiformatMessageString `json:"fullDescription,omitempty"`
+	Help             *MultiformatMessageString `json:"help,omitempty"`
 	HelpURI          string                    `json:"helpUri,omitempty"`
 	Properties       map[string]interface{}    `json:"properties,omitempty"`
 }
@@ -196,7 +197,8 @@ type Message struct {
 
 // MultiformatMessageString holds a plain-text and/or markdown description.
 type MultiformatMessageString struct {
-	Text string `json:"text"`
+	Text     string `json:"text"`
+	Markdown string `json:"markdown,omitempty"`
 }
 
 // severityToLevel converts Armur severity strings to SARIF levels.
