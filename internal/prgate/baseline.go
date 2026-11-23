@@ -112,3 +112,18 @@ func git(dir string, args ...string) (string, error) {
 	out, err := cmd.CombinedOutput()
 	return string(out), err
 }
+
+// LoadBaselineAtRef reads the baseline as committed at ref (nil if absent).
+// PR mode must use this rather than the head's file: otherwise a PR could
+// suppress its own findings by adding them to the baseline.
+func LoadBaselineAtRef(repoDir, ref, relPath string) (*Baseline, error) {
+	out, err := exec.Command("git", "-C", repoDir, "show", ref+":"+filepath.ToSlash(relPath)).Output()
+	if err != nil {
+		return nil, nil // not present at ref
+	}
+	var b Baseline
+	if err := json.Unmarshal(out, &b); err != nil {
+		return nil, fmt.Errorf("parse baseline at %s: %w", ref, err)
+	}
+	return &b, nil
+}

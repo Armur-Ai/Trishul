@@ -117,6 +117,15 @@ func run(args []string) int {
 	}
 	if *base != "" {
 		ref := prgate.MergeBase(dir, *base, "HEAD")
+		// Trust only the baseline committed on the base: a PR must not be
+		// able to whitelist its own findings.
+		if rel, err := filepath.Rel(dir, bp); err == nil && bp != "" {
+			if bl, err = prgate.LoadBaselineAtRef(dir, ref, rel); err != nil {
+				fmt.Fprintf(os.Stderr, "trishul-ci: %v\n", err)
+				return 2
+			}
+			current = bl.Apply(headFindings)
+		}
 		baseScan, err := prgate.ScanGitRef(dir, ref)
 		if err != nil {
 			_, _ = fmt.Fprintf(os.Stderr, "trishul-ci: %v\n", err)

@@ -126,7 +126,8 @@ func (s *Server) processPR(ctx context.Context, j Job) error {
 	fopts := prgate.FilterOptions{}
 	headF := prgate.Filter(headScan.Findings, headDir, fopts)
 	baseF := prgate.Filter(baseScan.Findings, headDir, fopts)
-	bl, _ := prgate.LoadBaseline(filepath.Join(headDir, prgate.DefaultBaselineFile))
+	// Baseline from the merge base only, so a PR can't whitelist its own findings.
+	bl, _ := prgate.LoadBaseline(filepath.Join(baseDir, prgate.DefaultBaselineFile))
 	current := bl.Apply(headF)
 	intro, fixed := prgate.Diff(current, bl.Apply(baseF))
 

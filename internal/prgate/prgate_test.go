@@ -190,3 +190,28 @@ func TestExcludedDoubleStar(t *testing.T) {
 		t.Error("should not match non-test file")
 	}
 }
+
+func TestPRCannotBaselineItself(t *testing.T) {
+	dir := t.TempDir()
+	run := func(args ...string) {
+		c := exec.Command("git", append([]string{"-C", dir, "-c", "user.email=t@t", "-c", "user.name=t", "-c", "commit.gpgsign=false"}, args...)...)
+		if out, err := c.CombinedOutput(); err != nil {
+			t.Fatalf("%v: %s", err, out)
+		}
+	}
+	run("init", "-q")
+	_ = os.WriteFile(filepath.Join(dir, "a"), []byte("x"), 0o644)
+	run("add", "-A")
+	run("commit", "-q", "-m", "base")
+	if err := NewBaseline([]Finding{f("evil", "high")}).Save(filepath.Join(dir, DefaultBaselineFile)); err != nil {
+		t.Fatal(err)
+	}
+	run("add", "-A")
+	run("commit", "-q", "-m", "pr adds baseline")
+	if b, _ := LoadBaselineAtRef(dir, "HEAD~1", DefaultBaselineFile); b != nil {
+		t.Fatal("base had no baseline; the PR's baseline must not be used")
+	}
+	if b, _ := LoadBaselineAtRef(dir, "HEAD", DefaultBaselineFile); b == nil || len(b.Findings) != 1 {
+		t.Fatal("expected baseline at HEAD")
+	}
+}
