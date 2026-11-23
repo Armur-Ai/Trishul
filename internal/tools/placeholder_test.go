@@ -199,6 +199,44 @@ func TestPlaceholder_LocaleStringsTable_NotFlagged(t *testing.T) {
 	}
 }
 
+func TestPlaceholder_URLNormTestCase_NotFlagged(t *testing.T) {
+	dir := t.TempDir()
+	// A URL-normalization test fixture: `user:pass@` userinfo is test data for a
+	// URL parser, not an embedded credential, so it must not be flagged inside a
+	// test file.
+	phWrite(t, dir, "url_test.go", "package x\n"+
+		"func TestNorm(t *testing.T) { u := \"http://user:pass@example.com/p\"; _ = u }\n")
+
+	findings := phFindings(t, mustRun(t, dir))
+	if got := phByCheck(findings, "VIBE-PLACEHOLDER-002"); len(got) != 0 {
+		t.Fatalf("user:pass@ in a test file should not be flagged, got %+v", got)
+	}
+}
+
+func TestPlaceholder_InlineCreds_NonTestStillFlagged(t *testing.T) {
+	dir := t.TempDir()
+	// The same userinfo in production code is still a real embedded credential.
+	phWrite(t, dir, "db.go", "const dsn = \"postgres://user:pass@db:5432/app\"\n")
+
+	findings := phFindings(t, mustRun(t, dir))
+	if got := phByCheck(findings, "VIBE-PLACEHOLDER-002"); len(got) != 1 {
+		t.Fatalf("inline creds in prod code should still be flagged, got %+v", got)
+	}
+}
+
+func TestPlaceholder_PrivilegedInlineCreds_FlaggedEvenInTest(t *testing.T) {
+	dir := t.TempDir()
+	// A privileged default pair (admin:admin@) is a genuine default-credential
+	// demonstration and stays flagged even inside a test file.
+	phWrite(t, dir, "conn_test.go", "package x\n"+
+		"var dsn = \"mongodb://admin:admin@localhost:27017\"\n")
+
+	findings := phFindings(t, mustRun(t, dir))
+	if got := phByCheck(findings, "VIBE-PLACEHOLDER-002"); len(got) != 1 {
+		t.Fatalf("admin:admin@ should stay flagged even in a test file, got %+v", got)
+	}
+}
+
 func TestPlaceholder_DebugMode_FlaggedMedium(t *testing.T) {
 	dir := t.TempDir()
 	phWrite(t, dir, "settings.py", "DEBUG = True\n")

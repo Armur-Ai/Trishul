@@ -281,7 +281,7 @@ func scanPlaceholderFile(relPath, content string, isTest bool) []map[string]inte
 			}
 		}
 		// 002 — inline connection-string credentials (self-contained, HIGH).
-		if rePhInlineCreds.MatchString(line) {
+		if m := rePhInlineCreds.FindStringSubmatch(line); m != nil && !phIsURLNormCase(isTest, m[1]) {
 			conf := "HIGH"
 			if isTest {
 				conf = "MEDIUM"
@@ -409,6 +409,16 @@ func phIsWeakSecret(v string) (weak bool, high bool) {
 		return true, false
 	}
 	return false, false
+}
+
+// phIsURLNormCase reports whether an inline-credential match inside a test file
+// is the canonical URL-parsing / URL-normalization placeholder `user:pass@`
+// (userinfo of the form user:<pass>), which test suites use as fixture data for
+// URL handling rather than as a real embedded credential. It never suppresses
+// privileged default pairs such as admin:admin@ or root:root@, which stay
+// flagged even in tests. user is the matched userinfo username (group 1).
+func phIsURLNormCase(isTest bool, user string) bool {
+	return isTest && strings.EqualFold(user, "user")
 }
 
 // phIsDisplayLabel reports whether value is a display label / translation of the
