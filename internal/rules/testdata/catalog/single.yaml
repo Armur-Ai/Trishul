@@ -1,0 +1,8 @@
+id: VIBE-007
+title: Route lacks authorization
+short: An API route has no auth middleware
+description: The route handler is registered without any authorization check.
+default_severity: HIGH
+default_confidence: 0.6
+maturity: beta
+mode_default: comment
