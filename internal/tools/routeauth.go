@@ -31,6 +31,8 @@ import (
 	"sort"
 	"strings"
 
+	"gopkg.in/yaml.v3"
+
 	"github.com/Armur-Ai/Trishul/internal/logger"
 	utils "github.com/Armur-Ai/Trishul/pkg"
 )
@@ -105,6 +107,10 @@ var raJSAuthTokens = []string{
 	"passport", "authorize", "checkauth", "validatesession", "req.user",
 	"request.user", "session.user", "ensureloggedin", "protect(", "auth(",
 	"ironsession", "nextauth", "supabase.auth", "getuser(", "permissionguard",
+	"requirerole", "hasrole", "checkrole", "requirepermission", "haspermission",
+	"assertauth", "ensureauthenticated", "getcurrentuser", "getsessionuser",
+	"verifysession", "getuserfromrequest", "clerkmiddleware", "auth.protect",
+	"authguard", "rbac", "authz",
 }
 
 var raPyAuthTokens = []string{
@@ -113,6 +119,9 @@ var raPyAuthTokens = []string{
 	"oauth2_scheme", "require_auth", "authenticate", "permission_classes",
 	"httpbearer", "token_required", "auth_required", "get_current_active_user",
 	"require_login", "depends(get_user", "depends(authenticate",
+	"require_role", "has_permission", "has_perm", "has_role", "check_permissions",
+	"require_scope", "requires_scopes", "is_staff", "is_superuser",
+	"user.is_authenticated", "request.user", "get_current_user_id",
 }
 
 // Data-layer tokens (lowercase substrings) indicating the handler reads/writes
@@ -139,19 +148,22 @@ var (
 	raReServerFn   = regexp.MustCompile(`export\s+(?:async\s+)?function\s+([A-Za-z_]\w*)\b`)
 	raReUseServer  = regexp.MustCompile(`['"]use server['"]`)
 	raReExpress    = regexp.MustCompile(`([A-Za-z_]\w*)\.(get|post|put|patch|delete|all)\s*\(`)
+	raReUse        = regexp.MustCompile(`([A-Za-z_]\w*)\.use\s*\(`)
 	raRePyRoute    = regexp.MustCompile(`(?m)^[ \t]*@[ \t]*([A-Za-z_]\w*)\.(get|post|put|patch|delete|route)[ \t]*\(`)
 	raRePyDef      = regexp.MustCompile(`^\s*(?:async\s+)?def\s+\w+\s*\(`)
 	raReFirstStr   = regexp.MustCompile(`['"]([^'"]*)['"]`)
 
 	// IDOR building blocks.
-	raReIDPath = regexp.MustCompile(`(?i)(\[\.*\w*id\]|\{\.*\w*id\}|:\w*id\b)`)
 	raReIDBody = regexp.MustCompile(`(?i)(\b(?:params|query|body)\s*\.\s*\w*id\b|\b(?:params|query|body)\s*\[\s*['"]\w*id['"]\s*\]|req\.params|searchparams\.get\(\s*['"]\w*id['"]|(?:args|query_params)\.get\(\s*['"]\w*id['"])`)
 	raReByID   = regexp.MustCompile(`(?i)(findunique\s*\(|findbyid\s*\(|find_by_id|where\s*:\s*\{[^}{]{0,120}\bid\b|\.get\(\s*\w*id\b|filter_by\(\s*\w*id\s*=|\.filter\([^()]{0,120}\.id\s*==|query\.get\(|where\s+\w*id\s*=)`)
+	// Captures the identifier name inside a dynamic path segment ([id], {order_id},
+	// :userId) so we can confirm it is actually consumed by the handler body.
+	raReIDName = regexp.MustCompile(`(?i)(?:\[\.*(\w*id)\]|\{\.*(\w*id)\}|:(\w*id)\b)`)
 	// Owner/tenant SCOPING predicates. Note: an authenticated principal such as
 	// `current_user` or `req.user` on its own is NOT an ownership predicate — the
 	// query must be scoped by the owner — so those are deliberately excluded here
 	// (an authenticated handler that fetches by id without owner scoping is IDOR).
-	raReOwner = regexp.MustCompile(`(?i)(user_?id|owner_?id|org_?id|team_?id|tenant_?id|account_?id|\buserid\b|created_?by|author_?id|user\s*\.\s*id|owner\s*\.\s*id|filter_by\([^)]*\buser|where[^}]*\buser|\.eq\(\s*['"][a-z_]*id['"])`)
+	raReOwner = regexp.MustCompile(`(?i)(user_?id|owner_?id|org_?id|team_?id|tenant_?id|account_?id|customer_?id|member_?id|profile_?id|clerk_?id|\buserid\b|created_?by|author_?id|user\s*\.\s*id|owner\s*\.\s*id|session\s*\.\s*user|filter_by\([^)]*\b(?:user|owner|org|tenant|account)|where[^}]*\b(?:user|owner|org|tenant|account)|\.eq\(\s*['"][a-z_]*(?:user|owner|org|tenant|account)[a-z_]*['"])`)
 )
 
 // raHandler is one route/handler candidate extracted from a file.
@@ -162,10 +174,27 @@ type raHandler struct {
 	guarded   bool   // Express: middleware present (treated as an auth guard)
 }
 
+// raScanOpts carries directory-level context resolved once per scan: extra
+// auth-helper names and public path segments from an optional .trishul.yml, and
+// a predicate that reports whether an app-wide Next.js auth middleware covers a
+// given App Router route. Threading it keeps per-file scanning pure.
+type raScanOpts struct {
+	extraJSAuth    []string        // additional JS/TS auth-helper substrings (lowercased)
+	extraPyAuth    []string        // additional Python auth-helper substrings (lowercased)
+	extraPublicSeg map[string]bool // additional public path segments (lowercased)
+	nextMwCovers   func(rel string) bool
+}
+
+func (o raScanOpts) covers(rel string) bool {
+	return o.nextMwCovers != nil && o.nextMwCovers(rel)
+}
+
 // scanRouteAuth walks directory (read-only) and returns deterministic findings.
 // Exported-for-test entry point used by the unit tests.
 func scanRouteAuth(directory string) ([]map[string]interface{}, error) {
 	var findings []map[string]interface{}
+
+	opts := raBuildOpts(directory)
 
 	walkErr := filepath.WalkDir(directory, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
@@ -203,9 +232,9 @@ func scanRouteAuth(directory string) ([]map[string]interface{}, error) {
 		rel = filepath.ToSlash(rel)
 
 		if isJS {
-			findings = append(findings, raScanJS(rel, string(content))...)
+			findings = append(findings, raScanJS(rel, string(content), opts)...)
 		} else {
-			findings = append(findings, raScanPy(rel, string(content))...)
+			findings = append(findings, raScanPy(rel, string(content), opts)...)
 		}
 		return nil
 	})
@@ -220,9 +249,13 @@ func scanRouteAuth(directory string) ([]map[string]interface{}, error) {
 
 // raScanJS gathers handler candidates from a JavaScript/TypeScript file and
 // evaluates the two checks against each.
-func raScanJS(rel, content string) []map[string]interface{} {
+func raScanJS(rel, content string, opts raScanOpts) []map[string]interface{} {
 	lower := strings.ToLower(content)
-	fileHasAuth := raContainsAny(lower, raJSAuthTokens)
+	authTokens := append(append([]string{}, raJSAuthTokens...), opts.extraJSAuth...)
+	// A route is considered auth-covered if the file references an auth helper
+	// anywhere, if the file installs an app-wide auth guard (Express `.use`,
+	// NestJS `@UseGuards`), or if an app-wide Next.js auth middleware matches it.
+	fileHasAuth := raContainsAny(lower, authTokens) || raJSAppWideAuth(content) || opts.covers(rel)
 
 	base := strings.ToLower(filepath.Base(rel))
 	isRouteFile := strings.HasPrefix(base, "route.")
@@ -244,13 +277,16 @@ func raScanJS(rel, content string) []map[string]interface{} {
 		handlers = append(handlers, raServerActionHandlers(content, rel)...)
 	}
 
-	return raEvaluate(handlers, rel, fileHasAuth, raJSAuthTokens, raJSDataTokens)
+	return raEvaluate(handlers, rel, fileHasAuth, authTokens, raJSDataTokens, opts)
 }
 
 // raScanPy gathers decorator-based route handlers from a Python file.
-func raScanPy(rel, content string) []map[string]interface{} {
+func raScanPy(rel, content string, opts raScanOpts) []map[string]interface{} {
 	lower := strings.ToLower(content)
-	fileHasAuth := raContainsAny(lower, raPyAuthTokens)
+	authTokens := append(append([]string{}, raPyAuthTokens...), opts.extraPyAuth...)
+	// File-wide auth: an auth helper anywhere, or an app-wide guard (Flask
+	// before_request, Django LoginRequiredMixin, FastAPI router dependencies).
+	fileHasAuth := raContainsAny(lower, authTokens) || raPyAppWideAuth(content)
 
 	lines := strings.Split(content, "\n")
 	var handlers []raHandler
@@ -293,11 +329,11 @@ func raScanPy(rel, content string) []map[string]interface{} {
 		handlers = append(handlers, raHandler{line: decoLine, body: body, routePath: routePath})
 	}
 
-	return raEvaluate(handlers, rel, fileHasAuth, raPyAuthTokens, raPyDataTokens)
+	return raEvaluate(handlers, rel, fileHasAuth, authTokens, raPyDataTokens, opts)
 }
 
 // raEvaluate runs both checks over the collected handlers for one file.
-func raEvaluate(handlers []raHandler, rel string, fileHasAuth bool, authTokens, dataTokens []string) []map[string]interface{} {
+func raEvaluate(handlers []raHandler, rel string, fileHasAuth bool, authTokens, dataTokens []string, opts raScanOpts) []map[string]interface{} {
 	var out []map[string]interface{}
 	for _, h := range handlers {
 		bodyLower := strings.ToLower(h.body)
@@ -306,7 +342,8 @@ func raEvaluate(handlers []raHandler, rel string, fileHasAuth bool, authTokens, 
 		// VIBE-AUTHZ-001: unauthenticated data route.
 		if !fileHasAuth && !handlerHasAuth && !h.guarded &&
 			raContainsAny(bodyLower, dataTokens) &&
-			!raPublicPath(rel, h.routePath) {
+			!raPublicPath(rel, h.routePath, opts.extraPublicSeg) &&
+			!raSignedWebhook(bodyLower) {
 			out = append(out, raFinding(rel, h.line, raCheckUnauth, raCWEMissing,
 				"API route handler reads/writes data with no visible authentication or authorization check; "+
 					"any unauthenticated client can invoke it.",
@@ -316,7 +353,7 @@ func raEvaluate(handlers []raHandler, rel string, fileHasAuth bool, authTokens, 
 		// VIBE-AUTHZ-002: IDOR heuristic. Independent of auth — an authenticated
 		// handler that fetches by a request-supplied id without an owner predicate
 		// is the classic IDOR.
-		idRead := raReIDBody.MatchString(h.body) || raReIDPath.MatchString(rel) || raReIDPath.MatchString(h.routePath)
+		idRead := raIDRequestRead(h.body, rel, h.routePath)
 		if idRead && raReByID.MatchString(h.body) && !raReOwner.MatchString(h.body) {
 			out = append(out, raFinding(rel, h.line, raCheckIDOR, raCWEIDOR,
 				"Handler looks up a record by a request-supplied id with no owner/user predicate; "+
@@ -410,6 +447,236 @@ func raExpressReceiver(recv string) bool {
 	return strings.HasSuffix(recv, "router")
 }
 
+// ---- app-wide / middleware auth resolution ---------------------------------
+
+// raJSMiddlewareAuthHints are substrings that, when present in the argument of
+// an `app.use(...)` / `router.use(...)` call, mark that middleware as an auth
+// guard. Kept narrow so generic middleware (json, cors, helmet, compression)
+// is not mistaken for authentication.
+var raJSMiddlewareAuthHints = []string{
+	"auth", "guard", "protect", "passport", "clerk", "verifytoken", "verifyjwt",
+	"jwt.verify", "ensureloggedin", "requirelogin", "requireuser", "session.user",
+	"withauth", "isauthenticated", "checkauth", "ensureauth",
+}
+
+// raJSAppWideAuth reports whether a JS/TS file installs an app-wide auth guard:
+// an Express/Connect `.use(<auth middleware>)` mounted on app/router, or a
+// NestJS `@UseGuards(...)` applied at the controller (or method) level.
+func raJSAppWideAuth(content string) bool {
+	if strings.Contains(strings.ToLower(content), "@useguards(") {
+		return true
+	}
+	for _, m := range raReUse.FindAllStringSubmatchIndex(content, -1) {
+		recv := strings.ToLower(content[m[2]:m[3]])
+		if !raExpressReceiver(recv) {
+			continue
+		}
+		openIdx := m[1] - 1 // index of the '(' (last char of the match)
+		closeIdx, ok := raMatchDelim(content, openIdx)
+		if !ok {
+			continue
+		}
+		args := strings.ToLower(content[openIdx+1 : closeIdx])
+		if raContainsAny(args, raJSMiddlewareAuthHints) {
+			return true
+		}
+	}
+	return false
+}
+
+// raPyAppWideHints are substrings marking an app-wide/class-wide Python auth
+// guard (Flask before_request hooks, Django auth mixins/decorators).
+var raPyAppWideHints = []string{
+	"before_request", "loginrequiredmixin", "permissionrequiredmixin",
+	"permission_required", "staff_member_required", "user_passes_test",
+	"accessmixin", "userpassestestmixin",
+}
+
+// raPyAppWideAuth reports whether a Python file installs an app-wide auth guard:
+// a Flask before_request hook, a Django auth mixin/decorator, or a FastAPI
+// router/app wired with auth dependencies or middleware.
+func raPyAppWideAuth(content string) bool {
+	lower := strings.ToLower(content)
+	if raContainsAny(lower, raPyAppWideHints) {
+		return true
+	}
+	// FastAPI router- or app-level dependencies: APIRouter(dependencies=[...]) /
+	// include_router(..., dependencies=[...]) / app.add_middleware(AuthMiddleware).
+	if (strings.Contains(lower, "dependencies=") || strings.Contains(lower, "dependencies =")) &&
+		(strings.Contains(lower, "depends(") || strings.Contains(lower, "security(")) &&
+		raContainsAny(lower, []string{"auth", "login", "require", "token", "current_user", "permission", "verify", "session"}) {
+		return true
+	}
+	if strings.Contains(lower, "add_middleware(") &&
+		raContainsAny(lower, []string{"auth", "login", "jwt", "session", "token"}) {
+		return true
+	}
+	return false
+}
+
+// raBuildOpts resolves directory-level scan context once per scan: an optional
+// .trishul.yml (extra auth helpers / public segments) and the Next.js
+// middleware coverage predicate.
+func raBuildOpts(directory string) raScanOpts {
+	opts := raScanOpts{nextMwCovers: raBuildNextMiddleware(directory)}
+	opts.extraJSAuth, opts.extraPyAuth, opts.extraPublicSeg = raLoadConfig(directory)
+	return opts
+}
+
+// raBuildNextMiddleware looks for a Next.js middleware file that performs auth
+// and returns a predicate reporting whether it covers a given App Router / Pages
+// route. A middleware without an explicit `matcher` config applies to every
+// route; otherwise only matching routes are covered. Returns nil when there is
+// no authenticating middleware.
+func raBuildNextMiddleware(directory string) func(string) bool {
+	cands := []string{
+		"middleware.ts", "middleware.js", "middleware.mjs", "middleware.mts",
+		"src/middleware.ts", "src/middleware.js", "src/middleware.mjs", "src/middleware.mts",
+	}
+	var content string
+	for _, c := range cands {
+		if b, err := os.ReadFile(filepath.Join(directory, filepath.FromSlash(c))); err == nil {
+			content = string(b)
+			break
+		}
+	}
+	if content == "" {
+		return nil
+	}
+	if !raContainsAny(strings.ToLower(content), raJSAuthTokens) && !raJSAppWideAuth(content) {
+		return nil // a middleware that never authenticates does not protect routes
+	}
+	matchers := raNextMatchers(content)
+	return func(rel string) bool {
+		base := strings.ToLower(filepath.Base(rel))
+		isRoute := strings.HasPrefix(base, "route.") || strings.HasPrefix(base, "page.") ||
+			strings.Contains(rel, "pages/api/")
+		if !isRoute {
+			return false // Next middleware governs Next routes, not e.g. Express files
+		}
+		if len(matchers) == 0 {
+			return true // no matcher config => applies to all routes
+		}
+		url := raAppRouteURL(rel)
+		for _, pat := range matchers {
+			if raMatchNextMatcher(pat, url) {
+				return true
+			}
+		}
+		return false
+	}
+}
+
+// raNextMatchers extracts the string patterns from a Next.js middleware
+// `matcher` config (array or single-string form).
+func raNextMatchers(content string) []string {
+	idx := strings.Index(strings.ToLower(content), "matcher")
+	if idx < 0 {
+		return nil
+	}
+	if br := raFindDelim(content, idx, '[', 80); br >= 0 {
+		if end, ok := raMatchDelim(content, br); ok {
+			var out []string
+			for _, m := range raReFirstStr.FindAllStringSubmatch(content[br:end+1], -1) {
+				out = append(out, m[1])
+			}
+			return out
+		}
+	}
+	line := content[idx:]
+	if nl := strings.IndexByte(line, '\n'); nl >= 0 {
+		line = line[:nl]
+	}
+	if m := raReFirstStr.FindStringSubmatch(line); m != nil {
+		return []string{m[1]}
+	}
+	return nil
+}
+
+// raAppRouteURL derives the URL path of a Next.js App Router / Pages route from
+// its relative file path (dropping the extension, the route/page basename, a
+// leading src/ or app/ and any (route-group) segments).
+func raAppRouteURL(rel string) string {
+	u := rel
+	if i := strings.LastIndex(u, "."); i >= 0 {
+		u = u[:i]
+	}
+	u = strings.TrimSuffix(u, "/route")
+	u = strings.TrimSuffix(u, "/page")
+	u = strings.TrimSuffix(u, "/index")
+	u = strings.TrimPrefix(u, "src/")
+	u = strings.TrimPrefix(u, "app/")
+	u = strings.TrimPrefix(u, "pages/")
+	var segs []string
+	for _, s := range strings.Split(u, "/") {
+		if s == "" || (strings.HasPrefix(s, "(") && strings.HasSuffix(s, ")")) {
+			continue
+		}
+		segs = append(segs, s)
+	}
+	return "/" + strings.Join(segs, "/")
+}
+
+// raMatchNextMatcher reports whether a Next.js matcher pattern covers url. It
+// matches on the literal prefix up to the first dynamic token (:param, *, regex)
+// so `/api/:path*` covers `/api/notes`.
+func raMatchNextMatcher(pattern, url string) bool {
+	prefix := pattern
+	if i := strings.IndexAny(pattern, ":*(?[{"); i >= 0 {
+		prefix = pattern[:i]
+	}
+	prefix = strings.TrimRight(prefix, "/")
+	if prefix == "" {
+		return true
+	}
+	return url == prefix || strings.HasPrefix(url, prefix+"/")
+}
+
+// raLoadConfig reads an optional .trishul.yml / .trishul.yaml at the scan root
+// and returns extra auth-helper substrings (JS and Py) and extra public path
+// segments. Unknown keys are ignored (this is a tolerant, additive read that
+// never fails the scan); projcfg owns the authoritative schema.
+func raLoadConfig(directory string) (extraJS, extraPy []string, extraSeg map[string]bool) {
+	for _, name := range []string{".trishul.yml", ".trishul.yaml"} {
+		data, err := os.ReadFile(filepath.Join(directory, name))
+		if err != nil {
+			continue
+		}
+		var cfg struct {
+			RouteAuth struct {
+				AuthHelpers    []string `yaml:"auth_helpers"`
+				JSAuthHelpers  []string `yaml:"js_auth_helpers"`
+				PyAuthHelpers  []string `yaml:"py_auth_helpers"`
+				PublicSegments []string `yaml:"public_segments"`
+			} `yaml:"routeauth"`
+		}
+		if yaml.Unmarshal(data, &cfg) != nil {
+			return nil, nil, nil
+		}
+		ra := cfg.RouteAuth
+		lower := func(in []string) []string {
+			var out []string
+			for _, s := range in {
+				if s = strings.ToLower(strings.TrimSpace(s)); s != "" {
+					out = append(out, s)
+				}
+			}
+			return out
+		}
+		shared := lower(ra.AuthHelpers)
+		extraJS = append(append([]string{}, shared...), lower(ra.JSAuthHelpers)...)
+		extraPy = append(append([]string{}, shared...), lower(ra.PyAuthHelpers)...)
+		if segs := lower(ra.PublicSegments); len(segs) > 0 {
+			extraSeg = map[string]bool{}
+			for _, s := range segs {
+				extraSeg[s] = true
+			}
+		}
+		return extraJS, extraPy, extraSeg
+	}
+	return nil, nil, nil
+}
+
 // ---- finding construction & helpers ----------------------------------------
 
 func raFinding(path string, line int, checkID, cwe, message, remediation string) map[string]interface{} {
@@ -426,14 +693,69 @@ func raFinding(path string, line int, checkID, cwe, message, remediation string)
 }
 
 // raPublicPath reports whether any path segment of rel or routePath marks the
-// route as intentionally public (health, login, webhook, static, …).
-func raPublicPath(rel, routePath string) bool {
+// route as intentionally public (health, login, webhook, static, …), including
+// any extra segments declared in .trishul.yml.
+func raPublicPath(rel, routePath string, extra map[string]bool) bool {
 	for _, tok := range raSegments(rel + "/" + routePath) {
-		if raPublicSegments[tok] {
+		if raPublicSegments[tok] || extra[tok] {
 			return true
 		}
 	}
 	return false
+}
+
+// raWebhookSigTokens are substrings that indicate the handler verifies an
+// inbound webhook's provider signature. Such a handler authenticates its caller
+// (the provider) and is public-by-design, so it must not be flagged for missing
+// user authorization. Kept specific to avoid matching unrelated crypto code.
+var raWebhookSigTokens = []string{
+	"constructevent", "stripe-signature", "x-hub-signature", "x-signature-",
+	"svix", "svix-signature", "verifysignature", "verify_signature",
+	"verifywebhook", "verify_webhook", "webhook.verify", "wh.verify",
+	"checksignature", "x-slack-signature", "x-shopify-hmac", "x-twilio-signature",
+	"verifyhmac", "verify_hmac",
+}
+
+// raSignedWebhook reports whether a handler body verifies an inbound webhook
+// signature (lowerBody is the already-lowercased handler text).
+func raSignedWebhook(lowerBody string) bool {
+	return raContainsAny(lowerBody, raWebhookSigTokens)
+}
+
+// raIDRequestRead reports whether the handler actually consumes a
+// request-supplied id. A direct body reference (req.params.id,
+// searchParams.get('id'), params['id'], …) always counts. When the id is only
+// evident from a dynamic path segment, we additionally require the handler body
+// to mention that specific parameter name, so a route that merely lives under
+// an [id] segment but never uses it is not mistaken for an id lookup (a
+// VIBE-AUTHZ-002 false positive).
+func raIDRequestRead(body, rel, routePath string) bool {
+	if raReIDBody.MatchString(body) {
+		return true
+	}
+	lower := strings.ToLower(body)
+	for _, name := range raPathIDNames(rel, routePath) {
+		if name != "" && strings.Contains(lower, name) {
+			return true
+		}
+	}
+	return false
+}
+
+// raPathIDNames extracts the id parameter names from dynamic path segments
+// (e.g. [orderId], {order_id}, :userId) across the given path strings.
+func raPathIDNames(parts ...string) []string {
+	var out []string
+	for _, p := range parts {
+		for _, m := range raReIDName.FindAllStringSubmatch(p, -1) {
+			for _, g := range m[1:] {
+				if g != "" {
+					out = append(out, strings.ToLower(g))
+				}
+			}
+		}
+	}
+	return out
 }
 
 func raSegments(s string) []string {
