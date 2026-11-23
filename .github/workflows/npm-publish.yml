@@ -1,0 +1,88 @@
+name: npm publish (trishul-cli)
+
+# Publishes the `trishul-cli` npm package and its 5 platform packages when a
+# GitHub Release is published. This is OPTIONAL and GATED: it is a no-op unless
+# the repository has an NPM_TOKEN secret. The release itself is never affected
+# by this workflow — a missing token simply skips publishing.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  # The `secrets` context cannot be used in a job-level `if`, so a tiny gate job
+  # reads the secret into a step output (env CAN reference secrets) and the real
+  # job depends on it. This guarantees a clean skip when the token is absent.
+  gate:
+    runs-on: ubuntu-latest
+    outputs:
+      enabled: ${{ steps.check.outputs.enabled }}
+    steps:
+      - id: check
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -n "$NPM_TOKEN" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            echo "NPM_TOKEN present: npm publish will run."
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "NPM_TOKEN absent: skipping npm publish (release unaffected)."
+          fi
+
+  publish:
+    needs: gate
+    if: needs.gate.outputs.enabled == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # required for npm provenance
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # goreleaser needs tags/history for versioning
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      # Build the full cross-platform binary matrix (no publishing to GitHub).
+      - name: Build binaries (goreleaser)
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: latest
+          args: build --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate npm platform packages
+        run: node scripts/npm/build-packages.mjs --dist dist --out packages/npm/dist-platform
+        env:
+          GITHUB_REF_NAME: ${{ github.event.release.tag_name || github.ref_name }}
+
+      - name: Publish platform packages
+        run: |
+          set -euo pipefail
+          for dir in packages/npm/dist-platform/*/; do
+            echo "Publishing $dir"
+            ( cd "$dir" && npm publish --provenance --access public )
+          done
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish root package
+        run: npm publish --provenance --access public
+        working-directory: packages/npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
