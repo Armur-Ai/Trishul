@@ -1,0 +1,54 @@
+name: Rule docs
+
+# Publishes the generated per-rule documentation (docs/rules/, from the catalog)
+# to GitHub Pages — the user's own repo, static files only, no Trishul server.
+# This is long-tail SEO ("fix CWE-X in Next.js") and a stable link target for the
+# SARIF helpUri / PR comments. Enabling Pages for the repo is a one-time owner
+# action (D-HUMAN); until then this builds the site as an artifact without
+# deploying.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'rules/**'
+      - 'cmd/trishul-rulesdoc/**'
+      - 'internal/rules/**'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: rules-pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+      - name: Regenerate rule docs
+        run: go run ./cmd/trishul-rulesdoc --rules rules --out site
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    # Deploy only when Pages is enabled for the repo (owner action). The job is
+    # allowed to fail softly so a Pages-not-enabled repo doesn't fail CI.
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
