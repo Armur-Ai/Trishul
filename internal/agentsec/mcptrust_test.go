@@ -19,6 +19,12 @@ func mcpWrite(t *testing.T, dir, rel, content string) {
 	}
 }
 
+// jsonStr renders s as a JSON string literal (quoted, escaped) for embedding.
+func jsonStr(s string) string {
+	b, _ := json.Marshal(s)
+	return string(b)
+}
+
 func mcpHas(fs []AgentFinding, checkID string) *AgentFinding {
 	for i := range fs {
 		if fs[i].CheckID == checkID {
@@ -156,6 +162,118 @@ func TestScanMCPTrust_NonMCPJSONIgnored(t *testing.T) {
 	}
 }
 
+func TestScanMCPTrust_MCP005_InsecureRemoteFlagged(t *testing.T) {
+	cases := map[string]struct {
+		server  string
+		wantCWE string
+	}{
+		"http-remote":         {`{"type":"http","url":"http://mcp.example.com/sse"}`, "CWE-319"},
+		"token-in-url-https":  {`{"type":"http","url":"https://mcp.example.com/sse?token=abc123def456"}`, "CWE-598"},
+		"apikey-in-url":       {`{"type":"http","url":"https://mcp.example.com/sse?api_key=abc123def456"}`, "CWE-598"},
+		"http-url-in-command": {`{"command":"mcp-proxy","args":["http://mcp.example.com/sse"]}`, "CWE-319"},
+	}
+	for name, tc := range cases {
+		dir := t.TempDir()
+		mcpWrite(t, dir, ".mcp.json", `{"mcpServers":{"`+name+`":`+tc.server+`}}`)
+		fs, err := scanMCPTrust(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		f := mcpHas(fs, "AGENT-MCP-005")
+		if f == nil {
+			t.Fatalf("%s: expected AGENT-MCP-005, got %+v", name, fs)
+		}
+		if f.CWE != tc.wantCWE {
+			t.Errorf("%s: CWE = %q, want %q", name, f.CWE, tc.wantCWE)
+		}
+		// A concrete MCP-005 finding suppresses the MCP-004 review prompt.
+		if mcpHas(fs, "AGENT-MCP-004") != nil {
+			t.Errorf("%s: MCP-004 should not also fire alongside MCP-005", name)
+		}
+		// The token value must never leak into the evidence.
+		blob, _ := json.Marshal(fs)
+		if strings.Contains(string(blob), "abc123def456") {
+			t.Errorf("%s: URL token leaked into findings", name)
+		}
+	}
+}
+
+func TestScanMCPTrust_MCP005_SecureRemoteNotFlagged(t *testing.T) {
+	for name, server := range map[string]string{
+		"https-remote":   `{"type":"http","url":"https://mcp.example.com/sse"}`,
+		"http-loopback":  `{"type":"http","url":"http://localhost:8080/sse"}`,
+		"http-127":       `{"type":"http","url":"http://127.0.0.1:8080/sse"}`,
+		"http-ipv6-loop": `{"type":"http","url":"http://[::1]:8080/sse"}`,
+	} {
+		dir := t.TempDir()
+		mcpWrite(t, dir, ".mcp.json", `{"mcpServers":{"`+name+`":`+server+`}}`)
+		fs, err := scanMCPTrust(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if f := mcpHas(fs, "AGENT-MCP-005"); f != nil {
+			t.Errorf("%s: secure/loopback transport should not raise AGENT-MCP-005, got %+v", name, f)
+		}
+	}
+}
+
+func TestScanMCPTrust_MCP003_PlaceholdersNotFlagged(t *testing.T) {
+	placeholders := map[string]string{
+		"your_upper":  "YOUR_API_KEY_HERE",
+		"your_dash":   "your-token-here",
+		"angle":       "<your-token>",
+		"xxx":         "xxx",
+		"changeme":    "changeme",
+		"env_ref":     "${GITHUB_TOKEN}",
+		"env_dollar":  "$GITHUB_TOKEN",
+		"placeholder": "PLACEHOLDER",
+	}
+	for name, val := range placeholders {
+		dir := t.TempDir()
+		mcpWrite(t, dir, ".mcp.json", `{"mcpServers":{"s":{"command":"local","env":{"GITHUB_TOKEN":`+jsonStr(val)+`}}}}`)
+		fs, err := scanMCPTrust(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if f := mcpHas(fs, "AGENT-MCP-003"); f != nil {
+			t.Errorf("%s (%q): placeholder should not raise AGENT-MCP-003, got %+v", name, val, f)
+		}
+	}
+}
+
+func TestScanMCPTrust_MCP003_RealSecretFlagged(t *testing.T) {
+	dir := t.TempDir()
+	mcpWrite(t, dir, ".mcp.json", `{"mcpServers":{"s":{"command":"local","env":{"GITHUB_TOKEN":`+jsonStr(mcpPlantedSecret)+`}}}}`)
+	fs, err := scanMCPTrust(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if mcpHas(fs, "AGENT-MCP-003") == nil {
+		t.Fatalf("a real embedded secret must raise AGENT-MCP-003, got %+v", fs)
+	}
+}
+
+func TestScanMCPTrust_MCP003_ExampleAndDocsAndGoldenNotFlagged(t *testing.T) {
+	body := `{"mcpServers":{"s":{"command":"local","env":{"GITHUB_TOKEN":` + jsonStr(mcpPlantedSecret) + `}}}}`
+	for _, rel := range []string{
+		"mcp.example.json",
+		"config.sample.json",
+		"docs/setup/.mcp.json",
+		"internal/foo/testdata/golden/mcp.json",
+		"snapshots/mcp.json",
+	} {
+		dir := t.TempDir()
+		mcpWrite(t, dir, rel, body)
+		fs, err := scanMCPTrust(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if f := mcpHas(fs, "AGENT-MCP-003"); f != nil {
+			t.Errorf("%s: secret in example/docs/golden must not raise AGENT-MCP-003, got %+v", rel, f)
+		}
+	}
+}
+
 func TestMcpIsPinned(t *testing.T) {
 	cases := map[string]bool{
 		"@scope/pkg@1.2.3": true,
@@ -165,10 +283,70 @@ func TestMcpIsPinned(t *testing.T) {
 		"pkg":              false,
 		"pkg@latest":       false,
 		"@scope/pkg@next":  false,
+
+		// P3.6: additional pinned forms must be treated as PINNED.
+		"pkg==1.2.3":                         true, // pip-style double-equals
+		"./local/path":                       true, // relative local path
+		"/abs/path/to/server":                true, // absolute local path
+		"~/vendor/server":                    true, // home-rooted path
+		"dist/server-1.0.0-py3-none-any.whl": true, // wheel file
+		"${VAR}/vendor/thing-1.0.whl":        true, // env-var-rooted wheel glob
+		"$HOME/vendor/pkg.tar.gz":            true, // env-var-rooted sdist
+		"git+https://github.com/a/b@0123abcdef0123abcdef0123abcdef0123abcdef": true, // git ref/sha
+		"ghcr.io/org/image@sha256:" + strings.Repeat("a", 64):                 true, // docker digest
+
+		// still unpinned.
+		"pkg==":                      false, // double-equals with no version
+		"git+https://github.com/a/b": false, // git with no ref
+		"@scope/pkg@canary":          false, // floating tag
 	}
 	for in, want := range cases {
 		if got := mcpIsPinned(in); got != want {
 			t.Errorf("mcpIsPinned(%q) = %v, want %v", in, got, want)
+		}
+	}
+}
+
+func TestScanMCPTrust_MCP001_PinnedFormsClean(t *testing.T) {
+	// Each of these pinned/local forms must NOT raise AGENT-MCP-001.
+	pinned := map[string]string{
+		"npx-exact":      `{"command":"npx","args":["-y","pkg@1.2.3"]}`,
+		"npx-pipeq":      `{"command":"npx","args":["-y","pkg==1.2.3"]}`,
+		"uvx-from-wheel": `{"command":"uvx","args":["--from","${VAR}/vendor/server-1.0.whl","server"]}`,
+		"uvx-from-local": `{"command":"uvx","args":["--from","./local/server","server"]}`,
+		"uvx-git-sha":    `{"command":"uvx","args":["git+https://github.com/a/b@` + strings.Repeat("a", 40) + `"]}`,
+		"docker-digest":  `{"command":"uvx","args":["ghcr.io/org/img@sha256:` + strings.Repeat("a", 64) + `"]}`,
+	}
+	for name, server := range pinned {
+		dir := t.TempDir()
+		mcpWrite(t, dir, ".mcp.json", `{"mcpServers":{"`+name+`":`+server+`}}`)
+		fs, err := scanMCPTrust(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if f := mcpHas(fs, "AGENT-MCP-001"); f != nil {
+			t.Errorf("%s: pinned form should not raise AGENT-MCP-001, got %+v", name, f)
+		}
+	}
+}
+
+func TestScanMCPTrust_MCP001_FloatingFlagged(t *testing.T) {
+	floating := map[string]string{
+		"npx-latest":  `{"command":"npx","args":["-y","pkg@latest"]}`,
+		"npx-nover":   `{"command":"npx","args":["-y","@acme/server"]}`,
+		"uvx-nover":   `{"command":"uvx","args":["some-server"]}`,
+		"uvx-float":   `{"command":"uvx","args":["--from","some-server","server"]}`,
+		"bunx-canary": `{"command":"bunx","args":["pkg@canary"]}`,
+	}
+	for name, server := range floating {
+		dir := t.TempDir()
+		mcpWrite(t, dir, ".mcp.json", `{"mcpServers":{"`+name+`":`+server+`}}`)
+		fs, err := scanMCPTrust(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if mcpHas(fs, "AGENT-MCP-001") == nil {
+			t.Errorf("%s: floating/unpinned runner should raise AGENT-MCP-001, got %+v", name, fs)
 		}
 	}
 }

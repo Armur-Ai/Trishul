@@ -336,6 +336,30 @@ rules:
         "command": "local-mcp-server", "args": []
     mode_default: monitor
 
+  - id: AGENT-MCP-005
+    title: MCP server uses an insecure remote transport
+    short: A remote MCP server uses plaintext http:// or a token embedded in its URL.
+    description: |
+      A remote MCP server is reached over plaintext http:// to a non-loopback host (exposed
+      to on-path tampering of the tools the agent trusts), or a credential is carried in the
+      server URL's query string (where it leaks into logs, shell history, and proxies). A
+      token in the URL is flagged regardless of scheme or host; loopback http:// is not.
+    default_severity: HIGH
+    default_confidence: 0.9
+    maturity: stable
+    languages: [json]
+    file_kinds: [config, agent-surface]
+    cwe: [CWE-319, CWE-598]
+    owasp: [A02]
+    references: []
+    fix: Use https:// to a non-loopback host and pass credentials via headers or env, never in the URL.
+    examples:
+      bad: |
+        "url": "http://mcp.example.com/sse?token=abc123"
+      good: |
+        "url": "https://mcp.example.com/sse"
+    mode_default: block
+
   # --- Component 6: encoded-content & obfuscation (encoded.go) ---
   - id: AGENT-OBFS-001
     title: Hidden or bidirectional Unicode concealing text

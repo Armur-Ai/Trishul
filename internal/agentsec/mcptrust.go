@@ -21,6 +21,7 @@ import (
 //	AGENT-MCP-002  server fetches + runs remote code (curl|wget to shell / URL arg)
 //	AGENT-MCP-003  secret embedded in MCP config (reported REDACTED only)
 //	AGENT-MCP-004  newly-configured server — review its trust (baseline)
+//	AGENT-MCP-005  insecure remote transport (plaintext http:// or token in URL)
 func init() { register(scanMCPTrust) }
 
 const (
@@ -172,8 +173,10 @@ func mcpInspectServer(file string, lines []string, name string, raw json.RawMess
 		})
 	}
 
-	// AGENT-MCP-003: embedded secrets (reported REDACTED only).
-	for _, s := range mcpFindSecrets(raw) {
+	// AGENT-MCP-003: embedded secrets (reported REDACTED only). Example configs,
+	// docs, and golden test snapshots carry deliberately fake credentials, so a
+	// secret in one of those is not a real leak.
+	for _, s := range mcpFindSecretsIn(file, raw) {
 		line := mcpLine(lines, nameLine, fmt.Sprintf("%q", s.lastKey))
 		out = append(out, AgentFinding{
 			CheckID:          "AGENT-MCP-003",
@@ -191,6 +194,31 @@ func mcpInspectServer(file string, lines []string, name string, raw json.RawMess
 			Remediation:      "move the secret to an environment variable / secret store; rotate the exposed value",
 			CWE:              "CWE-798",
 		})
+	}
+
+	// AGENT-MCP-005: insecure remote transport. A remote server reached over
+	// plaintext http:// (non-loopback) is exposed to on-path tampering, and a
+	// credential carried in the URL query leaks into logs, history, and proxies.
+	for _, u := range mcpURLs(def, tokens) {
+		if reason, cwe, ok := mcpInsecureURL(u); ok {
+			out = append(out, AgentFinding{
+				CheckID:          "AGENT-MCP-005",
+				Title:            "MCP server uses an insecure remote transport",
+				Severity:         "HIGH",
+				Confidence:       "HIGH",
+				EntryPoint:       file,
+				TrustBoundary:    mcpTrustBoundary,
+				AffectedWorkflow: mcpWorkflow,
+				EnabledAction:    reason,
+				File:             file,
+				Line:             nameLine,
+				Evidence:         []string{mcpTrim(fmt.Sprintf("%s: %s", name, mcpScrubURL(u)))},
+				Limitations:      "static read of config; the server is not contacted",
+				Remediation:      "use https:// to a non-loopback host and pass credentials via headers / env, never in the URL",
+				CWE:              cwe,
+			})
+			break // one transport finding per server is enough
+		}
 	}
 
 	// AGENT-MCP-004: baseline trust review. A passive dir scan cannot see a PR
@@ -238,6 +266,82 @@ func mcpIsRemote(def mcpServer, tokens []string) bool {
 	return false
 }
 
+// mcpURLTokenRe matches a credential carried in a URL query string, e.g.
+// `?token=...` or `&api_key=...`.
+var mcpURLTokenRe = regexp.MustCompile(`(?i)[?&](api[_-]?key|access[_-]?token|auth[_-]?token|session[_-]?token|token|secret|password|passwd|apikey|auth|bearer|sig|signature)=[^&#\s"']+`)
+
+// mcpURLs collects every URL the server reaches: the `url` transport plus any
+// http(s) URL embedded in the launch command/args.
+func mcpURLs(def mcpServer, tokens []string) []string {
+	var urls []string
+	if u := strings.TrimSpace(def.URL); u != "" {
+		urls = append(urls, u)
+	}
+	for _, t := range tokens {
+		lt := strings.ToLower(t)
+		if strings.Contains(lt, "http://") || strings.Contains(lt, "https://") {
+			urls = append(urls, strings.TrimSpace(t))
+		}
+	}
+	return urls
+}
+
+// mcpInsecureURL reports (reason, cwe, true) when a URL embeds a credential in
+// its query, or uses plaintext http:// to a non-loopback host. A token in the
+// URL is flagged regardless of scheme or host; loopback http:// is not flagged.
+func mcpInsecureURL(u string) (string, string, bool) {
+	if mcpURLTokenRe.MatchString(u) {
+		return "a credential is embedded in the server URL query string, where it leaks into logs and history", "CWE-598", true
+	}
+	if strings.HasPrefix(strings.ToLower(strings.TrimSpace(u)), "http://") && !mcpIsLoopbackHost(mcpURLHost(u)) {
+		return "the agent connects to this remote server over plaintext http://, exposed to on-path tampering", "CWE-319", true
+	}
+	return "", "", false
+}
+
+// mcpURLHost extracts the lowercased host (no scheme, creds, port, or path).
+func mcpURLHost(u string) string {
+	s := strings.TrimSpace(u)
+	if i := strings.Index(s, "://"); i >= 0 {
+		s = s[i+3:]
+	}
+	if i := strings.LastIndex(s, "@"); i >= 0 {
+		s = s[i+1:] // strip user:pass@
+	}
+	if i := strings.IndexAny(s, "/?#"); i >= 0 {
+		s = s[:i]
+	}
+	if strings.HasPrefix(s, "[") { // IPv6 literal, e.g. [::1]:8080
+		if j := strings.Index(s, "]"); j >= 0 {
+			return strings.ToLower(s[1:j])
+		}
+	}
+	if i := strings.LastIndex(s, ":"); i >= 0 {
+		s = s[:i] // strip port
+	}
+	return strings.ToLower(s)
+}
+
+// mcpIsLoopbackHost reports whether host is a local loopback address.
+func mcpIsLoopbackHost(host string) bool {
+	switch host {
+	case "localhost", "127.0.0.1", "::1", "0.0.0.0":
+		return true
+	}
+	return strings.HasPrefix(host, "127.") || strings.HasSuffix(host, ".localhost")
+}
+
+// mcpScrubURL redacts a credential value in a URL query so the evidence string
+// never carries the live secret.
+func mcpScrubURL(u string) string {
+	return mcpTrim(mcpURLTokenRe.ReplaceAllStringFunc(u, func(m string) string {
+		if i := strings.Index(m, "="); i >= 0 {
+			return m[:i+1] + "[REDACTED]"
+		}
+		return m
+	}))
+}
+
 // mcpUnpinnedRunner reports (runner, package, true) when the server is launched
 // with an auto-installing runner (npx -y/--yes, uvx, bunx, pnpx) at a floating
 // (unpinned) version.
@@ -252,7 +356,13 @@ func mcpUnpinnedRunner(prog string, tokens []string) (string, string, bool) {
 	default:
 		return "", "", false
 	}
+	// `--from <source>` (uvx/pip) selects the actual install source; when it is
+	// present it, not the trailing entry-point name, determines whether the
+	// install is pinned.
 	pkg := mcpPackageArg(tokens)
+	if src, ok := mcpFromArg(tokens); ok {
+		pkg = src
+	}
 	if pkg == "" || mcpIsPinned(pkg) {
 		return "", "", false
 	}
@@ -271,16 +381,63 @@ func mcpPackageArg(tokens []string) string {
 	return ""
 }
 
-// mcpIsPinned reports whether a package spec carries a concrete version pin.
-// Floating tags (latest/next/beta/...) count as unpinned.
+// mcpFromArg returns the value of a `--from <value>` (or `--from=<value>`) flag,
+// used by uvx/pip to install from a specific source (local path, wheel, git ref).
+func mcpFromArg(tokens []string) (string, bool) {
+	for i, t := range tokens {
+		if t == "--from" && i+1 < len(tokens) {
+			return tokens[i+1], true
+		}
+		if v, ok := strings.CutPrefix(t, "--from="); ok {
+			return v, true
+		}
+	}
+	return "", false
+}
+
+// mcpIsPinned reports whether a package spec carries a concrete, non-floating
+// pin. Besides an npm-style `@version`, it recognizes the other forms that name
+// an exact artifact: pip `pkg==1.2.3`, a local path or wheel/sdist file,
+// `git+<url>@<ref>`, and a docker `image@sha256:<digest>`. Only `@latest`,
+// floating tags, and a missing version count as unpinned.
 func mcpIsPinned(pkg string) bool {
-	s := pkg
+	s := strings.TrimSpace(pkg)
+	if s == "" {
+		return false
+	}
+	// A local filesystem source (path, wheel/sdist, env-var-rooted or glob path)
+	// is a concrete artifact, not a floating registry fetch.
+	if mcpIsLocalSource(s) {
+		return true
+	}
+	// git+<url>@<ref>: pinned when it carries a ref/sha after the repo path. The
+	// `@` must come after the last `/` so `git@host` creds do not count.
+	if strings.HasPrefix(strings.ToLower(s), "git+") {
+		slash := strings.LastIndex(s, "/")
+		at := strings.LastIndex(s, "@")
+		return at > slash && at < len(s)-1
+	}
+	// docker digest pin: image@sha256:<hex>.
+	if strings.Contains(s, "@sha256:") {
+		return true
+	}
+	// pip-style double-equals pin: pkg==1.2.3.
+	if i := strings.Index(s, "=="); i >= 0 {
+		return mcpConcreteVersion(s[i+2:])
+	}
+	// npm-style @version pin.
 	s = strings.TrimPrefix(s, "@") // scoped package: skip the scope separator
 	at := strings.Index(s, "@")
 	if at < 0 {
 		return false
 	}
-	ver := strings.ToLower(s[at+1:])
+	return mcpConcreteVersion(s[at+1:])
+}
+
+// mcpConcreteVersion reports whether ver is a concrete version (starts with a
+// digit, optionally behind a v/^/~/range prefix) rather than a floating tag.
+func mcpConcreteVersion(ver string) bool {
+	ver = strings.ToLower(strings.TrimSpace(ver))
 	if ver == "" {
 		return false
 	}
@@ -288,9 +445,24 @@ func mcpIsPinned(pkg string) bool {
 	case "latest", "next", "beta", "canary", "alpha", "rc", "dev", "nightly":
 		return false
 	}
-	// A concrete version starts with a digit or a leading v/^/~ + digit.
 	ver = strings.TrimLeft(ver, "v^~>=< ")
 	return len(ver) > 0 && ver[0] >= '0' && ver[0] <= '9'
+}
+
+// mcpIsLocalSource reports whether a spec points at a concrete local artifact: a
+// wheel/sdist file, or a filesystem path (absolute, relative, home-rooted, or
+// env-var/glob-rooted such as ${VAR}/vendor/*.whl).
+func mcpIsLocalSource(s string) bool {
+	ls := strings.ToLower(s)
+	if strings.HasSuffix(ls, ".whl") || strings.HasSuffix(ls, ".tar.gz") || strings.HasSuffix(ls, ".tgz") || strings.HasSuffix(ls, ".zip") {
+		return true
+	}
+	switch {
+	case strings.HasPrefix(s, "/"), strings.HasPrefix(s, "./"), strings.HasPrefix(s, "../"),
+		strings.HasPrefix(s, "~"), strings.HasPrefix(s, "$"):
+		return true
+	}
+	return false
 }
 
 type mcpSecret struct {
@@ -298,6 +470,15 @@ type mcpSecret struct {
 	lastKey    string
 	value      string
 	confidence string
+}
+
+// mcpFindSecretsIn walks the server definition and returns embedded credentials,
+// unless the file is an example/docs/golden snapshot whose "secrets" are fake.
+func mcpFindSecretsIn(file string, raw json.RawMessage) []mcpSecret {
+	if mcpIsExampleConfig(file) {
+		return nil
+	}
+	return mcpFindSecrets(raw)
 }
 
 // mcpFindSecrets walks the server definition and returns embedded credentials.
@@ -309,6 +490,28 @@ func mcpFindSecrets(raw json.RawMessage) []mcpSecret {
 	var found []mcpSecret
 	mcpWalkSecrets("", "", v, &found)
 	return found
+}
+
+// mcpIsExampleConfig reports whether a path holds documentation or fixture
+// credentials rather than a live config: an `*.example.json`/`*.sample.json`
+// file, anything under a docs/ directory, or a golden test snapshot.
+func mcpIsExampleConfig(file string) bool {
+	f := strings.ToLower(filepath.ToSlash(file))
+	base := strings.ToLower(filepath.Base(file))
+	if strings.Contains(base, ".example.") || strings.Contains(base, ".sample.") ||
+		strings.HasSuffix(base, ".example") || strings.HasSuffix(base, ".sample") {
+		return true
+	}
+	if strings.Contains(f, "golden") || strings.Contains(f, "snapshot") || strings.Contains(f, "__snapshots__") {
+		return true
+	}
+	for _, seg := range strings.Split(f, "/") {
+		switch seg {
+		case "docs", "example", "examples":
+			return true
+		}
+	}
+	return false
 }
 
 func mcpWalkSecrets(path, key string, v interface{}, found *[]mcpSecret) {
@@ -361,7 +564,11 @@ func mcpIsPlaceholder(val string) bool {
 		return true // <your-token-here>
 	}
 	lower := strings.ToLower(v)
-	for _, p := range []string{"changeme", "example", "redacted", "placeholder", "your-", "xxxx", "****"} {
+	// YOUR_TOKEN / your-token-here and similar fill-me-in markers.
+	if strings.HasPrefix(lower, "your") {
+		return true
+	}
+	for _, p := range []string{"changeme", "example", "redacted", "placeholder", "your-", "your_", "xxx", "****"} {
 		if strings.Contains(lower, p) {
 			return true
 		}
