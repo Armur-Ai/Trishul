@@ -21,6 +21,7 @@ import (
 //	AGENT-MCP-002  server fetches + runs remote code (curl|wget to shell / URL arg)
 //	AGENT-MCP-003  secret embedded in MCP config (reported REDACTED only)
 //	AGENT-MCP-004  newly-configured server — review its trust (baseline)
+//	AGENT-MCP-005  insecure remote transport (plaintext http:// or token in URL)
 func init() { register(scanMCPTrust) }
 
 const (
@@ -195,6 +196,31 @@ func mcpInspectServer(file string, lines []string, name string, raw json.RawMess
 		})
 	}
 
+	// AGENT-MCP-005: insecure remote transport. A remote server reached over
+	// plaintext http:// (non-loopback) is exposed to on-path tampering, and a
+	// credential carried in the URL query leaks into logs, history, and proxies.
+	for _, u := range mcpURLs(def, tokens) {
+		if reason, cwe, ok := mcpInsecureURL(u); ok {
+			out = append(out, AgentFinding{
+				CheckID:          "AGENT-MCP-005",
+				Title:            "MCP server uses an insecure remote transport",
+				Severity:         "HIGH",
+				Confidence:       "HIGH",
+				EntryPoint:       file,
+				TrustBoundary:    mcpTrustBoundary,
+				AffectedWorkflow: mcpWorkflow,
+				EnabledAction:    reason,
+				File:             file,
+				Line:             nameLine,
+				Evidence:         []string{mcpTrim(fmt.Sprintf("%s: %s", name, mcpScrubURL(u)))},
+				Limitations:      "static read of config; the server is not contacted",
+				Remediation:      "use https:// to a non-loopback host and pass credentials via headers / env, never in the URL",
+				CWE:              cwe,
+			})
+			break // one transport finding per server is enough
+		}
+	}
+
 	// AGENT-MCP-004: baseline trust review. A passive dir scan cannot see a PR
 	// diff, so it cannot prove a server is "newly added"; it instead surfaces the
 	// servers that most warrant a trust review and that the specific checks above
@@ -238,6 +264,82 @@ func mcpIsRemote(def mcpServer, tokens []string) bool {
 		}
 	}
 	return false
+}
+
+// mcpURLTokenRe matches a credential carried in a URL query string, e.g.
+// `?token=...` or `&api_key=...`.
+var mcpURLTokenRe = regexp.MustCompile(`(?i)[?&](api[_-]?key|access[_-]?token|auth[_-]?token|session[_-]?token|token|secret|password|passwd|apikey|auth|bearer|sig|signature)=[^&#\s"']+`)
+
+// mcpURLs collects every URL the server reaches: the `url` transport plus any
+// http(s) URL embedded in the launch command/args.
+func mcpURLs(def mcpServer, tokens []string) []string {
+	var urls []string
+	if u := strings.TrimSpace(def.URL); u != "" {
+		urls = append(urls, u)
+	}
+	for _, t := range tokens {
+		lt := strings.ToLower(t)
+		if strings.Contains(lt, "http://") || strings.Contains(lt, "https://") {
+			urls = append(urls, strings.TrimSpace(t))
+		}
+	}
+	return urls
+}
+
+// mcpInsecureURL reports (reason, cwe, true) when a URL embeds a credential in
+// its query, or uses plaintext http:// to a non-loopback host. A token in the
+// URL is flagged regardless of scheme or host; loopback http:// is not flagged.
+func mcpInsecureURL(u string) (string, string, bool) {
+	if mcpURLTokenRe.MatchString(u) {
+		return "a credential is embedded in the server URL query string, where it leaks into logs and history", "CWE-598", true
+	}
+	if strings.HasPrefix(strings.ToLower(strings.TrimSpace(u)), "http://") && !mcpIsLoopbackHost(mcpURLHost(u)) {
+		return "the agent connects to this remote server over plaintext http://, exposed to on-path tampering", "CWE-319", true
+	}
+	return "", "", false
+}
+
+// mcpURLHost extracts the lowercased host (no scheme, creds, port, or path).
+func mcpURLHost(u string) string {
+	s := strings.TrimSpace(u)
+	if i := strings.Index(s, "://"); i >= 0 {
+		s = s[i+3:]
+	}
+	if i := strings.LastIndex(s, "@"); i >= 0 {
+		s = s[i+1:] // strip user:pass@
+	}
+	if i := strings.IndexAny(s, "/?#"); i >= 0 {
+		s = s[:i]
+	}
+	if strings.HasPrefix(s, "[") { // IPv6 literal, e.g. [::1]:8080
+		if j := strings.Index(s, "]"); j >= 0 {
+			return strings.ToLower(s[1:j])
+		}
+	}
+	if i := strings.LastIndex(s, ":"); i >= 0 {
+		s = s[:i] // strip port
+	}
+	return strings.ToLower(s)
+}
+
+// mcpIsLoopbackHost reports whether host is a local loopback address.
+func mcpIsLoopbackHost(host string) bool {
+	switch host {
+	case "localhost", "127.0.0.1", "::1", "0.0.0.0":
+		return true
+	}
+	return strings.HasPrefix(host, "127.") || strings.HasSuffix(host, ".localhost")
+}
+
+// mcpScrubURL redacts a credential value in a URL query so the evidence string
+// never carries the live secret.
+func mcpScrubURL(u string) string {
+	return mcpTrim(mcpURLTokenRe.ReplaceAllStringFunc(u, func(m string) string {
+		if i := strings.Index(m, "="); i >= 0 {
+			return m[:i+1] + "[REDACTED]"
+		}
+		return m
+	}))
 }
 
 // mcpUnpinnedRunner reports (runner, package, true) when the server is launched

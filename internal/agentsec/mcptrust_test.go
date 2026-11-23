@@ -162,6 +162,61 @@ func TestScanMCPTrust_NonMCPJSONIgnored(t *testing.T) {
 	}
 }
 
+func TestScanMCPTrust_MCP005_InsecureRemoteFlagged(t *testing.T) {
+	cases := map[string]struct {
+		server  string
+		wantCWE string
+	}{
+		"http-remote":         {`{"type":"http","url":"http://mcp.example.com/sse"}`, "CWE-319"},
+		"token-in-url-https":  {`{"type":"http","url":"https://mcp.example.com/sse?token=abc123def456"}`, "CWE-598"},
+		"apikey-in-url":       {`{"type":"http","url":"https://mcp.example.com/sse?api_key=abc123def456"}`, "CWE-598"},
+		"http-url-in-command": {`{"command":"mcp-proxy","args":["http://mcp.example.com/sse"]}`, "CWE-319"},
+	}
+	for name, tc := range cases {
+		dir := t.TempDir()
+		mcpWrite(t, dir, ".mcp.json", `{"mcpServers":{"`+name+`":`+tc.server+`}}`)
+		fs, err := scanMCPTrust(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		f := mcpHas(fs, "AGENT-MCP-005")
+		if f == nil {
+			t.Fatalf("%s: expected AGENT-MCP-005, got %+v", name, fs)
+		}
+		if f.CWE != tc.wantCWE {
+			t.Errorf("%s: CWE = %q, want %q", name, f.CWE, tc.wantCWE)
+		}
+		// A concrete MCP-005 finding suppresses the MCP-004 review prompt.
+		if mcpHas(fs, "AGENT-MCP-004") != nil {
+			t.Errorf("%s: MCP-004 should not also fire alongside MCP-005", name)
+		}
+		// The token value must never leak into the evidence.
+		blob, _ := json.Marshal(fs)
+		if strings.Contains(string(blob), "abc123def456") {
+			t.Errorf("%s: URL token leaked into findings", name)
+		}
+	}
+}
+
+func TestScanMCPTrust_MCP005_SecureRemoteNotFlagged(t *testing.T) {
+	for name, server := range map[string]string{
+		"https-remote":   `{"type":"http","url":"https://mcp.example.com/sse"}`,
+		"http-loopback":  `{"type":"http","url":"http://localhost:8080/sse"}`,
+		"http-127":       `{"type":"http","url":"http://127.0.0.1:8080/sse"}`,
+		"http-ipv6-loop": `{"type":"http","url":"http://[::1]:8080/sse"}`,
+	} {
+		dir := t.TempDir()
+		mcpWrite(t, dir, ".mcp.json", `{"mcpServers":{"`+name+`":`+server+`}}`)
+		fs, err := scanMCPTrust(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if f := mcpHas(fs, "AGENT-MCP-005"); f != nil {
+			t.Errorf("%s: secure/loopback transport should not raise AGENT-MCP-005, got %+v", name, f)
+		}
+	}
+}
+
 func TestScanMCPTrust_MCP003_PlaceholdersNotFlagged(t *testing.T) {
 	placeholders := map[string]string{
 		"your_upper":  "YOUR_API_KEY_HERE",
