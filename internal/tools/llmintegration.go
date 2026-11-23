@@ -100,6 +100,11 @@ var (
 	reLLMDangerous  = regexp.MustCompile(`(?i)dangerouslyAllowBrowser\s*:\s*true`)
 	reLLMApiKey     = regexp.MustCompile(`(?i)\bapi[_]?key\b`)
 
+	// Signals that a key is actually exposed to the browser bundle: a build-time
+	// public env var, or a hardcoded string-literal key.
+	reLLMPublicEnv    = regexp.MustCompile(`(?i)\b(?:NEXT_PUBLIC_|VITE_|REACT_APP_|EXPO_PUBLIC_|PUBLIC_)`)
+	reLLMHardcodedKey = regexp.MustCompile(`(?i)\bapi[_]?key\b\s*[:=]\s*['"][^'"]+['"]`)
+
 	// Keywords stripped from an assignment left-hand side when extracting the
 	// bound identifier(s).
 	llmLHSKeywords = map[string]bool{
@@ -339,7 +344,13 @@ func scanLLMClientKey(relPath, lowerExt string, lines []string) []map[string]int
 		hasKey := reLLMApiKey.MatchString(window)
 		hasDangerous := reLLMDangerous.MatchString(window)
 
-		clientSide := fileHasUseClient || pathClient || hasDangerous
+		// A client-ish file path alone is a weak signal (a .tsx under app/ is a
+		// server component by default and never ships its key to the browser),
+		// so it only counts when the key is demonstrably browser-exposed. An
+		// explicit "use client" directive or dangerouslyAllowBrowser:true is a
+		// strong, standalone signal.
+		browserExposedKey := reLLMPublicEnv.MatchString(window) || reLLMHardcodedKey.MatchString(window)
+		clientSide := fileHasUseClient || hasDangerous || (pathClient && browserExposedKey)
 		if hasKey && clientSide {
 			findings = append(findings, llmFinding(relPath, i+1, "CRITICAL", "VIBE-LLM-003",
 				"A provider (OpenAI/Anthropic) client is constructed with an API key in code that runs in the browser; the key is shipped to every visitor and can be stolen.",

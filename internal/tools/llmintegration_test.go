@@ -422,6 +422,46 @@ const messages = [{ role: "system", content: "You are helpful." }];
 	})
 }
 
+// VIBE-LLM-003 fires on a key that is actually browser-exposed, but not on a
+// server component or a server module that merely references an apiKey.
+func TestRunUnsafeLLMIntegration_ClientApiKey_FPTP(t *testing.T) {
+	t.Run("server component in app dir does not fire", func(t *testing.T) {
+		findings := runLLM(t, "app/page.tsx", `
+import OpenAI from "openai";
+
+export default async function Page() {
+  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  return <div/>;
+}
+`)
+		if f := findByCheckID(findings, "VIBE-LLM-003"); f != nil {
+			t.Fatalf("VIBE-LLM-003 should not fire for a server component; got %v", f)
+		}
+	})
+	t.Run("server module does not fire", func(t *testing.T) {
+		findings := runLLM(t, "lib/ai.ts", `
+import OpenAI from "openai";
+const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+`)
+		if f := findByCheckID(findings, "VIBE-LLM-003"); f != nil {
+			t.Fatalf("VIBE-LLM-003 should not fire for a server module; got %v", f)
+		}
+	})
+	t.Run("public env key in a client path fires", func(t *testing.T) {
+		findings := runLLM(t, "src/components/Widget.jsx", `
+import OpenAI from "openai";
+const client = new OpenAI({ apiKey: process.env.NEXT_PUBLIC_OPENAI_KEY });
+`)
+		f := findByCheckID(findings, "VIBE-LLM-003")
+		if f == nil {
+			t.Fatalf("expected VIBE-LLM-003 for a NEXT_PUBLIC key in a client component; got %v", findings)
+		}
+		if f["severity"] != "CRITICAL" {
+			t.Errorf("severity = %v, want CRITICAL", f["severity"])
+		}
+	})
+}
+
 func TestRunUnsafeLLMIntegration_Clean(t *testing.T) {
 	dir := t.TempDir()
 	writeLLMFile(t, dir, "safe.js", `
