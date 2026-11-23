@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/Armur-Ai/Trishul/internal/fileclass"
 	"github.com/Armur-Ai/Trishul/internal/logger"
 	"github.com/Armur-Ai/Trishul/internal/redact"
 	utils "github.com/Armur-Ai/Trishul/pkg"
@@ -210,6 +211,13 @@ func scanPlaceholderFile(relPath, content string, isTest bool) []map[string]inte
 	var findings []map[string]interface{}
 	lines := strings.Split(content, "\n")
 
+	// Classify the file once (path-only) so detectors can tune precision:
+	//   - credential rules (001/002) are suppressed in locale/i18n string tables,
+	//     which hold translated UI labels rather than real credentials;
+	//   - the disabled-verification rule (003) scales severity by code context.
+	kind := fileclass.ClassifyPath(relPath)
+	skipCreds := kind == fileclass.KindLocale
+
 	// Collected for file-level correlation (checks 002 and 004).
 	hasDefaultUser := false
 	var weakPassLines []int
@@ -236,10 +244,10 @@ func scanPlaceholderFile(relPath, content string, isTest bool) []map[string]inte
 		}
 
 		// 001 — hardcoded placeholder secret.
-		if !rePhEnvAccess.MatchString(line) {
+		if !skipCreds && !rePhEnvAccess.MatchString(line) {
 			if m := rePhSecret.FindStringSubmatch(line); m != nil {
 				name, value := m[1], m[2]
-				if weak, high := phIsWeakSecret(value); weak {
+				if weak, high := phIsWeakSecret(value); weak && !phIsDisplayLabel(name, value) {
 					conf := "HIGH"
 					if !high {
 						conf = "MEDIUM"
@@ -257,15 +265,17 @@ func scanPlaceholderFile(relPath, content string, isTest bool) []map[string]inte
 			}
 		}
 
-		// 002 — default-credential correlation inputs.
-		if !rePhEnvAccess.MatchString(line) {
+		// 002 — default-credential correlation inputs. Locale/i18n tables and
+		// display-label assignments (e.g. `password: 'Password'`, enum display
+		// names) are UI strings, not credentials, and are skipped.
+		if !skipCreds && !rePhEnvAccess.MatchString(line) {
 			if m := rePhUserField.FindStringSubmatch(line); m != nil {
-				if phDefaultUsers[strings.ToLower(m[2])] {
+				if phDefaultUsers[strings.ToLower(m[2])] && !phIsDisplayLabel(m[1], m[2]) {
 					hasDefaultUser = true
 				}
 			}
 			if m := rePhPassField.FindStringSubmatch(line); m != nil {
-				if phWeakPasswords[strings.ToLower(m[2])] {
+				if phWeakPasswords[strings.ToLower(m[2])] && !phIsDisplayLabel(m[1], m[2]) {
 					weakPassLines = append(weakPassLines, lineNo)
 				}
 			}
@@ -399,6 +409,32 @@ func phIsWeakSecret(v string) (weak bool, high bool) {
 		return true, false
 	}
 	return false, false
+}
+
+// phIsDisplayLabel reports whether value is a display label / translation of the
+// field name rather than a real credential. UI code and i18n tables routinely
+// assign a human-readable label to a field named after a credential, e.g.
+// `password: 'Password'`, `username: 'Username'`, `secret_key: 'Secret Key'`, or
+// enum display names. These are detected by comparing the alphanumeric cores of
+// the key and the value: a value that is just the field name re-cased (or spaced)
+// is a label, never a secret.
+func phIsDisplayLabel(name, value string) bool {
+	n := phAlnumLower(name)
+	v := phAlnumLower(value)
+	return n != "" && n == v
+}
+
+// phAlnumLower returns s lower-cased with every non-alphanumeric rune removed, so
+// "Secret Key" and "secret_key" both collapse to "secretkey".
+func phAlnumLower(s string) string {
+	var b strings.Builder
+	b.Grow(len(s))
+	for _, r := range strings.ToLower(s) {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
 }
 
 // phIsCommentLine reports whether a trimmed line is a comment.

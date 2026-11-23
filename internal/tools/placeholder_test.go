@@ -166,6 +166,39 @@ func TestPlaceholder_DefaultCredentials_Flagged(t *testing.T) {
 	}
 }
 
+func TestPlaceholder_DisplayLabels_NotFlagged(t *testing.T) {
+	dir := t.TempDir()
+	// A UI label / form-field table: the values are display strings (the field
+	// name re-cased), not credentials, and must not trip the default-credential
+	// rule even though "user"/"password" are otherwise default values.
+	phWrite(t, dir, "labels.js", "const labels = {\n"+
+		"  user: 'User',\n"+
+		"  username: 'Username',\n"+
+		"  password: 'Password',\n"+
+		"};\n")
+
+	findings := phFindings(t, mustRun(t, dir))
+	if got := phByCheck(findings, "VIBE-PLACEHOLDER-002"); len(got) != 0 {
+		t.Fatalf("display-label strings should not be flagged as default creds, got %+v", got)
+	}
+}
+
+func TestPlaceholder_LocaleStringsTable_NotFlagged(t *testing.T) {
+	dir := t.TempDir()
+	// An i18n / locale string table. Even values that look like default
+	// credentials are translation strings here, so the credential rules are
+	// suppressed for locale-classified files.
+	phWrite(t, dir, "locales/en.json", "{\n  \"username\": \"admin\",\n  \"password\": \"admin\"\n}\n")
+
+	findings := phFindings(t, mustRun(t, dir))
+	if got := phByCheck(findings, "VIBE-PLACEHOLDER-002"); len(got) != 0 {
+		t.Fatalf("locale string table should not be flagged as default creds, got %+v", got)
+	}
+	if got := phByCheck(findings, "VIBE-PLACEHOLDER-001"); len(got) != 0 {
+		t.Fatalf("locale string table should not be flagged for hardcoded secrets, got %+v", got)
+	}
+}
+
 func TestPlaceholder_DebugMode_FlaggedMedium(t *testing.T) {
 	dir := t.TempDir()
 	phWrite(t, dir, "settings.py", "DEBUG = True\n")
