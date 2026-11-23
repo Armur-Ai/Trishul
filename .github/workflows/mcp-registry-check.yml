@@ -1,0 +1,45 @@
+name: MCP Registry Check
+
+# Validates the MCP-registry listing artifacts (server.json, smithery.yaml) and
+# fails if the listing version drifts behind the release (actionVersion). This
+# only prepares/validates artifacts — it never publishes or contacts a registry.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'server.json'
+      - 'packaging/mcp-registry/**'
+      - 'cli/cmd/init_github.go'
+      - 'internal/mcpmeta/**'
+      - '.github/workflows/mcp-registry-check.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'server.json'
+      - 'packaging/mcp-registry/**'
+      - 'cli/cmd/init_github.go'
+      - 'internal/mcpmeta/**'
+      - '.github/workflows/mcp-registry-check.yml'
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+
+      # Offline Go test: parses server.json, asserts required fields + semver
+      # format, and fails if the version != actionVersion (cli/cmd/init_github.go).
+      - name: Validate listing + version sync
+        run: go test ./internal/mcpmeta/... -v
+
+      - name: server.json is valid JSON
+        run: python3 -c "import json; json.load(open('server.json'))"
+
+      - name: smithery.yaml is valid YAML
+        run: ruby -ryaml -e "YAML.safe_load(File.read('packaging/mcp-registry/smithery.yaml'))"
