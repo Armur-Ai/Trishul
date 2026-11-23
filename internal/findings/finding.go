@@ -92,6 +92,13 @@ type Finding struct {
 	Tags        []string    `json:"tags,omitempty"`
 
 	FingerprintV2 string `json:"fingerprint_v2,omitempty"`
+
+	// Presentation aggregates (set by the dedupe/grouping passes in P2.4):
+	// AlsoReportedBy names other analyzers that flagged the same spot; Count and
+	// GroupedLines describe a same-rule-in-one-file group collapsed to one row.
+	AlsoReportedBy []string `json:"also_reported_by,omitempty"`
+	Count          int      `json:"count,omitempty"`
+	GroupedLines   []int    `json:"grouped_lines,omitempty"`
 }
 
 // BandFor maps a numeric confidence to its coarse band. The thresholds match
