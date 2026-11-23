@@ -252,7 +252,13 @@ func mcpUnpinnedRunner(prog string, tokens []string) (string, string, bool) {
 	default:
 		return "", "", false
 	}
+	// `--from <source>` (uvx/pip) selects the actual install source; when it is
+	// present it, not the trailing entry-point name, determines whether the
+	// install is pinned.
 	pkg := mcpPackageArg(tokens)
+	if src, ok := mcpFromArg(tokens); ok {
+		pkg = src
+	}
 	if pkg == "" || mcpIsPinned(pkg) {
 		return "", "", false
 	}
@@ -271,16 +277,63 @@ func mcpPackageArg(tokens []string) string {
 	return ""
 }
 
-// mcpIsPinned reports whether a package spec carries a concrete version pin.
-// Floating tags (latest/next/beta/...) count as unpinned.
+// mcpFromArg returns the value of a `--from <value>` (or `--from=<value>`) flag,
+// used by uvx/pip to install from a specific source (local path, wheel, git ref).
+func mcpFromArg(tokens []string) (string, bool) {
+	for i, t := range tokens {
+		if t == "--from" && i+1 < len(tokens) {
+			return tokens[i+1], true
+		}
+		if v, ok := strings.CutPrefix(t, "--from="); ok {
+			return v, true
+		}
+	}
+	return "", false
+}
+
+// mcpIsPinned reports whether a package spec carries a concrete, non-floating
+// pin. Besides an npm-style `@version`, it recognizes the other forms that name
+// an exact artifact: pip `pkg==1.2.3`, a local path or wheel/sdist file,
+// `git+<url>@<ref>`, and a docker `image@sha256:<digest>`. Only `@latest`,
+// floating tags, and a missing version count as unpinned.
 func mcpIsPinned(pkg string) bool {
-	s := pkg
+	s := strings.TrimSpace(pkg)
+	if s == "" {
+		return false
+	}
+	// A local filesystem source (path, wheel/sdist, env-var-rooted or glob path)
+	// is a concrete artifact, not a floating registry fetch.
+	if mcpIsLocalSource(s) {
+		return true
+	}
+	// git+<url>@<ref>: pinned when it carries a ref/sha after the repo path. The
+	// `@` must come after the last `/` so `git@host` creds do not count.
+	if strings.HasPrefix(strings.ToLower(s), "git+") {
+		slash := strings.LastIndex(s, "/")
+		at := strings.LastIndex(s, "@")
+		return at > slash && at < len(s)-1
+	}
+	// docker digest pin: image@sha256:<hex>.
+	if strings.Contains(s, "@sha256:") {
+		return true
+	}
+	// pip-style double-equals pin: pkg==1.2.3.
+	if i := strings.Index(s, "=="); i >= 0 {
+		return mcpConcreteVersion(s[i+2:])
+	}
+	// npm-style @version pin.
 	s = strings.TrimPrefix(s, "@") // scoped package: skip the scope separator
 	at := strings.Index(s, "@")
 	if at < 0 {
 		return false
 	}
-	ver := strings.ToLower(s[at+1:])
+	return mcpConcreteVersion(s[at+1:])
+}
+
+// mcpConcreteVersion reports whether ver is a concrete version (starts with a
+// digit, optionally behind a v/^/~/range prefix) rather than a floating tag.
+func mcpConcreteVersion(ver string) bool {
+	ver = strings.ToLower(strings.TrimSpace(ver))
 	if ver == "" {
 		return false
 	}
@@ -288,9 +341,24 @@ func mcpIsPinned(pkg string) bool {
 	case "latest", "next", "beta", "canary", "alpha", "rc", "dev", "nightly":
 		return false
 	}
-	// A concrete version starts with a digit or a leading v/^/~ + digit.
 	ver = strings.TrimLeft(ver, "v^~>=< ")
 	return len(ver) > 0 && ver[0] >= '0' && ver[0] <= '9'
+}
+
+// mcpIsLocalSource reports whether a spec points at a concrete local artifact: a
+// wheel/sdist file, or a filesystem path (absolute, relative, home-rooted, or
+// env-var/glob-rooted such as ${VAR}/vendor/*.whl).
+func mcpIsLocalSource(s string) bool {
+	ls := strings.ToLower(s)
+	if strings.HasSuffix(ls, ".whl") || strings.HasSuffix(ls, ".tar.gz") || strings.HasSuffix(ls, ".tgz") || strings.HasSuffix(ls, ".zip") {
+		return true
+	}
+	switch {
+	case strings.HasPrefix(s, "/"), strings.HasPrefix(s, "./"), strings.HasPrefix(s, "../"),
+		strings.HasPrefix(s, "~"), strings.HasPrefix(s, "$"):
+		return true
+	}
+	return false
 }
 
 type mcpSecret struct {

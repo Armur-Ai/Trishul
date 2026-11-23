@@ -165,10 +165,70 @@ func TestMcpIsPinned(t *testing.T) {
 		"pkg":              false,
 		"pkg@latest":       false,
 		"@scope/pkg@next":  false,
+
+		// P3.6: additional pinned forms must be treated as PINNED.
+		"pkg==1.2.3":                         true, // pip-style double-equals
+		"./local/path":                       true, // relative local path
+		"/abs/path/to/server":                true, // absolute local path
+		"~/vendor/server":                    true, // home-rooted path
+		"dist/server-1.0.0-py3-none-any.whl": true, // wheel file
+		"${VAR}/vendor/thing-1.0.whl":        true, // env-var-rooted wheel glob
+		"$HOME/vendor/pkg.tar.gz":            true, // env-var-rooted sdist
+		"git+https://github.com/a/b@0123abcdef0123abcdef0123abcdef0123abcdef": true, // git ref/sha
+		"ghcr.io/org/image@sha256:" + strings.Repeat("a", 64):                 true, // docker digest
+
+		// still unpinned.
+		"pkg==":                      false, // double-equals with no version
+		"git+https://github.com/a/b": false, // git with no ref
+		"@scope/pkg@canary":          false, // floating tag
 	}
 	for in, want := range cases {
 		if got := mcpIsPinned(in); got != want {
 			t.Errorf("mcpIsPinned(%q) = %v, want %v", in, got, want)
+		}
+	}
+}
+
+func TestScanMCPTrust_MCP001_PinnedFormsClean(t *testing.T) {
+	// Each of these pinned/local forms must NOT raise AGENT-MCP-001.
+	pinned := map[string]string{
+		"npx-exact":      `{"command":"npx","args":["-y","pkg@1.2.3"]}`,
+		"npx-pipeq":      `{"command":"npx","args":["-y","pkg==1.2.3"]}`,
+		"uvx-from-wheel": `{"command":"uvx","args":["--from","${VAR}/vendor/server-1.0.whl","server"]}`,
+		"uvx-from-local": `{"command":"uvx","args":["--from","./local/server","server"]}`,
+		"uvx-git-sha":    `{"command":"uvx","args":["git+https://github.com/a/b@` + strings.Repeat("a", 40) + `"]}`,
+		"docker-digest":  `{"command":"uvx","args":["ghcr.io/org/img@sha256:` + strings.Repeat("a", 64) + `"]}`,
+	}
+	for name, server := range pinned {
+		dir := t.TempDir()
+		mcpWrite(t, dir, ".mcp.json", `{"mcpServers":{"`+name+`":`+server+`}}`)
+		fs, err := scanMCPTrust(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if f := mcpHas(fs, "AGENT-MCP-001"); f != nil {
+			t.Errorf("%s: pinned form should not raise AGENT-MCP-001, got %+v", name, f)
+		}
+	}
+}
+
+func TestScanMCPTrust_MCP001_FloatingFlagged(t *testing.T) {
+	floating := map[string]string{
+		"npx-latest":  `{"command":"npx","args":["-y","pkg@latest"]}`,
+		"npx-nover":   `{"command":"npx","args":["-y","@acme/server"]}`,
+		"uvx-nover":   `{"command":"uvx","args":["some-server"]}`,
+		"uvx-float":   `{"command":"uvx","args":["--from","some-server","server"]}`,
+		"bunx-canary": `{"command":"bunx","args":["pkg@canary"]}`,
+	}
+	for name, server := range floating {
+		dir := t.TempDir()
+		mcpWrite(t, dir, ".mcp.json", `{"mcpServers":{"`+name+`":`+server+`}}`)
+		fs, err := scanMCPTrust(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if mcpHas(fs, "AGENT-MCP-001") == nil {
+			t.Errorf("%s: floating/unpinned runner should raise AGENT-MCP-001, got %+v", name, fs)
 		}
 	}
 }
