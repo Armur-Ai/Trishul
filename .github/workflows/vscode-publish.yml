@@ -1,0 +1,137 @@
+name: vscode publish (extension)
+
+# Packages the Trishul VS Code extension (editors/vscode) and OPTIONALLY
+# publishes it to the VS Code Marketplace and/or Open VSX when a GitHub Release
+# is published.
+#
+# OWNER / D-HUMAN responsibility — this workflow does nothing until a human sets
+# the publishing accounts and tokens up:
+#   * VS Code Marketplace: create the `armur-ai` publisher at
+#     https://marketplace.visualstudio.com/manage, mint an Azure DevOps PAT with
+#     Marketplace (Manage) scope, and store it as the `VSCE_PAT` repo secret.
+#   * Open VSX: create the `armur-ai` namespace at https://open-vsx.org, mint an
+#     access token, and store it as the `OVSX_PAT` repo secret.
+#
+# Both publish steps are GATED: each is skipped (a clean no-op) when its token
+# secret is absent. The `.vsix` is always built and uploaded as a workflow
+# artifact, so a release is NEVER failed by a missing token — you can always
+# download the package and publish it by hand.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: editors/vscode
+
+jobs:
+  # The `secrets` context cannot be used in a job-level `if`, so a tiny gate job
+  # reads each secret into a step output (env CAN reference secrets) and the
+  # publish jobs depend on it. This guarantees a clean skip when a token is
+  # absent.
+  gate:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: .
+    outputs:
+      vsce: ${{ steps.check.outputs.vsce }}
+      ovsx: ${{ steps.check.outputs.ovsx }}
+    steps:
+      - id: check
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+        run: |
+          if [ -n "$VSCE_PAT" ]; then
+            echo "vsce=true" >> "$GITHUB_OUTPUT"
+            echo "VSCE_PAT present: Marketplace publish will run."
+          else
+            echo "vsce=false" >> "$GITHUB_OUTPUT"
+            echo "VSCE_PAT absent: skipping Marketplace publish (release unaffected)."
+          fi
+          if [ -n "$OVSX_PAT" ]; then
+            echo "ovsx=true" >> "$GITHUB_OUTPUT"
+            echo "OVSX_PAT present: Open VSX publish will run."
+          else
+            echo "ovsx=false" >> "$GITHUB_OUTPUT"
+            echo "OVSX_PAT absent: skipping Open VSX publish (release unaffected)."
+          fi
+
+  # Always package the .vsix and upload it, regardless of whether any token is
+  # set. This keeps the release unaffected and gives a human a downloadable
+  # artifact to publish by hand.
+  package:
+    needs: gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Compile
+        run: npm run compile
+
+      - name: Package .vsix
+        run: npx --yes @vscode/vsce@2.26.1 package --no-dependencies -o trishul.vsix
+
+      - name: Upload .vsix artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: trishul-vsix
+          path: editors/vscode/trishul.vsix
+          if-no-files-found: error
+
+  publish-marketplace:
+    needs: [gate, package]
+    if: needs.gate.outputs.vsce == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Compile
+        run: npm run compile
+
+      - name: Publish to VS Code Marketplace
+        run: npx --yes @vscode/vsce@2.26.1 publish --no-dependencies
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+
+  publish-openvsx:
+    needs: [gate, package]
+    if: needs.gate.outputs.ovsx == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Compile
+        run: npm run compile
+
+      - name: Publish to Open VSX
+        run: npx --yes ovsx@0.9.1 publish --no-dependencies
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
