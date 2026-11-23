@@ -1,10 +1,13 @@
 package internal
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
+	"github.com/Armur-Ai/Trishul/internal/logger"
 	utils "github.com/Armur-Ai/Trishul/pkg"
 )
 
@@ -22,7 +25,19 @@ import (
 // (`request.auth.token.admin == true`) rule is treated as clean. It flags only
 // the unambiguous over-exposure patterns described by FIREBASE-001..004.
 func RunFirebaseRules(dir string) (map[string]interface{}, error) {
+	logger.Info().Str("tool", "firebase-rules").Str("dir", dir).Msg("running")
+
 	categorized := utils.InitAdvancedCategorizedResults()
+
+	// Context gate: only run the Firebase rule checks when the repo is actually a
+	// Firebase project. A bare `*.rules` file name is ambiguous (udev, logrotate,
+	// Snort and many other tools ship `.rules` files), so scanning every repo that
+	// merely contains one is a precision problem. If none of the Firebase signals
+	// are present we emit nothing.
+	if !isFirebaseProject(dir) {
+		logger.Debug().Str("tool", "firebase-rules").Str("dir", dir).Msg("not a firebase project; skipping")
+		return utils.ConvertCategorizedResults(categorized), nil
+	}
 
 	findings, err := scanFirebaseDir(dir)
 	if err != nil {
@@ -34,6 +49,71 @@ func RunFirebaseRules(dir string) (map[string]interface{}, error) {
 	}
 
 	return utils.ConvertCategorizedResults(categorized), nil
+}
+
+// errFirebaseSignal short-circuits the context-gate walk the moment any Firebase
+// signal is found.
+var errFirebaseSignal = errors.New("firebase signal")
+
+// reFirebaseRulesSignal matches the tokens that only appear in a Firebase
+// security-rules file: the `rules_version` pragma or a `service cloud.firestore`
+// / `service firebase.storage` declaration.
+var reFirebaseRulesSignal = regexp.MustCompile(`(?i)rules_version|service\s+cloud\.firestore|service\s+firebase\.storage`)
+
+// reFirebaseDep matches a `firebase` or `@firebase/*` dependency entry in a
+// package.json ("firebase": "..." or "@firebase/app": "...").
+var reFirebaseDep = regexp.MustCompile(`"(?:firebase|@firebase/[^"]+)"\s*:`)
+
+// isFirebaseProject reports whether directory looks like a Firebase project.
+// Any one of the following signals qualifies it:
+//   - a `firebase.json` config exists;
+//   - a canonically named `firestore.rules` / `storage.rules` (or
+//     `database.rules.json`) file exists;
+//   - a `*.rules` file carries a Firebase rules signal (`rules_version`,
+//     `service cloud.firestore`, `service firebase.storage`);
+//   - a `firebase` / `@firebase/*` dependency appears in a package.json.
+//
+// It is read-only and skips vendored trees (node_modules, .git, vendor) so a
+// dependency's own files do not mask the project's real intent. With no signal
+// the caller emits nothing.
+func isFirebaseProject(directory string) bool {
+	// Fast path: the canonical firebase.json at the repo root.
+	if _, err := os.Stat(filepath.Join(directory, "firebase.json")); err == nil {
+		return true
+	}
+
+	walkErr := filepath.WalkDir(directory, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() {
+			switch d.Name() {
+			case "node_modules", ".git", "vendor":
+				return filepath.SkipDir
+			}
+			return nil
+		}
+
+		lower := strings.ToLower(d.Name())
+		switch {
+		case lower == "firebase.json" ||
+			lower == "firestore.rules" ||
+			lower == "storage.rules" ||
+			lower == "database.rules.json":
+			return errFirebaseSignal
+		case strings.HasSuffix(lower, ".rules"):
+			if content, readErr := os.ReadFile(path); readErr == nil && reFirebaseRulesSignal.Match(content) {
+				return errFirebaseSignal
+			}
+		case lower == "package.json":
+			if content, readErr := os.ReadFile(path); readErr == nil && reFirebaseDep.Match(content) {
+				return errFirebaseSignal
+			}
+		}
+		return nil
+	})
+
+	return errors.Is(walkErr, errFirebaseSignal)
 }
 
 // fbFrame is one entry on the brace stack. isMatch is true when the block was
@@ -66,6 +146,17 @@ func scanFirebaseDir(directory string) ([]map[string]interface{}, error) {
 			return nil
 		}
 
+		// A generic `*.rules` file (not the canonical firestore.rules/storage.rules)
+		// is only treated as Firebase rules when its content actually carries a
+		// Firebase rules signal. This keeps unrelated `.rules` files (udev, Snort,
+		// logrotate, …) that happen to live in a Firebase repo from being parsed as
+		// security rules.
+		if strings.HasSuffix(strings.ToLower(d.Name()), ".rules") &&
+			!isNamedFirebaseRules(d.Name()) &&
+			!reFirebaseRulesSignal.Match(content) {
+			return nil
+		}
+
 		relPath := path
 		if rel, relErr := filepath.Rel(directory, path); relErr == nil {
 			relPath = rel
@@ -88,6 +179,13 @@ func scanFirebaseDir(directory string) ([]map[string]interface{}, error) {
 func isFirebaseRulesFile(name string) bool {
 	lower := strings.ToLower(name)
 	return strings.HasSuffix(lower, ".rules") || lower == "firebase.json"
+}
+
+// isNamedFirebaseRules reports whether name is one of the canonical Firebase
+// rules file names, which are a strong enough signal to scan unconditionally.
+func isNamedFirebaseRules(name string) bool {
+	lower := strings.ToLower(name)
+	return lower == "firestore.rules" || lower == "storage.rules"
 }
 
 // defaultServiceFor picks the service context for a file before any explicit

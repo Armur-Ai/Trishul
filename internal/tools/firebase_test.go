@@ -357,6 +357,91 @@ func TestScanFirebase_InlineFirebaseJSON(t *testing.T) {
 	}
 }
 
+func TestRunFirebaseRules_ContextGate_NonFirebaseRepo(t *testing.T) {
+	// A repo with no Firebase signal at all — some source, an unrelated
+	// package.json — must produce zero Firebase findings even if an insecure
+	// rule-looking snippet is present in a non-rules file.
+	dir := t.TempDir()
+	writeRules(t, dir, "main.go", "package main\n\nfunc main() { allow read, write: if true }\n")
+	writeRules(t, dir, "package.json", `{"name":"app","dependencies":{"express":"^4.0.0"}}`)
+
+	if isFirebaseProject(dir) {
+		t.Fatalf("non-firebase repo must not be detected as a firebase project")
+	}
+
+	res, err := RunFirebaseRules(dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	raw, ok := res[utils.INFRA_SECURITY]
+	if !ok {
+		return // category absent entirely is also zero findings
+	}
+	if list, ok := raw.([]interface{}); ok && len(list) != 0 {
+		t.Errorf("expected 0 firebase findings for non-firebase repo, got %d: %v", len(list), list)
+	}
+}
+
+func TestRunFirebaseRules_ContextGate_GenericRulesNotFirebase(t *testing.T) {
+	// A generic `.rules` file that is NOT a Firebase rules file (no rules_version
+	// / service declaration) must neither gate the repo in nor be scanned, even
+	// though it textually contains an `allow read, write: if true;` line.
+	dir := t.TempDir()
+	writeRules(t, dir, "iptables.rules", "# firewall rules\nallow read, write: if true;\n-A INPUT -j ACCEPT\n")
+
+	if isFirebaseProject(dir) {
+		t.Fatalf("a non-firebase .rules file must not qualify the repo as firebase")
+	}
+
+	// Even scanned directly, a generic non-firebase .rules file yields nothing.
+	findings, err := scanFirebaseDir(dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(findings) != 0 {
+		t.Errorf("expected 0 findings from a non-firebase .rules file, got %d: %v", len(findings), findings)
+	}
+}
+
+func TestRunFirebaseRules_ContextGate_Signals(t *testing.T) {
+	// Each individual signal should independently qualify the repo.
+	t.Run("firebase.json", func(t *testing.T) {
+		dir := t.TempDir()
+		writeRules(t, dir, "firebase.json", `{"firestore":{"rules":"firestore.rules"}}`)
+		if !isFirebaseProject(dir) {
+			t.Errorf("firebase.json should qualify the repo")
+		}
+	})
+	t.Run("named firestore.rules", func(t *testing.T) {
+		dir := t.TempDir()
+		writeRules(t, dir, "firestore.rules", "service cloud.firestore {}\n")
+		if !isFirebaseProject(dir) {
+			t.Errorf("firestore.rules should qualify the repo")
+		}
+	})
+	t.Run("generic .rules with service signal", func(t *testing.T) {
+		dir := t.TempDir()
+		writeRules(t, dir, "my.rules", "rules_version = '2';\nservice cloud.firestore {}\n")
+		if !isFirebaseProject(dir) {
+			t.Errorf("a .rules file carrying a firebase signal should qualify the repo")
+		}
+	})
+	t.Run("firebase dependency", func(t *testing.T) {
+		dir := t.TempDir()
+		writeRules(t, dir, "package.json", `{"dependencies":{"firebase":"^10.0.0"}}`)
+		if !isFirebaseProject(dir) {
+			t.Errorf("a firebase dependency should qualify the repo")
+		}
+	})
+	t.Run("@firebase scoped dependency", func(t *testing.T) {
+		dir := t.TempDir()
+		writeRules(t, dir, "package.json", `{"dependencies":{"@firebase/app":"^0.9.0"}}`)
+		if !isFirebaseProject(dir) {
+			t.Errorf("an @firebase/* dependency should qualify the repo")
+		}
+	})
+}
+
 func TestScanFirebase_LineNumbers(t *testing.T) {
 	dir := t.TempDir()
 	writeRules(t, dir, "firestore.rules", "service cloud.firestore {\n  match /databases/{database}/documents {\n    match /x/{id} {\n      allow read, write: if true;\n    }\n  }\n}\n")
