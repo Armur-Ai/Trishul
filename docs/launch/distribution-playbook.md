@@ -16,7 +16,7 @@ The adoption loop mirrors Codecov's: **free for public repos → a PR comment th
 2. **Dogfood for 1–2 weeks** on Armur-Ai repos (the App is private to the org at first). Watch `/stats` and the false-positive rate on real PRs.
 3. **Make the App public:** GitHub → Armur-Ai → Settings → Developer settings → GitHub Apps → Trishul → Advanced → *Make public*.
 4. **List on GitHub Marketplace**, both the Action (release with "Publish to Marketplace") and the App (free plan). Copy is below.
-5. **"State of MCP Security" report:** publish only after private disclosure windows close (see the draft in `Trishul-reports/`).
+5. **"State of MCP Security" report:** publish only after private disclosure windows close (draft kept outside this repo).
 6. **Get listed** on awesome-mcp-servers, awesome-claude-code, awesome-cursorrules and the Supabase community tools pages, with the badge plus a one-line value prop.
 7. **Templates:** offer PRs adding the workflow to AI starter templates *whose maintainers opt in*. Don't open unsolicited bot PRs.
 8. **Track** weekly: installs, active repos (7d), comments, 30-day retention, and uninstalls. Treat retention below 60% as a noise problem first.
