@@ -24,6 +24,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/Armur-Ai/Trishul/internal/fileclass"
 	"github.com/Armur-Ai/Trishul/internal/logger"
 	"github.com/Armur-Ai/Trishul/internal/redact"
 	utils "github.com/Armur-Ai/Trishul/pkg"
@@ -40,7 +41,8 @@ const (
 	checkCommittedEnv = "CLIENT-SECRET-002"
 	// checkClientSideStrong: a high-confidence privileged secret (Supabase
 	// service_role JWT, private key, or sk-style provider key) appearing in a
-	// file that looks client-side.
+	// source file. Severity is CRITICAL when the file ships to the browser and
+	// is otherwise adjusted by the file's classification.
 	checkClientSideStrong = "CLIENT-SECRET-003"
 )
 
@@ -50,10 +52,12 @@ const maxScanFileSize = int64(2 << 20) // 2 MiB
 // minSecretLen is the minimum length for a value to be considered "key-shaped".
 const minSecretLen = 20
 
-// minSecretEntropy is the Shannon-entropy floor (bits/char) a key-shaped value
-// must exceed. Random tokens sit well above this; prose and identifiers sit
-// below it, which keeps false positives down.
-const minSecretEntropy = 3.0
+// minSecretEntropy is the Shannon-entropy floor (bits/char) a generic
+// (non-provider-format) key-shaped value must exceed to be flagged. Random
+// tokens sit well above this; prose and identifiers sit below it, which keeps
+// false positives down. Values matching a known provider format bypass this
+// gate (see matchesProviderFormat).
+const minSecretEntropy = 3.5
 
 var (
 	// publicAssignRe matches an assignment to a client-exposed env variable,
@@ -74,7 +78,46 @@ var (
 
 	// privKeyRe matches a PEM private-key header.
 	privKeyRe = regexp.MustCompile(`-----BEGIN (?:[A-Z0-9 ]+ )?PRIVATE KEY-----`)
+
+	// stripeTestKeyRe matches Stripe test-mode keys (sk_test_, pk_test_,
+	// rk_test_), which are safe to expose and carry no production access.
+	stripeTestKeyRe = regexp.MustCompile(`(?:sk|pk|rk)_test_[A-Za-z0-9]{8,}`)
+
+	// firebaseWebKeyRe matches a Firebase / Google-style browser API key
+	// (AIza...). Firebase intends these to ship in the client web config; they
+	// are gated by security rules, not by secrecy.
+	firebaseWebKeyRe = regexp.MustCompile(`AIza[0-9A-Za-z_-]{35}`)
+
+	// providerFormatRes are distinctive provider credential shapes. A value
+	// matching any of them is treated as key-shaped regardless of entropy.
+	providerFormatRes = []*regexp.Regexp{
+		jwtRe,
+		privKeyRe,
+		skKeyRe,
+		regexp.MustCompile(`(?:sk|pk|rk)_(?:test|live)_[A-Za-z0-9]{8,}`), // Stripe
+		regexp.MustCompile(`AKIA[0-9A-Z]{16}`),                           // AWS access key id
+		regexp.MustCompile(`gh[pousr]_[A-Za-z0-9]{20,}`),                 // GitHub tokens
+		regexp.MustCompile(`xox[baprs]-[A-Za-z0-9-]{10,}`),               // Slack tokens
+		firebaseWebKeyRe, // Google/Firebase API key
+		credURLRe,        // scheme://user:pass@host
+	}
+
+	// credURLRe matches a URL carrying userinfo with a password
+	// (scheme://user:pass@host), i.e. an embedded credential.
+	credURLRe = regexp.MustCompile(`://[^/\s:@]+:[^/\s:@]+@`)
 )
+
+// emulatorDefaults are well-known, non-secret values baked into local emulator
+// and demo stacks (Supabase/Firebase emulators, demo projects). They look
+// key-shaped but grant no production access, so findings carrying them are
+// downgraded rather than suppressed.
+var emulatorDefaults = map[string]bool{
+	// Firebase Auth emulator demo values.
+	"demo-project":     true,
+	"fake-api-key":     true,
+	"demo-api-key":     true,
+	"AIzaSyFake-local": true,
+}
 
 // clientSideEnvPrefixes documents the prefixes publicAssignRe recognises. It is
 // used only to keep .env scanning from double-reporting those lines.
@@ -210,30 +253,100 @@ func analyzeFile(rel, name, content string, envIgnored bool) []finding {
 		out = append(out, scanEnvFile(rel, content, envIgnored)...)
 	}
 
+	// i18n / locale string tables are translation text, not credentials. Skip
+	// the source-scanning rules for them (an .env still scans above).
+	if isI18nPath(rel) {
+		return out
+	}
+
+	kind := fileclass.ClassifyPath(rel)
 	clientSide := looksClientSide(rel, content)
 
 	// Rule 001: secret-shaped values assigned to client-exposed env prefixes.
 	for i, line := range strings.Split(content, "\n") {
+		if isNonSecretContext(line) {
+			continue
+		}
 		m := publicAssignRe.FindStringSubmatch(line)
 		if m == nil {
 			continue
 		}
 		val := cleanValue(m[2])
-		if !isSecretShaped(val) {
+		if isIgnorableKey(m[1], val) || !isSecretShaped(val) {
 			continue
 		}
-		out = append(out, newFinding(rel, i+1, "HIGH", checkPublicPrefix, "CWE-200",
-			"Client-exposed environment variable '"+m[1]+"' is assigned a secret-shaped value. "+
-				"Variables with this prefix are inlined into the client/browser bundle at build time and are publicly readable.",
-			val))
+		var sev, msg string
+		if isKnownPublicKey(val) {
+			sev = "LOW"
+			msg = "Client-exposed environment variable '" + m[1] + "' holds a known-public value " +
+				"(test key, browser API key, or emulator default). It is inlined into the client bundle, " +
+				"which is expected for this kind of value; confirm it is not a production secret."
+		} else {
+			sev = resolveSeverity("HIGH", kind, matchesProviderFormat(val), isHighEntropy(val))
+			msg = "Client-exposed environment variable '" + m[1] + "' is assigned a secret-shaped value. " +
+				"Variables with this prefix are inlined into the client/browser bundle at build time and are publicly readable."
+		}
+		out = append(out, newFinding(rel, i+1, sev, checkPublicPrefix, "CWE-200", msg, val))
 	}
 
-	// Rule 003: high-confidence privileged secrets in a client-side file.
-	if clientSide {
-		out = append(out, scanStrongSecrets(rel, content)...)
+	// Rule 003: high-confidence privileged secrets. A service_role JWT, a PEM
+	// private key or an sk-style provider key is dangerous wherever it lands —
+	// not only in files that ship to the browser — so this scans every source
+	// file (committed .env files are covered by rule 002 above).
+	if !isEnvFile(name) {
+		out = append(out, scanStrongSecrets(rel, content, kind, clientSide)...)
 	}
 
 	return out
+}
+
+// isHighEntropy reports whether v clears the generic length+entropy bar used to
+// treat a value as a real (rather than placeholder) secret.
+func isHighEntropy(v string) bool {
+	v = strings.TrimSpace(v)
+	return len(v) >= minSecretLen && shannonEntropy(v) >= minSecretEntropy
+}
+
+// resolveSeverity adjusts a base severity for the file's classification: in
+// test/fixture files a secret is informational (INFO) unless it is a
+// high-confidence provider-format, high-entropy credential, in which case the
+// base severity stands. Other kinds keep the base severity.
+func resolveSeverity(base string, kind fileclass.Kind, providerFormat, highEntropy bool) string {
+	switch kind {
+	case fileclass.KindTest, fileclass.KindFixture:
+		if providerFormat && highEntropy {
+			return base
+		}
+		return "INFO"
+	default:
+		return base
+	}
+}
+
+// isNonSecretContext reports whether a line sits in a context where a
+// secret-shaped token is almost certainly not a live credential: UI attributes
+// that merely display example text (placeholder=, aria-label, title=) and test
+// typing calls that feed a string into an input (.type(...), fill(...)).
+func isNonSecretContext(line string) bool {
+	lower := strings.ToLower(line)
+	for _, marker := range []string{"placeholder=", "aria-label", "title=", ".type(", "fill("} {
+		if strings.Contains(lower, marker) {
+			return true
+		}
+	}
+	return false
+}
+
+// isI18nPath reports whether a file path lives in an i18n / localization
+// string-table tree, whose values are translation text rather than secrets.
+func isI18nPath(rel string) bool {
+	for _, seg := range strings.Split(rel, "/") {
+		switch strings.ToLower(seg) {
+		case "locales", "locale", "i18n", "translations", "lang", "langs", "messages":
+			return true
+		}
+	}
+	return false
 }
 
 // scanEnvFile reports secret-shaped assignments in a committed .env file. Lines
@@ -258,59 +371,130 @@ func scanEnvFile(rel, content string, envIgnored bool) []finding {
 			continue // handled by rule 001
 		}
 		val := cleanValue(m[2])
-		if !isSecretShaped(val) {
+		if isIgnorableKey(m[1], val) || !isSecretShaped(val) {
 			continue
 		}
-		out = append(out, newFinding(rel, i+1, "HIGH", checkCommittedEnv, "CWE-312",
-			"Committed .env file assigns a secret-shaped value to '"+m[1]+"'. "+
-				"Secrets stored in env files are exposed to anyone with repository access."+gitignoreNote,
-			val))
+		sev := "HIGH"
+		msg := "Committed .env file assigns a secret-shaped value to '" + m[1] + "'. " +
+			"Secrets stored in env files are exposed to anyone with repository access." + gitignoreNote
+		if isKnownPublicKey(val) {
+			sev = "LOW"
+			msg = "Committed .env file assigns a known-public value (test key, browser API key, " +
+				"or emulator default) to '" + m[1] + "'. This grants no production access; " +
+				"confirm it is not a real secret." + gitignoreNote
+		}
+		out = append(out, newFinding(rel, i+1, sev, checkCommittedEnv, "CWE-312", msg, val))
 	}
 	return out
 }
 
-// scanStrongSecrets reports high-confidence privileged secrets anywhere in a
-// client-side file's content.
-func scanStrongSecrets(rel, content string) []finding {
+// scanStrongSecrets reports high-confidence privileged secrets (service_role
+// JWTs, sk-style provider keys, PEM private keys) found anywhere in a file. The
+// finding's severity and wording depend on where the secret lives: a file that
+// ships to the browser is CRITICAL ("...and ships to the browser"); anywhere
+// else the base severity is adjusted by the file's classification, and the
+// wording stays neutral so it reads correctly for server and test paths.
+func scanStrongSecrets(rel, content string, kind fileclass.Kind, clientSide bool) []finding {
 	var out []finding
+
+	base := "CRITICAL"
+	if !clientSide {
+		base = "HIGH"
+	}
+	loc := locationPhrase(rel, clientSide)
 
 	// Supabase service_role JWTs (and any JWT whose payload claims service_role).
 	for _, tok := range jwtRe.FindAllString(content, -1) {
 		if !jwtHasServiceRole(tok) {
 			continue
 		}
-		out = append(out, newFinding(rel, lineOf(content, tok), "CRITICAL", checkClientSideStrong, "CWE-798",
-			"A Supabase service_role JWT appears in a client-side file ('"+rel+"'). "+
-				"This token bypasses row-level security and must never ship to the browser.",
+		ln := lineOf(content, tok)
+		if isNonSecretContext(lineText(content, ln)) {
+			continue
+		}
+		if isKnownPublicKey(tok) {
+			out = append(out, newFinding(rel, ln, "LOW", checkClientSideStrong, "CWE-798",
+				"A known-public demo JWT (Supabase/Firebase emulator) appears in "+loc+". "+
+					"It grants no production access; confirm it is not a real service_role token.",
+				tok))
+			continue
+		}
+		out = append(out, newFinding(rel, ln, resolveSeverity(base, kind, true, true), checkClientSideStrong, "CWE-798",
+			"A Supabase service_role JWT appears in "+loc+". "+
+				"This token bypasses row-level security and must never be committed to source or exposed to clients.",
 			tok))
 	}
 
 	// sk-style provider keys (OpenAI, Anthropic, ...).
 	for _, m := range skKeyRe.FindAllStringSubmatch(content, -1) {
 		tok := m[1]
-		out = append(out, newFinding(rel, lineOf(content, tok), "CRITICAL", checkClientSideStrong, "CWE-798",
-			"A provider API key (sk-style) appears in a client-side file ('"+rel+"'). "+
-				"Secret provider keys shipped to the browser can be extracted and abused.",
+		ln := lineOf(content, tok)
+		if isNonSecretContext(lineText(content, ln)) {
+			continue
+		}
+		if isKnownPublicKey(tok) {
+			out = append(out, newFinding(rel, ln, "LOW", checkClientSideStrong, "CWE-798",
+				"A known-public test provider key appears in "+loc+". "+
+					"Test-mode keys carry no production access; confirm it is not a live key.",
+				tok))
+			continue
+		}
+		out = append(out, newFinding(rel, ln, resolveSeverity(base, kind, true, true), checkClientSideStrong, "CWE-798",
+			"A provider API key (sk-style) appears in "+loc+". "+
+				"Secret provider keys must never be committed to source or shipped to clients, where they can be extracted and abused.",
 			tok))
 	}
 
 	// PEM private keys.
 	if loc := privKeyRe.FindStringIndex(content); loc != nil {
 		marker := content[loc[0]:loc[1]]
-		out = append(out, newFinding(rel, lineOf(content, marker), "CRITICAL", checkClientSideStrong, "CWE-312",
-			"A private key appears in a client-side file ('"+rel+"'). "+
-				"Private keys must never be bundled into client-side code.",
-			marker))
+		ln := lineOf(content, marker)
+		if !isNonSecretContext(lineText(content, ln)) {
+			out = append(out, newFinding(rel, ln, resolveSeverity(base, kind, true, true), checkClientSideStrong, "CWE-312",
+				"A private key appears in "+locationPhrase(rel, clientSide)+". "+
+					"Private keys must never be committed to source or bundled into client-side code.",
+				marker))
+		}
 	}
 
 	return out
+}
+
+// locationPhrase describes where a secret was found for use in a finding
+// message: a browser-shipped file is called out as such, while any other path
+// (server, test, config, ...) is named neutrally.
+func locationPhrase(rel string, clientSide bool) string {
+	if clientSide {
+		return "a client-side file ('" + rel + "'), where it ships to the browser"
+	}
+	return "'" + rel + "'"
+}
+
+// lineText returns the text of the 1-based line number ln in content, or "".
+func lineText(content string, ln int) string {
+	if ln < 1 {
+		return ""
+	}
+	lines := strings.Split(content, "\n")
+	if ln > len(lines) {
+		return ""
+	}
+	return lines[ln-1]
 }
 
 // isSecretShaped applies a conservative length/charset/entropy heuristic so we
 // flag key-like values while ignoring URLs, booleans, numbers and placeholders.
 func isSecretShaped(v string) bool {
 	v = strings.TrimSpace(v)
-	if len(v) < minSecretLen || len(v) > 4096 {
+	if len(v) > 4096 {
+		return false
+	}
+	// A value matching a distinctive provider credential format is flagged
+	// regardless of its length or entropy.
+	if matchesProviderFormat(v) {
+		return true
+	}
+	if len(v) < minSecretLen {
 		return false
 	}
 	lower := strings.ToLower(v)
@@ -343,6 +527,37 @@ func isSecretShaped(v string) bool {
 		return false
 	}
 	return shannonEntropy(v) >= minSecretEntropy
+}
+
+// matchesProviderFormat reports whether v contains a distinctive provider
+// credential shape (JWT, PEM key, sk-/Stripe/AWS/GitHub/Slack/Google token).
+func matchesProviderFormat(v string) bool {
+	for _, re := range providerFormatRes {
+		if re.MatchString(v) {
+			return true
+		}
+	}
+	return false
+}
+
+// isIgnorableKey reports whether an env key is a non-credential field whose
+// value should not be flagged: *_IMAGE, *_VERSION and *_URL (container image
+// refs, version strings, plain endpoints), unless the value embeds a credential
+// (e.g. a connection URL with an inline password).
+func isIgnorableKey(key, val string) bool {
+	u := strings.ToUpper(key)
+	for _, suf := range []string{"_IMAGE", "_VERSION", "_URL"} {
+		if strings.HasSuffix(u, suf) {
+			return !hasEmbeddedCredential(val)
+		}
+	}
+	return false
+}
+
+// hasEmbeddedCredential reports whether val contains a URL with inline
+// userinfo credentials (scheme://user:pass@host).
+func hasEmbeddedCredential(val string) bool {
+	return credURLRe.MatchString(val)
 }
 
 // mostlyKeyCharset reports whether at least 90% of v is drawn from the
@@ -421,6 +636,52 @@ func jwtHasServiceRole(token string) bool {
 	return strings.Contains(string(raw), "service_role")
 }
 
+// jwtIssuer decodes a JWT's payload and returns its "iss" claim, or "".
+func jwtIssuer(token string) string {
+	segs := strings.Split(token, ".")
+	if len(segs) < 2 {
+		return ""
+	}
+	raw, err := base64.RawURLEncoding.DecodeString(segs[1])
+	if err != nil {
+		if raw, err = base64.StdEncoding.DecodeString(segs[1]); err != nil {
+			return ""
+		}
+	}
+	m := issuerRe.FindSubmatch(raw)
+	if m == nil {
+		return ""
+	}
+	return string(m[1])
+}
+
+// issuerRe extracts the "iss" claim value from a decoded JWT payload.
+var issuerRe = regexp.MustCompile(`"iss"\s*:\s*"([^"]*)"`)
+
+// isKnownPublicKey reports whether v is a value that is public by design and so
+// warrants a downgraded (LOW) finding rather than a secret-exposure alarm:
+// Stripe test keys, Firebase browser API keys, Supabase local demo JWTs
+// (issuer "supabase-demo"), and common emulator defaults.
+func isKnownPublicKey(v string) bool {
+	v = strings.TrimSpace(v)
+	if emulatorDefaults[v] {
+		return true
+	}
+	if stripeTestKeyRe.MatchString(v) {
+		return true
+	}
+	if firebaseWebKeyRe.MatchString(v) {
+		return true
+	}
+	if jwtRe.MatchString(v) {
+		switch jwtIssuer(v) {
+		case "supabase-demo", "firebase-demo":
+			return true
+		}
+	}
+	return false
+}
+
 // lineOf returns the 1-based line number of the first occurrence of sub in
 // content, or 1 if it is not found.
 func lineOf(content, sub string) int {
@@ -432,14 +693,33 @@ func lineOf(content, sub string) int {
 }
 
 // looksClientSide reports whether a file is likely to ship to the browser,
-// based on its path or a "use client" directive.
+// based on its path or a "use client" directive. Server-only files (Next.js
+// app/api/** route handlers, route.*/middleware.* modules) are not treated as
+// client-side even when they sit under an otherwise client-ish directory,
+// unless they explicitly opt in with a "use client" directive.
 func looksClientSide(rel, content string) bool {
-	for _, p := range strings.Split(rel, "/") {
+	if strings.Contains(content, `"use client"`) || strings.Contains(content, `'use client'`) {
+		return true
+	}
+	segs := strings.Split(rel, "/")
+	base := ""
+	if len(segs) > 0 {
+		base = segs[len(segs)-1]
+	}
+	if strings.HasPrefix(base, "route.") || strings.HasPrefix(base, "middleware.") {
+		return false
+	}
+	for i := 0; i+1 < len(segs); i++ {
+		if segs[i] == "app" && segs[i+1] == "api" {
+			return false // app/api/** is server-side
+		}
+	}
+	for _, p := range segs {
 		if clientDirSegments[p] {
 			return true
 		}
 	}
-	return strings.Contains(content, `"use client"`) || strings.Contains(content, `'use client'`)
+	return false
 }
 
 // hasClientPrefix reports whether an env key uses a client-exposed prefix.

@@ -181,6 +181,256 @@ func TestRunClientSecretExposureEmptyDir(t *testing.T) {
 	}
 }
 
+// TestNonSecretContextsNotFlagged verifies that secret-shaped tokens sitting in
+// UI attributes (placeholder=, aria-label, title=) and test typing calls
+// (.type(...), fill(...)) are not reported, and that i18n string tables are
+// skipped entirely.
+func TestNonSecretContextsNotFlagged(t *testing.T) {
+	dir := t.TempDir()
+	jwt := buildServiceRoleJWT()
+
+	// A placeholder attribute showing an example sk-style key in a client file:
+	// without the context filter this would trip rule 003.
+	write(t, dir, "src/app/form.tsx",
+		"\"use client\";\n"+
+			"export const Form = () => <input placeholder=\"sk-abcdefghijklmnopqrstuvwxyz0123\" />;\n")
+
+	// An aria-label and a title carrying a high-entropy token.
+	write(t, dir, "src/app/widget.tsx",
+		"\"use client\";\n"+
+			"const a = <div aria-label=\""+plantedPublicSecret+"\" title=\""+plantedPublicSecret+"\" />;\n")
+
+	// A test typing call feeding a service_role JWT into an input.
+	write(t, dir, "src/app/login.spec.tsx",
+		"\"use client\";\n"+
+			"await page.fill('#token', '"+jwt+"');\n"+
+			"cy.get('#t').type('"+jwt+"');\n")
+
+	// An i18n string table: translation text that happens to be long.
+	write(t, dir, "src/locales/en.ts",
+		"export const NEXT_PUBLIC_WELCOME = \""+plantedPublicSecret+"\";\n")
+
+	res, err := RunClientSecretExposure(dir)
+	if err != nil {
+		t.Fatalf("RunClientSecretExposure: %v", err)
+	}
+	if fs := findings(t, res); len(fs) != 0 {
+		t.Fatalf("non-secret contexts produced %d findings, want 0: %v", len(fs), fs)
+	}
+}
+
+// buildDemoJWT constructs a Supabase local-demo service_role JWT (issuer
+// "supabase-demo"), which is public by design.
+func buildDemoJWT() string {
+	header := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"HS256","typ":"JWT"}`))
+	payload := base64.RawURLEncoding.EncodeToString([]byte(`{"role":"service_role","iss":"supabase-demo","ref":"local"}`))
+	sig := "s1gNATUREfake1234567890abcdefABCDEFghij"
+	return header + "." + payload + "." + sig
+}
+
+// sevByCheck collapses findings to a check_id -> severity map, failing if a
+// check_id appears with conflicting severities.
+func sevByCheck(t *testing.T, fs []map[string]interface{}) map[string]string {
+	t.Helper()
+	out := map[string]string{}
+	for _, f := range fs {
+		id, _ := f["check_id"].(string)
+		sev, _ := f["severity"].(string)
+		out[id] = sev
+	}
+	return out
+}
+
+// TestKnownPublicKeysDowngraded verifies that public-by-design values are
+// reported at LOW rather than HIGH/CRITICAL.
+func TestKnownPublicKeysDowngraded(t *testing.T) {
+	// Stripe test key on a client-exposed env var -> rule 001 downgraded.
+	t.Run("stripe test key (rule 001)", func(t *testing.T) {
+		dir := t.TempDir()
+		write(t, dir, "src/pay.ts",
+			"const NEXT_PUBLIC_STRIPE_KEY = \"sk_test_"+"4eC39HqLyjWDarjtT1zdp7dc\";\n")
+		res, err := RunClientSecretExposure(dir)
+		if err != nil {
+			t.Fatalf("run: %v", err)
+		}
+		sev := sevByCheck(t, findings(t, res))
+		if sev[checkPublicPrefix] != "LOW" {
+			t.Fatalf("stripe sk_test_ severity = %q, want LOW (findings: %v)", sev[checkPublicPrefix], sev)
+		}
+	})
+
+	// Stripe test key committed in a .env -> rule 002 downgraded.
+	t.Run("stripe test key (.env rule 002)", func(t *testing.T) {
+		dir := t.TempDir()
+		write(t, dir, ".env", "STRIPE_SECRET=sk_test_"+"4eC39HqLyjWDarjtT1zdp7dc\n")
+		res, err := RunClientSecretExposure(dir)
+		if err != nil {
+			t.Fatalf("run: %v", err)
+		}
+		sev := sevByCheck(t, findings(t, res))
+		if sev[checkCommittedEnv] != "LOW" {
+			t.Fatalf(".env sk_test_ severity = %q, want LOW (findings: %v)", sev[checkCommittedEnv], sev)
+		}
+	})
+
+	// Supabase local-demo service_role JWT in a client file -> rule 003 LOW,
+	// not CRITICAL.
+	t.Run("supabase-demo JWT (rule 003)", func(t *testing.T) {
+		dir := t.TempDir()
+		write(t, dir, "src/app/db.tsx",
+			"\"use client\";\nexport const c = createClient(u, \""+buildDemoJWT()+"\");\n")
+		res, err := RunClientSecretExposure(dir)
+		if err != nil {
+			t.Fatalf("run: %v", err)
+		}
+		sev := sevByCheck(t, findings(t, res))
+		if sev[checkClientSideStrong] != "LOW" {
+			t.Fatalf("supabase-demo JWT severity = %q, want LOW (findings: %v)", sev[checkClientSideStrong], sev)
+		}
+	})
+}
+
+// TestValueShapeGate verifies the provider-format-OR-high-entropy value gate
+// and the *_IMAGE/*_VERSION/*_URL key ignores.
+func TestValueShapeGate(t *testing.T) {
+	// A high-entropy, provider-format key (sk-style) is still flagged.
+	t.Run("provider-format key flagged", func(t *testing.T) {
+		dir := t.TempDir()
+		write(t, dir, "src/app/ai.tsx",
+			"\"use client\";\nconst k = \"sk-AbCd1234EfGh5678IjKl9012MnOp3456\";\n")
+		res, err := RunClientSecretExposure(dir)
+		if err != nil {
+			t.Fatalf("run: %v", err)
+		}
+		sev := sevByCheck(t, findings(t, res))
+		if sev[checkClientSideStrong] != "CRITICAL" {
+			t.Fatalf("provider-format sk- key severity = %q, want CRITICAL (findings: %v)", sev[checkClientSideStrong], sev)
+		}
+	})
+
+	// NEXT_PUBLIC_FOO assigned a plain, non-key-shaped URL/word is not flagged.
+	t.Run("non-key-shaped public value ignored", func(t *testing.T) {
+		dir := t.TempDir()
+		write(t, dir, "src/config.ts",
+			"const NEXT_PUBLIC_FOO = \"someurl\";\n"+
+				"const NEXT_PUBLIC_API = \"https://api.example.com/v1/endpoint\";\n")
+		res, err := RunClientSecretExposure(dir)
+		if err != nil {
+			t.Fatalf("run: %v", err)
+		}
+		if fs := findings(t, res); len(fs) != 0 {
+			t.Fatalf("non-key-shaped NEXT_PUBLIC values produced %d findings, want 0: %v", len(fs), fs)
+		}
+	})
+
+	// *_IMAGE / *_VERSION / *_URL keys with benign values are ignored, but a
+	// URL embedding a credential still fires.
+	t.Run("image/version/url keys ignored", func(t *testing.T) {
+		dir := t.TempDir()
+		write(t, dir, ".env",
+			"APP_IMAGE=registry.example.com/app@sha256:abcdef0123456789abcdef0123456789\n"+
+				"APP_VERSION=1.2.3-rc.4+build567890abcdef\n"+
+				"API_URL=https://api.example.com/v1/service/endpoint/path\n")
+		res, err := RunClientSecretExposure(dir)
+		if err != nil {
+			t.Fatalf("run: %v", err)
+		}
+		if fs := findings(t, res); len(fs) != 0 {
+			t.Fatalf("image/version/url keys produced %d findings, want 0: %v", len(fs), fs)
+		}
+	})
+
+	t.Run("url key with embedded credential flagged", func(t *testing.T) {
+		dir := t.TempDir()
+		write(t, dir, ".env",
+			"DATABASE_URL=postgres://admin:Sup3rS3cretP4ssw0rd@db.example.com:5432/app\n")
+		res, err := RunClientSecretExposure(dir)
+		if err != nil {
+			t.Fatalf("run: %v", err)
+		}
+		if _, ok := sevByCheck(t, findings(t, res))[checkCommittedEnv]; !ok {
+			t.Fatalf("DATABASE_URL with embedded credential was not flagged")
+		}
+	})
+}
+
+// findByCheck returns the first finding with the given check_id, or nil.
+func findByCheck(fs []map[string]interface{}, checkID string) map[string]interface{} {
+	for _, f := range fs {
+		if id, _ := f["check_id"].(string); id == checkID {
+			return f
+		}
+	}
+	return nil
+}
+
+// TestFileClassificationSeverity verifies that file classification shapes
+// severity and that strong-secret wording is correct for server paths.
+func TestFileClassificationSeverity(t *testing.T) {
+	jwt := buildServiceRoleJWT()
+
+	// A generic (non-provider-format) high-entropy secret in a test file is
+	// informational.
+	t.Run("generic secret in test file -> INFO", func(t *testing.T) {
+		dir := t.TempDir()
+		write(t, dir, "src/app/foo.test.tsx",
+			"const NEXT_PUBLIC_KEY = \""+plantedPublicSecret+"\";\n")
+		res, err := RunClientSecretExposure(dir)
+		if err != nil {
+			t.Fatalf("run: %v", err)
+		}
+		f := findByCheck(findings(t, res), checkPublicPrefix)
+		if f == nil {
+			t.Fatalf("expected a %s finding in the test file", checkPublicPrefix)
+		}
+		if sev, _ := f["severity"].(string); sev != "INFO" {
+			t.Fatalf("generic secret in test file severity = %q, want INFO", sev)
+		}
+	})
+
+	// A provider-format, high-entropy secret in a test file keeps its elevated
+	// severity (the carve-out).
+	t.Run("provider-format secret in test file stays elevated", func(t *testing.T) {
+		dir := t.TempDir()
+		write(t, dir, "src/__tests__/db.ts",
+			"export const c = createClient(u, \""+jwt+"\");\n")
+		res, err := RunClientSecretExposure(dir)
+		if err != nil {
+			t.Fatalf("run: %v", err)
+		}
+		f := findByCheck(findings(t, res), checkClientSideStrong)
+		if f == nil {
+			t.Fatalf("expected a %s finding in the test file", checkClientSideStrong)
+		}
+		if sev, _ := f["severity"].(string); sev == "INFO" {
+			t.Fatalf("provider-format JWT in test file was downgraded to INFO, want elevated")
+		}
+	})
+
+	// A service_role JWT in a server-only app/api route handler is flagged but
+	// NOT described as client-side / browser-shipped, and is not CRITICAL.
+	t.Run("server api route wording and severity", func(t *testing.T) {
+		dir := t.TempDir()
+		write(t, dir, "src/app/api/db/route.ts",
+			"export async function GET() { return createClient(u, \""+jwt+"\"); }\n")
+		res, err := RunClientSecretExposure(dir)
+		if err != nil {
+			t.Fatalf("run: %v", err)
+		}
+		f := findByCheck(findings(t, res), checkClientSideStrong)
+		if f == nil {
+			t.Fatalf("expected a %s finding in the server route", checkClientSideStrong)
+		}
+		if sev, _ := f["severity"].(string); sev == "CRITICAL" {
+			t.Fatalf("server-side route secret severity = CRITICAL, want non-critical")
+		}
+		msg, _ := f["message"].(string)
+		if strings.Contains(msg, "client-side") || strings.Contains(msg, "ships to the browser") {
+			t.Fatalf("server-side finding wrongly described as client-side: %q", msg)
+		}
+	})
+}
+
 func keys(m map[string]map[string]interface{}) []string {
 	out := make([]string, 0, len(m))
 	for k := range m {
