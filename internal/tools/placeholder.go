@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/Armur-Ai/Trishul/internal/fileclass"
 	"github.com/Armur-Ai/Trishul/internal/logger"
 	"github.com/Armur-Ai/Trishul/internal/redact"
 	utils "github.com/Armur-Ai/Trishul/pkg"
@@ -210,6 +211,13 @@ func scanPlaceholderFile(relPath, content string, isTest bool) []map[string]inte
 	var findings []map[string]interface{}
 	lines := strings.Split(content, "\n")
 
+	// Classify the file once (path-only) so detectors can tune precision:
+	//   - credential rules (001/002) are suppressed in locale/i18n string tables,
+	//     which hold translated UI labels rather than real credentials;
+	//   - the disabled-verification rule (003) scales severity by code context.
+	kind := fileclass.ClassifyPath(relPath)
+	skipCreds := kind == fileclass.KindLocale
+
 	// Collected for file-level correlation (checks 002 and 004).
 	hasDefaultUser := false
 	var weakPassLines []int
@@ -236,10 +244,10 @@ func scanPlaceholderFile(relPath, content string, isTest bool) []map[string]inte
 		}
 
 		// 001 — hardcoded placeholder secret.
-		if !rePhEnvAccess.MatchString(line) {
+		if !skipCreds && !rePhEnvAccess.MatchString(line) {
 			if m := rePhSecret.FindStringSubmatch(line); m != nil {
 				name, value := m[1], m[2]
-				if weak, high := phIsWeakSecret(value); weak {
+				if weak, high := phIsWeakSecret(value); weak && !phIsDisplayLabel(name, value) {
 					conf := "HIGH"
 					if !high {
 						conf = "MEDIUM"
@@ -257,21 +265,23 @@ func scanPlaceholderFile(relPath, content string, isTest bool) []map[string]inte
 			}
 		}
 
-		// 002 — default-credential correlation inputs.
-		if !rePhEnvAccess.MatchString(line) {
+		// 002 — default-credential correlation inputs. Locale/i18n tables and
+		// display-label assignments (e.g. `password: 'Password'`, enum display
+		// names) are UI strings, not credentials, and are skipped.
+		if !skipCreds && !rePhEnvAccess.MatchString(line) {
 			if m := rePhUserField.FindStringSubmatch(line); m != nil {
-				if phDefaultUsers[strings.ToLower(m[2])] {
+				if phDefaultUsers[strings.ToLower(m[2])] && !phIsDisplayLabel(m[1], m[2]) {
 					hasDefaultUser = true
 				}
 			}
 			if m := rePhPassField.FindStringSubmatch(line); m != nil {
-				if phWeakPasswords[strings.ToLower(m[2])] {
+				if phWeakPasswords[strings.ToLower(m[2])] && !phIsDisplayLabel(m[1], m[2]) {
 					weakPassLines = append(weakPassLines, lineNo)
 				}
 			}
 		}
 		// 002 — inline connection-string credentials (self-contained, HIGH).
-		if rePhInlineCreds.MatchString(line) {
+		if m := rePhInlineCreds.FindStringSubmatch(line); m != nil && !phIsURLNormCase(isTest, m[1]) {
 			conf := "HIGH"
 			if isTest {
 				conf = "MEDIUM"
@@ -283,22 +293,31 @@ func scanPlaceholderFile(relPath, content string, isTest bool) []map[string]inte
 			))
 		}
 
-		// 003 — disabled verification.
+		// 003 — disabled verification (severity scaled by file kind; see
+		// phVerifyContext). A nil result means the finding is suppressed.
 		if rePhVerifyFalse.MatchString(line) {
-			findings = append(findings, phVerifyFinding(relPath, lineNo, isTest,
-				"TLS/certificate verification is disabled (`verify=False`), exposing traffic to man-in-the-middle attacks."))
+			if f := phVerifyFinding(relPath, lineNo, kind,
+				"TLS/certificate verification is disabled (`verify=False`), exposing traffic to man-in-the-middle attacks."); f != nil {
+				findings = append(findings, f)
+			}
 		}
 		if rePhRejectUnauth.MatchString(line) {
-			findings = append(findings, phVerifyFinding(relPath, lineNo, isTest,
-				"TLS certificate validation is disabled (`rejectUnauthorized: false`), exposing traffic to man-in-the-middle attacks."))
+			if f := phVerifyFinding(relPath, lineNo, kind,
+				"TLS certificate validation is disabled (`rejectUnauthorized: false`), exposing traffic to man-in-the-middle attacks."); f != nil {
+				findings = append(findings, f)
+			}
 		}
 		if rePhNodeTLS.MatchString(line) {
-			findings = append(findings, phVerifyFinding(relPath, lineNo, isTest,
-				"`NODE_TLS_REJECT_UNAUTHORIZED=0` disables all TLS certificate validation process-wide."))
+			if f := phVerifyFinding(relPath, lineNo, kind,
+				"`NODE_TLS_REJECT_UNAUTHORIZED=0` disables all TLS certificate validation process-wide."); f != nil {
+				findings = append(findings, f)
+			}
 		}
 		if rePhInsecureSkip.MatchString(line) {
-			findings = append(findings, phVerifyFinding(relPath, lineNo, isTest,
-				"`InsecureSkipVerify: true` disables TLS certificate validation, exposing traffic to man-in-the-middle attacks."))
+			if f := phVerifyFinding(relPath, lineNo, kind,
+				"`InsecureSkipVerify: true` disables TLS certificate validation, exposing traffic to man-in-the-middle attacks."); f != nil {
+				findings = append(findings, f)
+			}
 		}
 
 		// 004 — CORS correlation inputs.
@@ -367,17 +386,62 @@ func scanPlaceholderFile(relPath, content string, isTest bool) []map[string]inte
 	return findings
 }
 
-// phVerifyFinding builds a check-003 finding.
-func phVerifyFinding(relPath string, lineNo int, isTest bool, message string) map[string]interface{} {
-	conf := "HIGH"
-	if isTest {
-		conf = "MEDIUM"
+// phVerifyFinding builds a check-003 finding, scaling severity by the file's
+// classification (see phVerifyContext). It returns nil when the finding should
+// be suppressed entirely (prompts and docs), so callers must nil-check.
+func phVerifyFinding(relPath string, lineNo int, kind fileclass.Kind, message string) map[string]interface{} {
+	sev, skip := phVerifyContext(relPath, kind)
+	if skip {
+		return nil
 	}
 	return phFinding(
-		relPath, lineNo, "HIGH", phCheckVerify, "CWE-295", conf,
+		relPath, lineNo, sev, phCheckVerify, "CWE-295", sev,
 		message,
 		"Keep certificate/host verification enabled; fix the underlying trust issue (install the correct CA) instead of disabling validation.",
 	)
+}
+
+// phVerifyContext decides how a disabled-verification finding (003) should be
+// treated for a file, using internal/fileclass:
+//   - prompts and docs (agent-surface, docs, locale) are illustrative text, not a
+//     live control, so the finding is suppressed;
+//   - tooling / scripts / pentest-tools / dev configs (tests, fixtures, examples,
+//     config, CI, migrations, generated, and script-like source paths) carry real
+//     but lower risk, reported at LOW;
+//   - production code paths (plain source) are reported at HIGH.
+func phVerifyContext(relPath string, kind fileclass.Kind) (severity string, skip bool) {
+	switch kind {
+	case fileclass.KindDocs, fileclass.KindAgentSurface, fileclass.KindLocale:
+		return "", true
+	case fileclass.KindSource:
+		if phIsToolingPath(relPath) {
+			return "LOW", false
+		}
+		return "HIGH", false
+	default:
+		return "LOW", false
+	}
+}
+
+// phIsToolingPath reports whether a source-classified path is really a script or
+// tooling/pentest/dev surface rather than production application code. fileclass
+// has no dedicated "script" kind, so shell scripts and well-known tooling
+// directories are recognised here to keep their disabled-verification findings at
+// LOW rather than HIGH.
+func phIsToolingPath(relPath string) bool {
+	lower := strings.ToLower(relPath)
+	switch filepath.Ext(lower) {
+	case ".sh", ".bash":
+		return true
+	}
+	for _, seg := range strings.Split(lower, "/") {
+		switch seg {
+		case "scripts", "script", "tools", "tool", "tooling", "bin", "hack",
+			"pentest", "pentests", "devtools", "dev":
+			return true
+		}
+	}
+	return false
 }
 
 // phIsWeakSecret reports whether a secret value is weak/placeholder. The second
@@ -399,6 +463,42 @@ func phIsWeakSecret(v string) (weak bool, high bool) {
 		return true, false
 	}
 	return false, false
+}
+
+// phIsURLNormCase reports whether an inline-credential match inside a test file
+// is the canonical URL-parsing / URL-normalization placeholder `user:pass@`
+// (userinfo of the form user:<pass>), which test suites use as fixture data for
+// URL handling rather than as a real embedded credential. It never suppresses
+// privileged default pairs such as admin:admin@ or root:root@, which stay
+// flagged even in tests. user is the matched userinfo username (group 1).
+func phIsURLNormCase(isTest bool, user string) bool {
+	return isTest && strings.EqualFold(user, "user")
+}
+
+// phIsDisplayLabel reports whether value is a display label / translation of the
+// field name rather than a real credential. UI code and i18n tables routinely
+// assign a human-readable label to a field named after a credential, e.g.
+// `password: 'Password'`, `username: 'Username'`, `secret_key: 'Secret Key'`, or
+// enum display names. These are detected by comparing the alphanumeric cores of
+// the key and the value: a value that is just the field name re-cased (or spaced)
+// is a label, never a secret.
+func phIsDisplayLabel(name, value string) bool {
+	n := phAlnumLower(name)
+	v := phAlnumLower(value)
+	return n != "" && n == v
+}
+
+// phAlnumLower returns s lower-cased with every non-alphanumeric rune removed, so
+// "Secret Key" and "secret_key" both collapse to "secretkey".
+func phAlnumLower(s string) string {
+	var b strings.Builder
+	b.Grow(len(s))
+	for _, r := range strings.ToLower(s) {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
 }
 
 // phIsCommentLine reports whether a trimmed line is a comment.

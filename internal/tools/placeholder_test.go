@@ -118,6 +118,41 @@ func TestPlaceholder_DisabledVerification_Flagged(t *testing.T) {
 	}
 }
 
+func TestPlaceholder_InsecureSkipVerify_ProdHigh_ScriptLow(t *testing.T) {
+	dir := t.TempDir()
+	// Production source: HIGH. Script/tooling path: same pattern, LOW.
+	phWrite(t, dir, "prod/client.go", "package prod\nvar c = &tls.Config{InsecureSkipVerify: true}\n")
+	phWrite(t, dir, "scripts/probe.go", "package main\nvar c = &tls.Config{InsecureSkipVerify: true}\n")
+
+	findings := phFindings(t, mustRun(t, dir))
+	vf := phByCheck(findings, "VIBE-PLACEHOLDER-003")
+	if len(vf) != 2 {
+		t.Fatalf("expected 2 VIBE-PLACEHOLDER-003 findings, got %d: %+v", len(vf), findings)
+	}
+	sev := map[string]string{}
+	for _, f := range vf {
+		sev[f["path"].(string)] = f["severity"].(string)
+	}
+	if sev["prod/client.go"] != "HIGH" {
+		t.Errorf("prod InsecureSkipVerify: expected HIGH, got %v", sev["prod/client.go"])
+	}
+	if sev["scripts/probe.go"] != "LOW" {
+		t.Errorf("script InsecureSkipVerify: expected LOW, got %v", sev["scripts/probe.go"])
+	}
+}
+
+func TestPlaceholder_DisabledVerify_PromptSuppressed(t *testing.T) {
+	dir := t.TempDir()
+	// An agent-surface / prompt file (.claude/...): disabled verification here is
+	// illustrative text, not a live control, and is suppressed entirely.
+	phWrite(t, dir, ".claude/snippet.py", "client = requests.get(url, verify=False)\n")
+
+	findings := phFindings(t, mustRun(t, dir))
+	if got := phByCheck(findings, "VIBE-PLACEHOLDER-003"); len(got) != 0 {
+		t.Fatalf("verify=False in a prompt/agent-surface file should be suppressed, got %+v", got)
+	}
+}
+
 func TestPlaceholder_WildcardCORSWithCredentials_Flagged(t *testing.T) {
 	dir := t.TempDir()
 	phWrite(t, dir, "server.js", `app.use(cors({ origin: "*", credentials: true }));`+"\n")
@@ -163,6 +198,77 @@ func TestPlaceholder_DefaultCredentials_Flagged(t *testing.T) {
 	}
 	if df[0]["severity"] != "HIGH" {
 		t.Errorf("expected HIGH, got %v", df[0]["severity"])
+	}
+}
+
+func TestPlaceholder_DisplayLabels_NotFlagged(t *testing.T) {
+	dir := t.TempDir()
+	// A UI label / form-field table: the values are display strings (the field
+	// name re-cased), not credentials, and must not trip the default-credential
+	// rule even though "user"/"password" are otherwise default values.
+	phWrite(t, dir, "labels.js", "const labels = {\n"+
+		"  user: 'User',\n"+
+		"  username: 'Username',\n"+
+		"  password: 'Password',\n"+
+		"};\n")
+
+	findings := phFindings(t, mustRun(t, dir))
+	if got := phByCheck(findings, "VIBE-PLACEHOLDER-002"); len(got) != 0 {
+		t.Fatalf("display-label strings should not be flagged as default creds, got %+v", got)
+	}
+}
+
+func TestPlaceholder_LocaleStringsTable_NotFlagged(t *testing.T) {
+	dir := t.TempDir()
+	// An i18n / locale string table. Even values that look like default
+	// credentials are translation strings here, so the credential rules are
+	// suppressed for locale-classified files.
+	phWrite(t, dir, "locales/en.json", "{\n  \"username\": \"admin\",\n  \"password\": \"admin\"\n}\n")
+
+	findings := phFindings(t, mustRun(t, dir))
+	if got := phByCheck(findings, "VIBE-PLACEHOLDER-002"); len(got) != 0 {
+		t.Fatalf("locale string table should not be flagged as default creds, got %+v", got)
+	}
+	if got := phByCheck(findings, "VIBE-PLACEHOLDER-001"); len(got) != 0 {
+		t.Fatalf("locale string table should not be flagged for hardcoded secrets, got %+v", got)
+	}
+}
+
+func TestPlaceholder_URLNormTestCase_NotFlagged(t *testing.T) {
+	dir := t.TempDir()
+	// A URL-normalization test fixture: `user:pass@` userinfo is test data for a
+	// URL parser, not an embedded credential, so it must not be flagged inside a
+	// test file.
+	phWrite(t, dir, "url_test.go", "package x\n"+
+		"func TestNorm(t *testing.T) { u := \"http://user:pass@example.com/p\"; _ = u }\n")
+
+	findings := phFindings(t, mustRun(t, dir))
+	if got := phByCheck(findings, "VIBE-PLACEHOLDER-002"); len(got) != 0 {
+		t.Fatalf("user:pass@ in a test file should not be flagged, got %+v", got)
+	}
+}
+
+func TestPlaceholder_InlineCreds_NonTestStillFlagged(t *testing.T) {
+	dir := t.TempDir()
+	// The same userinfo in production code is still a real embedded credential.
+	phWrite(t, dir, "db.go", "const dsn = \"postgres://user:pass@db:5432/app\"\n")
+
+	findings := phFindings(t, mustRun(t, dir))
+	if got := phByCheck(findings, "VIBE-PLACEHOLDER-002"); len(got) != 1 {
+		t.Fatalf("inline creds in prod code should still be flagged, got %+v", got)
+	}
+}
+
+func TestPlaceholder_PrivilegedInlineCreds_FlaggedEvenInTest(t *testing.T) {
+	dir := t.TempDir()
+	// A privileged default pair (admin:admin@) is a genuine default-credential
+	// demonstration and stays flagged even inside a test file.
+	phWrite(t, dir, "conn_test.go", "package x\n"+
+		"var dsn = \"mongodb://admin:admin@localhost:27017\"\n")
+
+	findings := phFindings(t, mustRun(t, dir))
+	if got := phByCheck(findings, "VIBE-PLACEHOLDER-002"); len(got) != 1 {
+		t.Fatalf("admin:admin@ should stay flagged even in a test file, got %+v", got)
 	}
 }
 
