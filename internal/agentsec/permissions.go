@@ -97,6 +97,13 @@ func scanPermissions(dir string) ([]AgentFinding, error) {
 				if !rule.re.MatchString(line) {
 					continue
 				}
+				// AGENT-PERM-001 (blanket allow-all) is only a committed
+				// escalation when it lives in a checked-in, project-level
+				// settings file. A wildcard in a gitignored local override, in
+				// documentation, or in an example/fixture is not shared policy.
+				if rule.checkID == "AGENT-PERM-001" && !permIsProjectSettings(rel) {
+					continue
+				}
 				dkey := rule.checkID + ":" + itoa(i+1)
 				if seen[dkey] {
 					continue
@@ -109,6 +116,11 @@ func scanPermissions(dir string) ([]AgentFinding, error) {
 		// Structured pass: catch multi-line allow-all arrays and bypass modes
 		// that a per-line regex cannot see.
 		for _, f := range permStructuredJSON(content) {
+			// Same precision gate as the per-line pass: only flag a blanket
+			// allow-all in a committed, project-level settings file.
+			if f.checkID == "AGENT-PERM-001" && !permIsProjectSettings(rel) {
+				continue
+			}
 			dkey := f.checkID + ":" + itoa(f.line)
 			if seen[dkey] {
 				continue
@@ -247,16 +259,54 @@ func permHasWildcard(v interface{}) bool {
 	return false
 }
 
+// permScopedWildcard matches a per-tool permission whose scope is left
+// unrestricted: Bash(*), Bash(:*), Write(*), WebFetch(domain:*). A narrow scope
+// such as Bash(git status) or WebFetch(domain:example.com) does not match.
+var permScopedWildcard = regexp.MustCompile(`\(\s*(\w*:)?\*\s*\)$`)
+
 func permIsWildcard(s string) bool {
 	s = strings.TrimSpace(s)
 	if s == "*" || strings.EqualFold(s, "all") || strings.EqualFold(s, "allow-all") {
 		return true
 	}
-	// broad per-tool wildcard like Bash(*) / Bash(:*)
-	if strings.HasSuffix(s, "(*)") || strings.HasSuffix(s, "(:*)") {
-		return true
+	// Broad per-tool wildcard: Bash(*), Bash(:*), WebFetch(domain:*).
+	return permScopedWildcard.MatchString(s)
+}
+
+// permIsProjectSettings reports whether rel is a committed, project-level agent
+// settings file — one checked into the repo that governs every run, such as
+// .claude/settings.json or .cursor/*.json. A blanket allow-all (AGENT-PERM-001)
+// is only a shared escalation in such a file. Personal gitignored overrides
+// (settings.local.json), documentation (*.md) and example/fixture configs are
+// excluded: a wildcard there is not committed project policy.
+func permIsProjectSettings(rel string) bool {
+	lp := "/" + filepath.ToSlash(strings.ToLower(rel))
+	base := strings.ToLower(filepath.Base(lp))
+
+	// Personal, gitignored overrides are not committed project policy.
+	if strings.HasSuffix(base, ".local.json") {
+		return false
 	}
-	return false
+	// Docs describe config; they don't enforce it.
+	if strings.HasSuffix(base, ".md") {
+		return false
+	}
+	// Examples, templates and test fixtures are illustrative, not active.
+	for _, seg := range []string{"example", "sample", "template", "fixture", "testdata", "/docs/", "/doc/", "/test/", "/tests/"} {
+		if strings.Contains(lp, seg) {
+			return false
+		}
+	}
+	if !strings.HasSuffix(base, ".json") {
+		return false
+	}
+	// Committed agent settings live under a project config dir, or are the
+	// canonical settings.json / *.settings.json for the project.
+	return strings.Contains(lp, "/.claude/") ||
+		strings.Contains(lp, "/.cursor/") ||
+		strings.Contains(lp, "/.codeium/") ||
+		base == "settings.json" ||
+		strings.HasSuffix(base, ".settings.json")
 }
 
 func permLineOf(lines []string, needle string) int {
