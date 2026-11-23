@@ -1,0 +1,6 @@
+repos:
+  - repo: https://github.com/example/alpha
+    sha: 0123456789abcdef0123456789abcdef01234567
+    note: seed sample
+  - repo: example/beta
+    sha: abc1234

@@ -1,0 +1,5 @@
+# Precision corpus: public repos pinned to commit SHAs, scanned by trishul-bench.
+# Seed with repos from the state-of-mcp-security scan. Fetch with
+# scripts/precision/fetch.sh testdata/precision/corpus.yaml .precision-cache
+# Never execute anything from these repos — they are untrusted, read-only inputs.
+repos: []
