@@ -433,6 +433,85 @@ export async function POST(req: Request) {
 	}
 }
 
+// --- fix #3: public-by-design routes ----------------------------------------
+
+// A webhook receiver that verifies the provider signature authenticates its
+// caller and must NOT be flagged, even when its path is not named "webhook".
+func TestRouteAuth_SignedWebhookClean(t *testing.T) {
+	dir := t.TempDir()
+	raWrite(t, dir, "app/api/stripe/events/route.ts", `
+import Stripe from 'stripe';
+import { prisma } from '@/lib/prisma';
+const stripe = new Stripe(process.env.STRIPE_KEY!);
+export async function POST(req: Request) {
+  const sig = req.headers.get('stripe-signature')!;
+  const event = stripe.webhooks.constructEvent(await req.text(), sig, process.env.WH_SECRET!);
+  await prisma.event.create({ data: { type: event.type } });
+  return Response.json({ received: true });
+}
+`)
+	findings := raScan(t, dir)
+	if len(findings) != 0 {
+		t.Fatalf("expected 0 findings for a signature-verified webhook, got %d: %v", len(findings), findings)
+	}
+}
+
+// A webhook-style receiver that does NOT verify any signature and has no auth
+// still gets flagged when its path is not an allow-listed public segment.
+func TestRouteAuth_UnsignedReceiverStillFlagged(t *testing.T) {
+	dir := t.TempDir()
+	raWrite(t, dir, "app/api/ingest/events/route.ts", `
+import { prisma } from '@/lib/prisma';
+export async function POST(req: Request) {
+  const body = await req.json();
+  await prisma.event.create({ data: { type: body.type } });
+  return Response.json({ received: true });
+}
+`)
+	if raCheckIDs(raScan(t, dir))[raCheckUnauth] == 0 {
+		t.Fatalf("an unsigned, unauthenticated receiver must still be flagged %s", raCheckUnauth)
+	}
+}
+
+// A standard health endpoint that touches the data layer stays clean.
+func TestRouteAuth_HealthEndpointClean(t *testing.T) {
+	dir := t.TempDir()
+	raWrite(t, dir, "app/api/healthz/route.ts", `
+import { db } from '@/lib/db';
+export async function GET() {
+  await db.query('SELECT 1');
+  return Response.json({ ok: true });
+}
+`)
+	if findings := raScan(t, dir); len(findings) != 0 {
+		t.Fatalf("expected 0 findings for a health endpoint, got %d: %v", len(findings), findings)
+	}
+}
+
+// Extra public segments declared in .trishul.yml are honored.
+func TestRouteAuth_ConfigPublicSegment(t *testing.T) {
+	route := `
+import { prisma } from '@/lib/prisma';
+export async function POST(req: Request) {
+  const body = await req.json();
+  return Response.json(await prisma.ping.create({ data: body }));
+}
+`
+	// Control: not public => flagged.
+	ctrl := t.TempDir()
+	raWrite(t, ctrl, "app/api/telemetry/route.ts", route)
+	if raCheckIDs(raScan(t, ctrl))[raCheckUnauth] == 0 {
+		t.Fatalf("control: a non-public route should be flagged")
+	}
+	// Declared public => clean.
+	cfg := t.TempDir()
+	raWrite(t, cfg, ".trishul.yml", "routeauth:\n  public_segments:\n    - telemetry\n")
+	raWrite(t, cfg, "app/api/telemetry/route.ts", route)
+	if findings := raScan(t, cfg); len(findings) != 0 {
+		t.Fatalf("a configured public_segment must suppress findings, got %d: %v", len(findings), findings)
+	}
+}
+
 // Findings must be sorted deterministically by (path, line, check_id).
 func TestRouteAuth_Deterministic(t *testing.T) {
 	dir := t.TempDir()

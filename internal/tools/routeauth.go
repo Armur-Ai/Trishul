@@ -340,7 +340,8 @@ func raEvaluate(handlers []raHandler, rel string, fileHasAuth bool, authTokens, 
 		// VIBE-AUTHZ-001: unauthenticated data route.
 		if !fileHasAuth && !handlerHasAuth && !h.guarded &&
 			raContainsAny(bodyLower, dataTokens) &&
-			!raPublicPath(rel, h.routePath) {
+			!raPublicPath(rel, h.routePath, opts.extraPublicSeg) &&
+			!raSignedWebhook(bodyLower) {
 			out = append(out, raFinding(rel, h.line, raCheckUnauth, raCWEMissing,
 				"API route handler reads/writes data with no visible authentication or authorization check; "+
 					"any unauthenticated client can invoke it.",
@@ -690,14 +691,33 @@ func raFinding(path string, line int, checkID, cwe, message, remediation string)
 }
 
 // raPublicPath reports whether any path segment of rel or routePath marks the
-// route as intentionally public (health, login, webhook, static, …).
-func raPublicPath(rel, routePath string) bool {
+// route as intentionally public (health, login, webhook, static, …), including
+// any extra segments declared in .trishul.yml.
+func raPublicPath(rel, routePath string, extra map[string]bool) bool {
 	for _, tok := range raSegments(rel + "/" + routePath) {
-		if raPublicSegments[tok] {
+		if raPublicSegments[tok] || extra[tok] {
 			return true
 		}
 	}
 	return false
+}
+
+// raWebhookSigTokens are substrings that indicate the handler verifies an
+// inbound webhook's provider signature. Such a handler authenticates its caller
+// (the provider) and is public-by-design, so it must not be flagged for missing
+// user authorization. Kept specific to avoid matching unrelated crypto code.
+var raWebhookSigTokens = []string{
+	"constructevent", "stripe-signature", "x-hub-signature", "x-signature-",
+	"svix", "svix-signature", "verifysignature", "verify_signature",
+	"verifywebhook", "verify_webhook", "webhook.verify", "wh.verify",
+	"checksignature", "x-slack-signature", "x-shopify-hmac", "x-twilio-signature",
+	"verifyhmac", "verify_hmac",
+}
+
+// raSignedWebhook reports whether a handler body verifies an inbound webhook
+// signature (lowerBody is the already-lowercased handler text).
+func raSignedWebhook(lowerBody string) bool {
+	return raContainsAny(lowerBody, raWebhookSigTokens)
 }
 
 func raSegments(s string) []string {
