@@ -1,9 +1,22 @@
+# trishul-cli — PyPI distribution.
+#
+# Published as per-platform binary wheels (ruff/maturin style): each wheel
+# carries the native `trishul` Go binary for one platform under
+# `trishul_cli/bin/` plus a tiny pure-Python console-script shim. The wheels
+# are NOT produced by this build-backend — they are assembled deterministically
+# from the goreleaser `dist/` tree by `scripts/pip/build-wheels.py`.
+#
+# This [project] table is the single source of truth for the package metadata
+# (name, version, classifiers, entry point); build-wheels.py reads it via
+# tomllib. The setuptools build-backend below only exists so that a plain
+# `python -m build --sdist` still works for a source distribution.
+
 [build-system]
 requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "trishul"
+name = "trishul-cli"
 version = "0.0.1"
 description = "trishul — Security Scanner for Vibe-Coded Software"
 readme = "README.md"
@@ -30,7 +43,11 @@ Repository = "https://github.com/Armur-Ai/trishul"
 Issues = "https://github.com/Armur-Ai/trishul/issues"
 
 [project.scripts]
-trishul = "trishul.cli:main"
+trishul = "trishul_cli._exec:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
-include = ["trishul*"]
+where = ["src"]
+include = ["trishul_cli*"]
