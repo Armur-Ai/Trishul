@@ -3,6 +3,7 @@ package internal
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	utils "github.com/Armur-Ai/Trishul/pkg"
@@ -277,6 +278,61 @@ func TestRunSupabaseRLS_ContextGate_Signals(t *testing.T) {
 			t.Errorf("expected findings when SQL references auth.uid(), got none")
 		}
 	})
+}
+
+func TestCreateTableParsing_Forms(t *testing.T) {
+	// Each form should parse to the expected canonical table key and produce a
+	// single missing-RLS finding whose message names that table. The historical
+	// bug produced a table named "if" for IF NOT EXISTS; it must not recur.
+	cases := []struct {
+		name     string
+		stmt     string
+		wantName string // canonical (unquoted, unqualified) name in the message
+	}{
+		{"if not exists", "create table if not exists widgets (id int);", "widgets"},
+		{"if not exists schema-qualified", "create table if not exists public.widgets (id int);", "widgets"},
+		{"quoted with space", `create table "My Table" (id int);`, "my table"},
+		{"schema qualified public", "create table public.users (id int);", "users"},
+		{"public prefix bare match", "create table public.users (id int);", "users"},
+		{"unqualified", "create table users (id int);", "users"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			writeMigration(t, dir, "0001.sql", tc.stmt)
+			findings, err := scanSupabaseMigrations(dir)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			byCheck := findingsByCheck(findings)
+			rls := byCheck["SUPABASE-RLS-001"]
+			if len(rls) != 1 {
+				t.Fatalf("expected exactly 1 missing-RLS finding, got %d: %v", len(rls), findings)
+			}
+			msg, _ := rls[0]["message"].(string)
+			want := "\"" + tc.wantName + "\""
+			if !strings.Contains(msg, want) {
+				t.Errorf("expected message to name table %s, got: %q", want, msg)
+			}
+			if strings.Contains(msg, "\"if\"") {
+				t.Errorf("parser produced bogus table name \"if\": %q", msg)
+			}
+		})
+	}
+}
+
+func TestCreateTableParsing_NonPublicSchemaSkipped(t *testing.T) {
+	// A table in a non-public schema (e.g. app.users) is not part of the
+	// Supabase anon/public data layer, so no missing-RLS finding is expected.
+	dir := t.TempDir()
+	writeMigration(t, dir, "0001.sql", "create table app.users (id int);\n-- auth.uid()\n")
+	findings, err := scanSupabaseMigrations(dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if byCheck := findingsByCheck(findings); len(byCheck["SUPABASE-RLS-001"]) != 0 {
+		t.Errorf("expected no missing-RLS finding for non-public schema, got: %v", byCheck["SUPABASE-RLS-001"])
+	}
 }
 
 func TestScanSupabase_TopLevelSQLFile(t *testing.T) {

@@ -120,9 +120,16 @@ type createdTable struct {
 	line    int
 }
 
+// sqlIdent is the identifier sub-pattern shared by the table/policy parsers: a
+// double-quoted name (which may contain spaces) or a bare snake_case name. It is
+// a string so it can be composed into larger patterns.
+const sqlIdent = `"[^"]+"|[a-z0-9_]+`
+
 var (
-	reCreateTable   = regexp.MustCompile(`(?s)create\s+table\s+(?:if\s+not\s+exists\s+)?(?:("?[a-z0-9_]+"?)\.)?("?[a-z0-9_]+"?)`)
-	reEnableRLS     = regexp.MustCompile(`(?s)alter\s+table\s+(?:only\s+)?(?:if\s+exists\s+)?(?:"?[a-z0-9_]+"?\.)?("?[a-z0-9_]+"?)\s+enable\s+row\s+level\s+security`)
+	// reCreateTable captures an optional schema (group 1) and the table name
+	// (group 2), supporting IF NOT EXISTS, quoted names and schema qualification.
+	reCreateTable   = regexp.MustCompile(`(?s)create\s+table\s+(?:if\s+not\s+exists\s+)?(?:(` + sqlIdent + `)\s*\.\s*)?(` + sqlIdent + `)`)
+	reEnableRLS     = regexp.MustCompile(`(?s)alter\s+table\s+(?:only\s+)?(?:if\s+exists\s+)?(?:(?:` + sqlIdent + `)\s*\.\s*)?(` + sqlIdent + `)\s+enable\s+row\s+level\s+security`)
 	reCreatePolicy  = regexp.MustCompile(`(?s)create\s+policy`)
 	reUsingTrue     = regexp.MustCompile(`(?s)using\s*\(\s*true\s*\)`)
 	reWithCheckTrue = regexp.MustCompile(`(?s)with\s+check\s*\(\s*true\s*\)`)
@@ -214,18 +221,19 @@ func scanStatements(stmts []sqlStmt, relPath string) ([]map[string]interface{}, 
 		// CREATE TABLE — record for missing-RLS correlation.
 		if m := reCreateTable.FindStringSubmatchIndex(lower); m != nil {
 			schema := captureAt(lower, m, 2)
-			name := unquote(captureAt(lower, m, 4))
-			schema = unquote(schema)
+			name := captureAt(lower, m, 4)
 			// Only public-schema tables are RLS-relevant; auth/storage/etc. are
 			// managed by Supabase. Unqualified defaults to public.
-			if name != "" && (schema == "" || schema == "public") {
-				created = append(created, createdTable{name: name, relPath: relPath, line: s.line})
+			if name != "" && isPublicSchema(schema) {
+				key, _ := canonicalTable(schema, name)
+				created = append(created, createdTable{name: key, relPath: relPath, line: s.line})
 			}
 		}
 
 		// ALTER TABLE ... ENABLE ROW LEVEL SECURITY.
 		if m := reEnableRLS.FindStringSubmatch(lower); m != nil {
-			enabled[unquote(m[1])] = true
+			key, _ := canonicalTable("", m[1])
+			enabled[key] = true
 		}
 
 		// Policy-level checks.
@@ -327,6 +335,28 @@ func captureAt(s string, idx []int, n int) string {
 
 func unquote(s string) string {
 	return strings.Trim(s, `"`)
+}
+
+// isPublicSchema reports whether a parsed schema qualifier refers to the public
+// schema. The unqualified form (empty) defaults to public in Postgres.
+func isPublicSchema(schema string) bool {
+	s := strings.ToLower(unquote(strings.TrimSpace(schema)))
+	return s == "" || s == "public"
+}
+
+// canonicalTable reduces a (schema, name) identifier pair to a key used to
+// correlate statements across migrations, plus a human-readable display name.
+// Quotes are stripped and the public schema (and the unqualified form) collapse
+// to the bare table name, so `public.users`, `"users"` and `users` are one
+// table; a non-public schema is kept in the key to avoid cross-schema
+// collisions.
+func canonicalTable(schema, name string) (key, display string) {
+	s := strings.ToLower(unquote(strings.TrimSpace(schema)))
+	n := strings.ToLower(unquote(strings.TrimSpace(name)))
+	if s == "" || s == "public" {
+		return n, n
+	}
+	return s + "." + n, n
 }
 
 // lineOfOffset maps a byte offset within a statement's text to an absolute
