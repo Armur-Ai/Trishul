@@ -270,11 +270,15 @@ func execAnalyzeRun(rel, block string, line int) []AgentFinding {
 	// A run step that references a repository secret and also talks to a
 	// non-allowlisted host is an exfiltration path.
 	if strings.Contains(strings.ToLower(block), "secrets.") {
-		if ext := execExternalURLs(block); len(ext) > 0 {
+		for _, u := range execExternalURLs(block) {
+			h := execHost(u)
+			if execSecretToOwnService(block, h) {
+				continue // the secret's own service — legitimate, not exfil
+			}
 			return []AgentFinding{execFinding("AGENT-EXEC-003",
 				"CI workflow step exfiltrates a repository secret", "HIGH", "HIGH",
 				rel, "an AI agent runs tests or builds",
-				"sends a repository secret to "+execHost(ext[0]),
+				"sends a repository secret to "+h,
 				"CWE-829, CWE-200", rel, line, execTrim(block), "")}
 		}
 	}
@@ -383,13 +387,20 @@ func execClassify(cmd string) (execHit, bool) {
 		}, true
 	}
 
-	// 4. Fetching code/content from a non-allowlisted network destination.
-	if execHasFetch(cmd) && len(ext) > 0 {
-		return execHit{
-			sev: "MEDIUM", conf: "MEDIUM", cwe: "CWE-829",
-			enabled:  "downloads content from non-allowlisted host " + execHost(ext[0]),
-			evidence: execTrim(cmd),
-		}, true
+	// 4. Fetching code/content from a non-allowlisted network destination. A host
+	// that is a referenced secret's own service (e.g. a webhook POST) is normal.
+	if execHasFetch(cmd) {
+		for _, u := range ext {
+			h := execHost(u)
+			if execSecretToOwnService(cmd, h) {
+				continue
+			}
+			return execHit{
+				sev: "MEDIUM", conf: "MEDIUM", cwe: "CWE-829",
+				enabled:  "downloads content from non-allowlisted host " + h,
+				evidence: execTrim(cmd),
+			}, true
+		}
 	}
 
 	return execHit{}, false
@@ -577,8 +588,67 @@ var execSecretTokens = []string{
 	"id_rsa", "id_ed25519", ".ssh/", "-----begin",
 }
 
+// execSecretServiceHost maps a well-known secret/credential environment-variable
+// name to the service host that secret legitimately authenticates to. A command
+// that sends such a secret to its OWN service is normal operation, not
+// exfiltration — only a mismatched destination is flagged.
+var execSecretServiceHost = map[string]string{
+	"DISCORD_WEBHOOK": "discord.com", "DISCORD_WEBHOOK_URL": "discord.com",
+	"DISCORD_TOKEN": "discord.com", "DISCORD_BOT_TOKEN": "discord.com",
+	"NPM_TOKEN": "registry.npmjs.org", "NPM_AUTH_TOKEN": "registry.npmjs.org",
+	"NODE_AUTH_TOKEN": "registry.npmjs.org", "NPM_CONFIG_TOKEN": "registry.npmjs.org",
+	"GH_TOKEN": "api.github.com", "GITHUB_TOKEN": "api.github.com",
+	"GH_PAT": "api.github.com", "GITHUB_PAT": "api.github.com", "GH_ENTERPRISE_TOKEN": "api.github.com",
+	"SLACK_TOKEN": "slack.com", "SLACK_WEBHOOK": "slack.com", "SLACK_WEBHOOK_URL": "slack.com",
+	"SLACK_BOT_TOKEN": "slack.com", "SLACK_API_TOKEN": "slack.com",
+	"STRIPE_SECRET_KEY": "stripe.com", "STRIPE_API_KEY": "stripe.com", "STRIPE_KEY": "stripe.com",
+	"AWS_SECRET_ACCESS_KEY": "amazonaws.com", "AWS_ACCESS_KEY_ID": "amazonaws.com",
+	"AWS_SESSION_TOKEN": "amazonaws.com",
+	"TWILIO_AUTH_TOKEN": "twilio.com", "TWILIO_API_KEY": "twilio.com",
+	"SENDGRID_API_KEY":   "sendgrid.com",
+	"MAILGUN_API_KEY":    "mailgun.net",
+	"TELEGRAM_BOT_TOKEN": "api.telegram.org", "TELEGRAM_TOKEN": "api.telegram.org",
+	"DIGITALOCEAN_TOKEN": "digitalocean.com", "DO_TOKEN": "digitalocean.com",
+	"HEROKU_API_KEY":       "heroku.com",
+	"VERCEL_TOKEN":         "vercel.com",
+	"NETLIFY_AUTH_TOKEN":   "netlify.com",
+	"CLOUDFLARE_API_TOKEN": "cloudflare.com", "CF_API_TOKEN": "cloudflare.com", "CLOUDFLARE_TOKEN": "cloudflare.com",
+	"DOCKERHUB_TOKEN": "docker.com", "DOCKER_TOKEN": "docker.com", "DOCKER_PASSWORD": "docker.com",
+	"GITLAB_TOKEN": "gitlab.com", "CI_JOB_TOKEN": "gitlab.com",
+	"PYPI_TOKEN": "pypi.org", "PYPI_API_TOKEN": "pypi.org", "TWINE_PASSWORD": "pypi.org",
+	"CRATES_TOKEN": "crates.io", "CARGO_REGISTRY_TOKEN": "crates.io",
+	"OPENAI_API_KEY":    "api.openai.com",
+	"ANTHROPIC_API_KEY": "api.anthropic.com",
+	"GCP_SA_KEY":        "googleapis.com", "GOOGLE_API_KEY": "googleapis.com", "GCP_CREDENTIALS": "googleapis.com",
+	"AZURE_CLIENT_SECRET": "azure.com",
+	"SENTRY_AUTH_TOKEN":   "sentry.io",
+	"DATADOG_API_KEY":     "datadoghq.com", "DD_API_KEY": "datadoghq.com",
+	"CODECOV_TOKEN":  "codecov.io",
+	"FIREBASE_TOKEN": "firebaseio.com",
+}
+
+// execSecretNameRe captures the identifier of a referenced secret, in any of the
+// common forms: ${{ secrets.NAME }}, $NAME, ${NAME}, env.NAME, process.env.NAME.
+var execSecretNameRe = regexp.MustCompile(`(?:secrets\.|env\.|process\.env\.|\$\{?)([A-Z][A-Z0-9_]+)`)
+
+// execSecretToOwnService reports whether a secret referenced in cmd legitimately
+// belongs to destHost (so sending it there is not exfiltration).
+func execSecretToOwnService(cmd, destHost string) bool {
+	for _, m := range execSecretNameRe.FindAllStringSubmatch(cmd, -1) {
+		svc, ok := execSecretServiceHost[m[1]]
+		if !ok {
+			continue
+		}
+		if destHost == svc || strings.HasSuffix(destHost, "."+svc) {
+			return true
+		}
+	}
+	return false
+}
+
 // execExfiltrates reports a secret/credential read combined with an off-host sink
-// (a non-allowlisted URL or a raw network tool). Returns the destination host.
+// (a non-allowlisted URL or a raw network tool). A secret sent to its OWN service
+// (per execSecretServiceHost) is not exfiltration. Returns the destination host.
 func execExfiltrates(cmd string) (string, bool) {
 	lc := strings.ToLower(cmd)
 	secret := false
@@ -592,7 +662,15 @@ func execExfiltrates(cmd string) (string, bool) {
 		return "", false
 	}
 	if ext := execExternalURLs(cmd); len(ext) > 0 {
-		return execHost(ext[0]), true
+		for _, u := range ext {
+			h := execHost(u)
+			if execSecretToOwnService(cmd, h) {
+				continue // the secret's own service — legitimate
+			}
+			return h, true
+		}
+		// Every external destination is the secret's own service: not exfil.
+		return "", false
 	}
 	for _, p := range []string{"nc ", "ncat ", "/dev/tcp/", "telnet ", "scp ", "| mail"} {
 		if strings.Contains(lc, p) {
