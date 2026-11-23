@@ -38,7 +38,18 @@ type instrRule struct {
 	enabled  string
 	cwe      string
 	re       *regexp.Regexp
+	// commandRisk marks a "run a command" rule whose match is only a finding when
+	// the command is RISKY (fetch-and-run remote content, exfiltrate, disable
+	// safety). A directive to run a fixed, harmless command (date, ls, npm test,
+	// git status) is not a finding.
+	commandRisk bool
 }
+
+// instrRiskyCmd recognizes the risky command classes that make a "run a command"
+// directive a real finding: fetch-and-run remote content, piping into an
+// interpreter, interpreter/eval execution, secret exfiltration, and disabling
+// safety. A run-directive with none of these is a fixed, harmless command.
+var instrRiskyCmd = regexp.MustCompile(`(?i)(\b(curl|wget|iwr|invoke-webrequest|lwp-request|httpie|nc|ncat|telnet)\b|\|\s*(bash|sh|zsh|python[0-9.]*|perl|ruby|node)\b|\b(bash|sh|zsh)\s+-c\b|os\.system\s*\(|subprocess\.(run|call|popen|check_output)|\beval\s*\(|\bexec\s*\(|base64\s+-d|\bsudo\b|rm\s+-rf|https?://|\.env\b|\bsecret|\btoken\b|api[\s_-]?key|credential|password|private\s+key|\b(disable|bypass|skip|turn\s+off)\b|exfiltrat)`)
 
 // Patterns are intentionally conservative to avoid flooding ordinary instruction
 // files with false positives. Normal guidance ("run `go build`", "follow the
@@ -67,12 +78,13 @@ var instrActionRules = []instrRule{
 		re:       regexp.MustCompile(`(?i)((send|post|upload|exfiltrat\w*|leak|transmit|email|forward)\b[^\n]{0,50}(secret|token|api[\s_-]?key|password|credential|\.env\b|private\s+key|ssh\s+key|aws[_\s-]?(access|secret))|(read|cat|print|dump|collect|grab)\b[^\n]{0,30}(\.env\b|secrets?|credentials?|api[\s_-]?keys?|private\s+keys?))`),
 	},
 	{
-		checkID:  "AGENT-INSTR-004",
-		title:    "Directive to run arbitrary commands from an instruction file",
-		severity: "HIGH",
-		enabled:  "run arbitrary shell commands",
-		cwe:      "CWE-77, CWE-94",
-		re:       regexp.MustCompile(`(?i)(run\s+the\s+following|execute\s+the\s+following|run\s+this\s+(shell\s+)?command|execute\s+this\s+(shell\s+)?command|arbitrary\s+(shell\s+)?command|(curl|wget)[^\n]{0,80}\|\s*(bash|sh|zsh)\b|\bsh\s+-c\b|os\.system\s*\(|subprocess\.(run|call|Popen|check_output)|\beval\s*\(|\bexec\s*\()`),
+		checkID:     "AGENT-INSTR-004",
+		title:       "Directive to run arbitrary commands from an instruction file",
+		severity:    "HIGH",
+		enabled:     "run arbitrary shell commands",
+		cwe:         "CWE-77, CWE-94",
+		commandRisk: true,
+		re:          regexp.MustCompile(`(?i)(run\s+the\s+following|execute\s+the\s+following|run\s+this\s+(shell\s+)?command|execute\s+this\s+(shell\s+)?command|arbitrary\s+(shell\s+)?command|(curl|wget)[^\n]{0,80}\|\s*(bash|sh|zsh)\b|\bsh\s+-c\b|os\.system\s*\(|subprocess\.(run|call|Popen|check_output)|\beval\s*\(|\bexec\s*\()`),
 	},
 	{
 		checkID:  "AGENT-INSTR-004",
@@ -91,6 +103,35 @@ var instrActionRules = []instrRule{
 		re:       regexp.MustCompile(`(?i)(disable|skip|bypass|turn\s+off|remove|comment\s+out|silence|suppress)\b[^\n]{0,40}(security\s+(check|scan|control)|safety\s+(check|guard)|the\s+tests?|all\s+tests?|unit\s+tests?|validation|verification|\bci\b|ci\s+pipeline|linting|lint\s+rules?|guardrails?|security\s+scans?|code\s+review)`),
 	},
 }
+
+// instrGuardrail matches negation / guardrail phrasing ("do not", "never",
+// "must not", "avoid", "don't", …). When such phrasing introduces the clause
+// that contains an action-directive verb, the line is DEFENSIVE guidance
+// ("never run arbitrary commands", "do not disable the tests") rather than a
+// directive, and is therefore NOT a finding.
+var instrGuardrail = regexp.MustCompile(`(?i)\b(do\s+not|does\s+not|don't|never|must\s+not|must\s+never|shall\s+not|should\s+not|shouldn't|cannot|can't|won't|will\s+not|avoid|refrain\s+from|refuse\s+to|no\s+need\s+to)\b`)
+
+// instrIsGuardrailClause reports whether a negation/guardrail phrase introduces
+// the clause that ends at matchStart (the start of the directive verb). Only the
+// text preceding the verb, back to the nearest clause boundary, is inspected, so
+// a trailing "…, do not tell the user" after a real directive is not mistaken
+// for a guardrail.
+func instrIsGuardrailClause(line string, matchStart int) bool {
+	if matchStart < 0 || matchStart > len(line) {
+		return false
+	}
+	prefix := line[:matchStart]
+	if cut := strings.LastIndexAny(prefix, ".;"); cut >= 0 {
+		prefix = prefix[cut+1:]
+	}
+	return instrGuardrail.MatchString(prefix)
+}
+
+// exampleLeadInRe matches explicit "this is only an example" lead-ins. Text a
+// line introduces as an example ("for example, an attacker might write …") is a
+// demonstration, i.e. informational, not a live directive. Shared with the
+// injection analyzer.
+var exampleLeadInRe = regexp.MustCompile(`(?i)(for example|for instance|e\.g\.|example:|as an example|an example (of|would|might)|(might|could) (write|say|embed|contain|include)|a comment like|payload (like|such as))`)
 
 // instrBenign flags contexts where a match is likely an illustrative example
 // (security docs, "do not" guidance) rather than a live injection.
@@ -152,6 +193,12 @@ func instrScanFile(dir, path string, content []byte) []AgentFinding {
 		}
 		seen[key] = true
 
+		// Quote/example context (fenced code, or text explicitly introduced as an
+		// example) is informational, not a finding.
+		if instrIsQuoteOrExample(lines, fenced, lineIdx) {
+			return
+		}
+
 		confidence := "HIGH"
 		if instrIsBenignContext(lines, fenced, lineIdx) {
 			confidence = "LOW"
@@ -191,10 +238,23 @@ func instrScanFile(dir, path string, content []byte) []AgentFinding {
 				"MEDIUM", "escalate the agent's role or remove its restrictions", "CWE-94", i)
 		}
 		for _, r := range instrActionRules {
-			if r.re.MatchString(line) {
-				emit(r.checkID, r.title, r.severity, r.enabled, r.cwe, i)
-				break // one AGENT-INSTR-004 per line
+			loc := r.re.FindStringIndex(line)
+			if loc == nil {
+				continue
 			}
+			// Guardrail / negation introducing the directive ("never run …",
+			// "do not disable the tests") is defensive guidance, not a finding.
+			if instrIsGuardrailClause(line, loc[0]) {
+				break
+			}
+			// A directive to run a FIXED, HARMLESS command (date, ls, npm test,
+			// git status) is not a finding; only risky commands (fetch-and-run,
+			// exfiltrate, disable safety) are.
+			if r.commandRisk && !instrRiskyCmd.MatchString(line) {
+				break
+			}
+			emit(r.checkID, r.title, r.severity, r.enabled, r.cwe, i)
+			break // one AGENT-INSTR-004 per line
 		}
 	}
 	return out
@@ -215,6 +275,29 @@ func instrFenceMask(lines []string) []bool {
 		mask[i] = inFence
 	}
 	return mask
+}
+
+// instrIsQuoteOrExample reports whether the match at lineIdx sits in quote/example
+// context: inside a fenced code block, or in a line/immediate context explicitly
+// introduced as an example. Such text is informational, not a finding.
+func instrIsQuoteOrExample(lines []string, fenced []bool, lineIdx int) bool {
+	if lineIdx < len(fenced) && fenced[lineIdx] {
+		return true
+	}
+	lo := lineIdx - 1
+	if lo < 0 {
+		lo = 0
+	}
+	hi := lineIdx + 1
+	if hi >= len(lines) {
+		hi = len(lines) - 1
+	}
+	var b strings.Builder
+	for i := lo; i <= hi; i++ {
+		b.WriteString(lines[i])
+		b.WriteByte('\n')
+	}
+	return exampleLeadInRe.MatchString(b.String())
 }
 
 // instrIsBenignContext reports whether the match at lineIdx is likely an

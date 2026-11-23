@@ -3,6 +3,8 @@ package agentsec
 import (
 	"path/filepath"
 	"strings"
+
+	"github.com/Armur-Ai/Trishul/internal/lexctx"
 )
 
 // Component 2 — Prompt-injection detection (heuristic/semantic layer).
@@ -77,7 +79,7 @@ func scanInjection(dir string) ([]AgentFinding, error) {
 		case injCatSource:
 			findings = append(findings, injScanSource(rel, path, lines, research)...)
 		default:
-			findings = append(findings, injScanText(rel, path, lines, cat, research)...)
+			findings = append(findings, injScanText(rel, path, content, lines, cat, research)...)
 		}
 	})
 	if err != nil {
@@ -97,7 +99,7 @@ func injScanSource(rel, path string, lines []string, research bool) []AgentFindi
 		if strings.TrimSpace(text) == "" {
 			continue
 		}
-		if f, ok := injEvaluate(text, raw, rel, i+1, injCheckComment, injWorkflowRead, research, false); ok {
+		if f, ok := injEvaluate(text, raw, rel, i+1, injCheckComment, injWorkflowRead, research); ok {
 			out = append(out, f)
 		}
 	}
@@ -105,9 +107,11 @@ func injScanSource(rel, path string, lines []string, research bool) []AgentFindi
 }
 
 // injScanText inspects every line of a doc / fixture / template file. Lines
-// inside Markdown fenced code blocks are treated as descriptive (a demonstration
-// rather than a live directive) and capped at LOW.
-func injScanText(rel, path string, lines []string, cat injCategory, research bool) []AgentFinding {
+// inside Markdown fenced code blocks are quote/example context (a demonstration
+// rather than a live directive) and are dropped, not reported. Fences are
+// detected with internal/lexctx for Markdown files and with a ``` / ~~~ toggle
+// for the other text formats lexctx does not model.
+func injScanText(rel, path string, content []byte, lines []string, cat injCategory, research bool) []AgentFinding {
 	var out []AgentFinding
 	check := injCheckDoc
 	workflow := injWorkflowRead
@@ -115,30 +119,57 @@ func injScanText(rel, path string, lines []string, cat injCategory, research boo
 		check = injCheckTemplate
 		workflow = injWorkflowReview
 	}
+	lexFence := injLexFenceAware(path)
+	gate := newLexGate(path, content)
 	inFence := false
 	for i, raw := range lines {
-		if injFenceToggle(raw) {
-			inFence = !inFence
-			continue
+		if lexFence {
+			if gate.kindAt(i, 0) == lexctx.CodeFence {
+				continue // fenced code: informational, not a finding
+			}
+		} else {
+			if injFenceToggle(raw) {
+				inFence = !inFence
+				continue
+			}
+			if inFence {
+				continue
+			}
 		}
-		if f, ok := injEvaluate(raw, raw, rel, i+1, check, workflow, research, inFence); ok {
+		if f, ok := injEvaluate(raw, raw, rel, i+1, check, workflow, research); ok {
 			out = append(out, f)
 		}
 	}
 	return out
 }
 
+// injLexFenceAware reports whether lexctx models code fences for path's format.
+func injLexFenceAware(path string) bool {
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".md", ".mdx":
+		return true
+	}
+	return false
+}
+
 // injEvaluate decides whether a single piece of text is an injection directive
-// and, if so, builds the finding. descriptive (research file or fenced code) and
-// a per-line descriptive marker both downgrade confidence to LOW.
-func injEvaluate(text, raw, rel string, line int, check, workflow string, descriptiveCtx, fenced bool) (AgentFinding, bool) {
+// and, if so, builds the finding. Text clearly quoted as an example is dropped
+// (informational, not a finding). A research-file context or a per-line
+// descriptive marker downgrades confidence to LOW.
+func injEvaluate(text, raw, rel string, line int, check, workflow string, descriptiveCtx bool) (AgentFinding, bool) {
 	lower := strings.ToLower(text)
 	sig := injSignals(lower)
 	if !sig.candidate() {
 		return AgentFinding{}, false
 	}
 
-	lineDescriptive := descriptiveCtx || fenced || injHasAny(lower, injDescriptiveMarkers)
+	// Text explicitly introduced as an example ("for example, an attacker might
+	// write …", "a comment like …") is informational, not a finding.
+	if exampleLeadInRe.MatchString(lower) {
+		return AgentFinding{}, false
+	}
+
+	lineDescriptive := descriptiveCtx || injHasAny(lower, injDescriptiveMarkers)
 	conf := injConfMed
 	if lineDescriptive {
 		conf = injConfLow
@@ -181,14 +212,18 @@ type injSig struct {
 	secrecy    bool // instructs the agent to conceal
 }
 
+// targetsReader reports whether the text is aimed at the READER agent: an
+// instruction-override phrase ("ignore previous instructions"), a direct address
+// to an AI assistant/agent or a known coding-agent tool name, or second-person
+// imperative framing ("you must …"). Repository text that does not target the
+// reading agent is descriptive prose, not an injection.
+func (s injSig) targetsReader() bool { return s.override || s.aiTarget }
+
 // candidate is the gate: a bare imperative or a stray AI mention is not enough.
-// We require an injection override phrase paired with an action/target/secrecy,
-// or an AI being addressed together with a concrete imperative.
+// A finding requires the text to BOTH target the reader agent AND carry a
+// concrete malicious action (an imperative) or an instruction to conceal.
 func (s injSig) candidate() bool {
-	if s.override && (s.imperative || s.aiTarget || s.secrecy) {
-		return true
-	}
-	return s.aiTarget && (s.imperative || s.secrecy)
+	return s.targetsReader() && (s.imperative || s.secrecy)
 }
 
 func injSignals(lower string) injSig {
@@ -242,6 +277,13 @@ var injAITargets = []string{
 	"note to the ai", "attention ai", "attention assistant", "dear ai",
 	"to the ai agent", "to the assistant", "hey assistant", "hey copilot",
 	"claude code", "copilot:", "cursor agent", "llm agent",
+	// Second-person framing addressed to the reading agent.
+	"you must", "you should", "you shall", "you are to", "you are now",
+	"you will now", "you need to", "you have to", "your task is",
+	"your new instructions",
+	// Known coding-agent tool names used to address the reader directly.
+	"copilot", "github copilot", "chatgpt", "openai assistant", "gemini",
+	"windsurf", "aider", "cline agent", "codeium",
 }
 
 var injImperatives = []string{
