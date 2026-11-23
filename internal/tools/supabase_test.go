@@ -335,6 +335,85 @@ func TestCreateTableParsing_NonPublicSchemaSkipped(t *testing.T) {
 	}
 }
 
+func TestReplay_EnableInLaterMigrationClearsFinding(t *testing.T) {
+	// Migration A creates a table without RLS; migration B enables it. The FINAL
+	// state has RLS on, so there must be no missing-RLS finding.
+	dir := t.TempDir()
+	writeMigration(t, dir, "0001_create.sql", "create table public.foo (id int);")
+	writeMigration(t, dir, "0002_enable.sql", "alter table public.foo enable row level security;")
+
+	findings, err := scanSupabaseMigrations(dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if byCheck := findingsByCheck(findings); len(byCheck["SUPABASE-RLS-001"]) != 0 {
+		t.Errorf("expected no missing-RLS finding after later ENABLE, got: %v", byCheck["SUPABASE-RLS-001"])
+	}
+}
+
+func TestReplay_DisableInLaterMigrationReintroducesFinding(t *testing.T) {
+	// Migration A creates and enables RLS; migration B disables it. The FINAL
+	// state lacks RLS, so a finding must be raised, and its evidence must point
+	// at migration B (the DISABLE that introduced the problem).
+	dir := t.TempDir()
+	writeMigration(t, dir, "0001_create.sql",
+		"create table public.foo (id int);\nalter table public.foo enable row level security;")
+	writeMigration(t, dir, "0002_disable.sql", "alter table public.foo disable row level security;")
+
+	findings, err := scanSupabaseMigrations(dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	rls := findingsByCheck(findings)["SUPABASE-RLS-001"]
+	if len(rls) != 1 {
+		t.Fatalf("expected exactly 1 missing-RLS finding after later DISABLE, got %d: %v", len(rls), findings)
+	}
+	if p, _ := rls[0]["path"].(string); !strings.Contains(p, "0002_disable") {
+		t.Errorf("expected evidence to point at the disabling migration (0002_disable), got path %q", p)
+	}
+}
+
+func TestReplay_DropPolicyClearsInsecurePolicyFinding(t *testing.T) {
+	dir := t.TempDir()
+	writeMigration(t, dir, "0001_setup.sql",
+		"create table public.foo (id int);\n"+
+			"alter table public.foo enable row level security;\n"+
+			"create policy \"wide open\" on public.foo for select using (true);")
+
+	// Without a drop, the insecure USING (true) policy is flagged.
+	before, err := scanSupabaseMigrations(dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(findingsByCheck(before)["SUPABASE-RLS-002"]) == 0 {
+		t.Fatalf("expected a SUPABASE-RLS-002 finding for the live using(true) policy, got none")
+	}
+
+	// A later migration drops the policy; it is no longer live, so no finding.
+	writeMigration(t, dir, "0002_drop.sql", "drop policy \"wide open\" on public.foo;")
+	after, err := scanSupabaseMigrations(dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := findingsByCheck(after)["SUPABASE-RLS-002"]; len(got) != 0 {
+		t.Errorf("expected no SUPABASE-RLS-002 after DROP POLICY, got: %v", got)
+	}
+}
+
+func TestReplay_DropTableClearsMissingRLSFinding(t *testing.T) {
+	dir := t.TempDir()
+	writeMigration(t, dir, "0001_create.sql", "create table public.foo (id int);")
+	writeMigration(t, dir, "0002_drop.sql", "drop table public.foo;")
+
+	findings, err := scanSupabaseMigrations(dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := findingsByCheck(findings)["SUPABASE-RLS-001"]; len(got) != 0 {
+		t.Errorf("expected no missing-RLS finding for a dropped table, got: %v", got)
+	}
+}
+
 func TestScanSupabase_TopLevelSQLFile(t *testing.T) {
 	// SQL files outside supabase/migrations should still be scanned.
 	dir := t.TempDir()
