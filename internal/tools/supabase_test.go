@@ -199,6 +199,86 @@ create policy "p" on public.leaky for select using (true);`
 	}
 }
 
+// infraFindings runs the public entry point and returns the flattened list of
+// findings emitted under the infra-security category.
+func infraFindings(t *testing.T, dir string) []interface{} {
+	t.Helper()
+	res, err := RunSupabaseRLS(dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	raw, ok := res[utils.INFRA_SECURITY]
+	if !ok {
+		return nil
+	}
+	list, ok := raw.([]interface{})
+	if !ok {
+		t.Fatalf("expected %q to be a slice, got %T", utils.INFRA_SECURITY, raw)
+	}
+	return list
+}
+
+func TestRunSupabaseRLS_ContextGate_NonSupabaseRepoEmitsNothing(t *testing.T) {
+	// A plain SQL file with a CREATE TABLE in a repo that has none of the
+	// Supabase signals must not produce any Supabase findings.
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "schema.sql"),
+		[]byte("create table public.widgets (id int);"), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	if got := infraFindings(t, dir); len(got) != 0 {
+		t.Errorf("expected 0 findings for non-Supabase repo, got %d: %v", len(got), got)
+	}
+}
+
+func TestRunSupabaseRLS_ContextGate_Signals(t *testing.T) {
+	// The same insecure migration body; each subtest adds exactly one Supabase
+	// signal and must then surface findings.
+	body := "create table public.widgets (id int);\ncreate policy \"p\" on public.widgets for select using (true);"
+
+	t.Run("supabase config.toml", func(t *testing.T) {
+		dir := t.TempDir()
+		if err := os.WriteFile(filepath.Join(dir, "schema.sql"), []byte(body), 0o644); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+		if err := os.MkdirAll(filepath.Join(dir, "supabase"), 0o755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "supabase", "config.toml"), []byte("project_id = \"x\"\n"), 0o644); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+		if got := infraFindings(t, dir); len(got) == 0 {
+			t.Errorf("expected findings when supabase/config.toml present, got none")
+		}
+	})
+
+	t.Run("package.json @supabase dep", func(t *testing.T) {
+		dir := t.TempDir()
+		if err := os.WriteFile(filepath.Join(dir, "schema.sql"), []byte(body), 0o644); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+		pkg := `{"dependencies": {"@supabase/supabase-js": "^2.0.0"}}`
+		if err := os.WriteFile(filepath.Join(dir, "package.json"), []byte(pkg), 0o644); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+		if got := infraFindings(t, dir); len(got) == 0 {
+			t.Errorf("expected findings when @supabase dep present, got none")
+		}
+	})
+
+	t.Run("sql references auth.uid", func(t *testing.T) {
+		dir := t.TempDir()
+		sql := "create table public.widgets (id int, owner uuid default auth.uid());\n" +
+			"create policy \"p\" on public.widgets for select using (true);"
+		if err := os.WriteFile(filepath.Join(dir, "schema.sql"), []byte(sql), 0o644); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+		if got := infraFindings(t, dir); len(got) == 0 {
+			t.Errorf("expected findings when SQL references auth.uid(), got none")
+		}
+	})
+}
+
 func TestScanSupabase_TopLevelSQLFile(t *testing.T) {
 	// SQL files outside supabase/migrations should still be scanned.
 	dir := t.TempDir()

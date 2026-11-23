@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -22,6 +23,16 @@ func RunSupabaseRLS(directory string) (map[string]interface{}, error) {
 
 	categorized := utils.InitAdvancedCategorizedResults()
 
+	// Context gate: only run the Supabase checks when the repo is actually a
+	// Supabase project. Scanning arbitrary SQL in a non-Supabase codebase is a
+	// precision problem — plenty of projects have `CREATE TABLE` statements with
+	// no intention of ever touching the Supabase anon/public data layer. If none
+	// of the Supabase signals are present we emit nothing.
+	if !isSupabaseProject(directory) {
+		logger.Debug().Str("tool", "supabase-rls").Str("dir", directory).Msg("not a supabase project; skipping")
+		return utils.ConvertCategorizedResults(categorized), nil
+	}
+
 	findings, err := scanSupabaseMigrations(directory)
 	if err != nil {
 		logger.Error().Str("tool", "supabase-rls").Err(err).Msg("failed to scan migrations")
@@ -33,6 +44,67 @@ func RunSupabaseRLS(directory string) (map[string]interface{}, error) {
 	}
 
 	return utils.ConvertCategorizedResults(categorized), nil
+}
+
+// errSupabaseSignal is a sentinel used to short-circuit the context-gate walk
+// as soon as any Supabase signal is found.
+var errSupabaseSignal = errors.New("supabase signal")
+
+// reSupabaseSQLToken matches SQL constructs that only appear in a Supabase
+// (PostgREST/GoTrue/Storage) project: the auth helper functions, the storage
+// object table, or the anon/authenticated roles.
+var reSupabaseSQLToken = regexp.MustCompile(`(?i)auth\.uid\s*\(\s*\)|auth\.jwt\s*\(\s*\)|storage\.objects|\banon\b|\bauthenticated\b`)
+
+// reSupabaseDep matches a `@supabase/*` dependency entry in a package.json.
+var reSupabaseDep = regexp.MustCompile(`"@supabase/[^"]+"`)
+
+// isSupabaseProject reports whether directory looks like a Supabase project.
+// Any one of the following signals qualifies it:
+//   - a `supabase/` directory exists;
+//   - `supabase/config.toml` exists;
+//   - a `@supabase/*` dependency appears in a package.json;
+//   - SQL in scope references auth.uid()/auth.jwt()/storage.objects or the
+//     anon/authenticated roles.
+//
+// It is read-only and skips vendored trees (node_modules, .git, vendor) so that
+// a dependency's own files do not mask the project's real intent.
+func isSupabaseProject(directory string) bool {
+	// Fast path: the canonical `supabase/config.toml` at the repo root.
+	if _, err := os.Stat(filepath.Join(directory, "supabase", "config.toml")); err == nil {
+		return true
+	}
+
+	walkErr := filepath.WalkDir(directory, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() {
+			switch d.Name() {
+			case "node_modules", ".git", "vendor":
+				return filepath.SkipDir
+			case "supabase":
+				return errSupabaseSignal
+			}
+			return nil
+		}
+
+		name := d.Name()
+		switch {
+		case name == "config.toml" && filepath.Base(filepath.Dir(path)) == "supabase":
+			return errSupabaseSignal
+		case name == "package.json":
+			if content, readErr := os.ReadFile(path); readErr == nil && reSupabaseDep.Match(content) {
+				return errSupabaseSignal
+			}
+		case strings.EqualFold(filepath.Ext(name), ".sql"):
+			if content, readErr := os.ReadFile(path); readErr == nil && reSupabaseSQLToken.Match(content) {
+				return errSupabaseSignal
+			}
+		}
+		return nil
+	})
+
+	return errors.Is(walkErr, errSupabaseSignal)
 }
 
 // sqlStmt is a single SQL statement with the 1-based line on which it starts.
