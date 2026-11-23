@@ -118,6 +118,41 @@ func TestPlaceholder_DisabledVerification_Flagged(t *testing.T) {
 	}
 }
 
+func TestPlaceholder_InsecureSkipVerify_ProdHigh_ScriptLow(t *testing.T) {
+	dir := t.TempDir()
+	// Production source: HIGH. Script/tooling path: same pattern, LOW.
+	phWrite(t, dir, "prod/client.go", "package prod\nvar c = &tls.Config{InsecureSkipVerify: true}\n")
+	phWrite(t, dir, "scripts/probe.go", "package main\nvar c = &tls.Config{InsecureSkipVerify: true}\n")
+
+	findings := phFindings(t, mustRun(t, dir))
+	vf := phByCheck(findings, "VIBE-PLACEHOLDER-003")
+	if len(vf) != 2 {
+		t.Fatalf("expected 2 VIBE-PLACEHOLDER-003 findings, got %d: %+v", len(vf), findings)
+	}
+	sev := map[string]string{}
+	for _, f := range vf {
+		sev[f["path"].(string)] = f["severity"].(string)
+	}
+	if sev["prod/client.go"] != "HIGH" {
+		t.Errorf("prod InsecureSkipVerify: expected HIGH, got %v", sev["prod/client.go"])
+	}
+	if sev["scripts/probe.go"] != "LOW" {
+		t.Errorf("script InsecureSkipVerify: expected LOW, got %v", sev["scripts/probe.go"])
+	}
+}
+
+func TestPlaceholder_DisabledVerify_PromptSuppressed(t *testing.T) {
+	dir := t.TempDir()
+	// An agent-surface / prompt file (.claude/...): disabled verification here is
+	// illustrative text, not a live control, and is suppressed entirely.
+	phWrite(t, dir, ".claude/snippet.py", "client = requests.get(url, verify=False)\n")
+
+	findings := phFindings(t, mustRun(t, dir))
+	if got := phByCheck(findings, "VIBE-PLACEHOLDER-003"); len(got) != 0 {
+		t.Fatalf("verify=False in a prompt/agent-surface file should be suppressed, got %+v", got)
+	}
+}
+
 func TestPlaceholder_WildcardCORSWithCredentials_Flagged(t *testing.T) {
 	dir := t.TempDir()
 	phWrite(t, dir, "server.js", `app.use(cors({ origin: "*", credentials: true }));`+"\n")

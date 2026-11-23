@@ -293,22 +293,31 @@ func scanPlaceholderFile(relPath, content string, isTest bool) []map[string]inte
 			))
 		}
 
-		// 003 — disabled verification.
+		// 003 — disabled verification (severity scaled by file kind; see
+		// phVerifyContext). A nil result means the finding is suppressed.
 		if rePhVerifyFalse.MatchString(line) {
-			findings = append(findings, phVerifyFinding(relPath, lineNo, isTest,
-				"TLS/certificate verification is disabled (`verify=False`), exposing traffic to man-in-the-middle attacks."))
+			if f := phVerifyFinding(relPath, lineNo, kind,
+				"TLS/certificate verification is disabled (`verify=False`), exposing traffic to man-in-the-middle attacks."); f != nil {
+				findings = append(findings, f)
+			}
 		}
 		if rePhRejectUnauth.MatchString(line) {
-			findings = append(findings, phVerifyFinding(relPath, lineNo, isTest,
-				"TLS certificate validation is disabled (`rejectUnauthorized: false`), exposing traffic to man-in-the-middle attacks."))
+			if f := phVerifyFinding(relPath, lineNo, kind,
+				"TLS certificate validation is disabled (`rejectUnauthorized: false`), exposing traffic to man-in-the-middle attacks."); f != nil {
+				findings = append(findings, f)
+			}
 		}
 		if rePhNodeTLS.MatchString(line) {
-			findings = append(findings, phVerifyFinding(relPath, lineNo, isTest,
-				"`NODE_TLS_REJECT_UNAUTHORIZED=0` disables all TLS certificate validation process-wide."))
+			if f := phVerifyFinding(relPath, lineNo, kind,
+				"`NODE_TLS_REJECT_UNAUTHORIZED=0` disables all TLS certificate validation process-wide."); f != nil {
+				findings = append(findings, f)
+			}
 		}
 		if rePhInsecureSkip.MatchString(line) {
-			findings = append(findings, phVerifyFinding(relPath, lineNo, isTest,
-				"`InsecureSkipVerify: true` disables TLS certificate validation, exposing traffic to man-in-the-middle attacks."))
+			if f := phVerifyFinding(relPath, lineNo, kind,
+				"`InsecureSkipVerify: true` disables TLS certificate validation, exposing traffic to man-in-the-middle attacks."); f != nil {
+				findings = append(findings, f)
+			}
 		}
 
 		// 004 — CORS correlation inputs.
@@ -377,17 +386,62 @@ func scanPlaceholderFile(relPath, content string, isTest bool) []map[string]inte
 	return findings
 }
 
-// phVerifyFinding builds a check-003 finding.
-func phVerifyFinding(relPath string, lineNo int, isTest bool, message string) map[string]interface{} {
-	conf := "HIGH"
-	if isTest {
-		conf = "MEDIUM"
+// phVerifyFinding builds a check-003 finding, scaling severity by the file's
+// classification (see phVerifyContext). It returns nil when the finding should
+// be suppressed entirely (prompts and docs), so callers must nil-check.
+func phVerifyFinding(relPath string, lineNo int, kind fileclass.Kind, message string) map[string]interface{} {
+	sev, skip := phVerifyContext(relPath, kind)
+	if skip {
+		return nil
 	}
 	return phFinding(
-		relPath, lineNo, "HIGH", phCheckVerify, "CWE-295", conf,
+		relPath, lineNo, sev, phCheckVerify, "CWE-295", sev,
 		message,
 		"Keep certificate/host verification enabled; fix the underlying trust issue (install the correct CA) instead of disabling validation.",
 	)
+}
+
+// phVerifyContext decides how a disabled-verification finding (003) should be
+// treated for a file, using internal/fileclass:
+//   - prompts and docs (agent-surface, docs, locale) are illustrative text, not a
+//     live control, so the finding is suppressed;
+//   - tooling / scripts / pentest-tools / dev configs (tests, fixtures, examples,
+//     config, CI, migrations, generated, and script-like source paths) carry real
+//     but lower risk, reported at LOW;
+//   - production code paths (plain source) are reported at HIGH.
+func phVerifyContext(relPath string, kind fileclass.Kind) (severity string, skip bool) {
+	switch kind {
+	case fileclass.KindDocs, fileclass.KindAgentSurface, fileclass.KindLocale:
+		return "", true
+	case fileclass.KindSource:
+		if phIsToolingPath(relPath) {
+			return "LOW", false
+		}
+		return "HIGH", false
+	default:
+		return "LOW", false
+	}
+}
+
+// phIsToolingPath reports whether a source-classified path is really a script or
+// tooling/pentest/dev surface rather than production application code. fileclass
+// has no dedicated "script" kind, so shell scripts and well-known tooling
+// directories are recognised here to keep their disabled-verification findings at
+// LOW rather than HIGH.
+func phIsToolingPath(relPath string) bool {
+	lower := strings.ToLower(relPath)
+	switch filepath.Ext(lower) {
+	case ".sh", ".bash":
+		return true
+	}
+	for _, seg := range strings.Split(lower, "/") {
+		switch seg {
+		case "scripts", "script", "tools", "tool", "tooling", "bin", "hack",
+			"pentest", "pentests", "devtools", "dev":
+			return true
+		}
+	}
+	return false
 }
 
 // phIsWeakSecret reports whether a secret value is weak/placeholder. The second
