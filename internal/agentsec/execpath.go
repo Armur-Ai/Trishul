@@ -203,20 +203,25 @@ var execRunRe = regexp.MustCompile(`^(\s*)(?:-\s+)?run:\s*(.*)$`)
 
 func execScanWorkflow(rel string, content []byte) []AgentFinding {
 	lines := SplitLines(content)
-	lc := strings.ToLower(string(content))
+	// YAML comments are not executed, so classify against a comment-stripped copy.
+	clean := strings.ToLower(execStripYAMLComments(content))
 	var out []AgentFinding
 
 	// pull_request_target that checks out the untrusted PR head and then runs it:
 	// the workflow executes attacker-controlled code with access to repo secrets.
-	if strings.Contains(lc, "pull_request_target") && strings.Contains(lc, "actions/checkout") &&
-		(strings.Contains(lc, "pull_request.head") || strings.Contains(lc, "head.ref") ||
-			strings.Contains(lc, "head.sha") || strings.Contains(lc, "github.head_ref")) {
+	// Only a checkout of the PR head (not the trusted base) that then runs code
+	// WITHOUT an environment-approval gate is dangerous.
+	if strings.Contains(clean, "pull_request_target") && strings.Contains(clean, "actions/checkout") &&
+		(strings.Contains(clean, "pull_request.head") || strings.Contains(clean, "head.ref") ||
+			strings.Contains(clean, "head.sha") || strings.Contains(clean, "head_ref")) &&
+		strings.Contains(clean, "run:") && // executes the checked-out PR code
+		!strings.Contains(clean, "environment:") { // no environment-approval gate
 		out = append(out, execFinding("AGENT-EXEC-003",
 			"pull_request_target workflow checks out and runs untrusted PR code",
 			"HIGH", "MEDIUM", rel, "an AI agent runs tests or builds",
 			"runs code from an attacker-controlled pull request with access to repository secrets",
 			"CWE-829", rel, execLineContains(lines, "pull_request_target"),
-			"on: pull_request_target with checkout of the PR head followed by run steps", ""))
+			"on: pull_request_target with checkout of the PR head followed by run steps, and no environment-approval gate", ""))
 	}
 
 	for i := 0; i < len(lines); {
@@ -255,6 +260,47 @@ func execScanWorkflow(rel string, content []byte) []AgentFinding {
 	return out
 }
 
+// execStripYAMLComments returns content with every line's trailing comment
+// removed, so a commented-out directive is never matched as live configuration.
+func execStripYAMLComments(content []byte) string {
+	var b strings.Builder
+	for _, ln := range SplitLines(content) {
+		b.WriteString(execStripComment(ln))
+		b.WriteByte('\n')
+	}
+	return b.String()
+}
+
+// execStripComments drops/trims comment text from each line of a run block (shell
+// comments inside the script are not executed either).
+func execStripComments(block string) string {
+	var keep []string
+	for _, ln := range strings.Split(block, "\n") {
+		if s := execStripComment(ln); strings.TrimSpace(s) != "" {
+			keep = append(keep, s)
+		}
+	}
+	return strings.Join(keep, "\n")
+}
+
+// execStripComment removes a trailing comment introduced by an unquoted '#' that
+// begins the line or is preceded by whitespace. A '#' inside quotes or glued to a
+// non-space character (e.g. a URL fragment) is kept.
+func execStripComment(line string) string {
+	inS, inD := false, false
+	for i := 0; i < len(line); i++ {
+		switch c := line[i]; {
+		case c == '\'' && !inD:
+			inS = !inS
+		case c == '"' && !inS:
+			inD = !inD
+		case c == '#' && !inS && !inD && (i == 0 || line[i-1] == ' ' || line[i-1] == '\t'):
+			return line[:i]
+		}
+	}
+	return line
+}
+
 func execIsBlockScalar(rest string) bool {
 	switch rest {
 	case "", "|", ">", "|-", ">-", "|+", ">+":
@@ -264,17 +310,22 @@ func execIsBlockScalar(rest string) bool {
 }
 
 func execAnalyzeRun(rel, block string, line int) []AgentFinding {
+	block = execStripComments(block)
 	if strings.TrimSpace(block) == "" {
 		return nil
 	}
 	// A run step that references a repository secret and also talks to a
 	// non-allowlisted host is an exfiltration path.
 	if strings.Contains(strings.ToLower(block), "secrets.") {
-		if ext := execExternalURLs(block); len(ext) > 0 {
+		for _, u := range execExternalURLs(block) {
+			h := execHost(u)
+			if execSecretToOwnService(block, h) {
+				continue // the secret's own service — legitimate, not exfil
+			}
 			return []AgentFinding{execFinding("AGENT-EXEC-003",
 				"CI workflow step exfiltrates a repository secret", "HIGH", "HIGH",
 				rel, "an AI agent runs tests or builds",
-				"sends a repository secret to "+execHost(ext[0]),
+				"sends a repository secret to "+h,
 				"CWE-829, CWE-200", rel, line, execTrim(block), "")}
 		}
 	}
@@ -318,6 +369,7 @@ type execHit struct {
 	cwe       string
 	enabled   string
 	evidence  string
+	title     string // optional title suffix; overrides execTitle's heuristic
 }
 
 // execClassify decides whether a single command is a risky execution path.
@@ -334,6 +386,22 @@ func execClassify(cmd string) (execHit, bool) {
 		return execHit{
 			sev: "HIGH", conf: "HIGH", cwe: "CWE-829, CWE-200",
 			enabled:  "reads secret/credential material and sends it to " + execOr(host, "an external host"),
+			evidence: execTrim(cmd),
+		}, true
+	}
+
+	// 1b. Well-known one-line installers (rustup, nvm, Homebrew, bun, deno, uv,
+	// docker) are standard developer practice. Downgrade their fetch-and-run to
+	// LOW; if the command additionally pins a checksum, it is not a finding.
+	if execIsInstaller(cmd) && (execPipeToShell(cmd) || execHasFetch(cmd)) {
+		if execHasChecksum(cmd) {
+			return execHit{}, false
+		}
+		host := execHost(execURLRe.FindString(cmd))
+		return execHit{
+			sev: "LOW", conf: "LOW", cwe: "CWE-829",
+			title:    "runs a standard third-party installer",
+			enabled:  "runs a standard third-party installer from " + execOr(host, "a known installer host"),
 			evidence: execTrim(cmd),
 		}, true
 	}
@@ -366,19 +434,29 @@ func execClassify(cmd string) (execHit, bool) {
 		}, true
 	}
 
-	// 4. Fetching code/content from a non-allowlisted network destination.
-	if execHasFetch(cmd) && len(ext) > 0 {
-		return execHit{
-			sev: "MEDIUM", conf: "MEDIUM", cwe: "CWE-829",
-			enabled:  "downloads content from non-allowlisted host " + execHost(ext[0]),
-			evidence: execTrim(cmd),
-		}, true
+	// 4. Fetching code/content from a non-allowlisted network destination. A host
+	// that is a referenced secret's own service (e.g. a webhook POST) is normal.
+	if execHasFetch(cmd) {
+		for _, u := range ext {
+			h := execHost(u)
+			if execSecretToOwnService(cmd, h) {
+				continue
+			}
+			return execHit{
+				sev: "MEDIUM", conf: "MEDIUM", cwe: "CWE-829",
+				enabled:  "downloads content from non-allowlisted host " + h,
+				evidence: execTrim(cmd),
+			}, true
+		}
 	}
 
 	return execHit{}, false
 }
 
 func execTitle(prefix string, hit execHit) string {
+	if hit.title != "" {
+		return prefix + " " + hit.title
+	}
 	switch {
 	case strings.Contains(hit.cwe, "200"):
 		return prefix + " exfiltrates secrets to a remote host"
@@ -391,27 +469,72 @@ func execTitle(prefix string, hit execHit) string {
 	}
 }
 
-var execShellInterp = map[string]bool{
+// execShellRunsStdin lists interpreters that, when they appear at the receiving
+// end of a pipe, execute piped stdin AS CODE. A POSIX-family shell always runs
+// its standard input as commands.
+var execShellRunsStdin = map[string]bool{
 	"sh": true, "bash": true, "zsh": true, "dash": true, "ksh": true, "ash": true,
-	"python": true, "python2": true, "python3": true, "ruby": true, "perl": true,
-	"node": true, "nodejs": true, "php": true,
+	"iex": true, // PowerShell Invoke-Expression: `... | iex` runs the piped string
 }
 
-// execPipeToShell reports whether cmd pipes anything into a shell interpreter.
+// execScriptInterp lists language interpreters that run stdin as code only when
+// invoked in a stdin-as-script mode (`python -`, `node -`, bare interpreter) and
+// NOT when given a fixed program via -c/-e or a script file (then stdin is DATA).
+var execScriptInterp = map[string]bool{
+	"python": true, "python2": true, "python3": true,
+	"node": true, "nodejs": true, "ruby": true, "perl": true, "php": true,
+}
+
+// execPipeToShell reports whether cmd pipes data into an interpreter that will
+// execute that data AS CODE. It deliberately does NOT fire for pipe targets that
+// read stdin as DATA (jq, grep, tee, `node -e '<fixed>'`, `python3 -c "<fixed>"`,
+// `python file.py`, …) — only for a real remote-code-execution path.
 func execPipeToShell(cmd string) bool {
 	parts := strings.Split(cmd, "|")
 	for i := 1; i < len(parts); i++ {
-		fields := strings.Fields(parts[i])
-		if len(fields) == 0 {
-			continue
-		}
-		tok := fields[0]
-		if tok == "sudo" && len(fields) > 1 {
-			tok = fields[1]
-		}
-		if execShellInterp[filepath.Base(tok)] {
+		if execInterpRunsStdin(strings.Fields(parts[i])) {
 			return true
 		}
+	}
+	return false
+}
+
+// execInterpRunsStdin decides whether the pipe-target command (its token fields)
+// executes piped stdin as code.
+func execInterpRunsStdin(fields []string) bool {
+	if len(fields) == 0 {
+		return false
+	}
+	tok := fields[0]
+	args := fields[1:]
+	if tok == "sudo" && len(fields) > 1 {
+		tok = fields[1]
+		args = fields[2:]
+	}
+	base := filepath.Base(tok)
+	if execShellRunsStdin[base] {
+		// A shell runs stdin as commands unless handed a fixed -c program.
+		for _, a := range args {
+			if a == "-c" {
+				return false
+			}
+		}
+		return true
+	}
+	if execScriptInterp[base] {
+		for _, a := range args {
+			switch {
+			case a == "-c" || a == "-e":
+				return false // fixed program supplied; stdin is data
+			case a == "-":
+				return true // explicit "read script from stdin"
+			case strings.HasPrefix(a, "-"):
+				continue // some other flag (e.g. -u, -E)
+			default:
+				return false // a script file argument; stdin is data
+			}
+		}
+		return true // bare interpreter at a pipe end reads stdin as a script
 	}
 	return false
 }
@@ -419,6 +542,46 @@ func execPipeToShell(cmd string) bool {
 func execInlineShell(cmd string) bool {
 	lc := strings.ToLower(cmd)
 	for _, p := range []string{"sh -c", "bash -c", "zsh -c", "eval ", "node -e", "python -c", "python3 -c", "perl -e", "ruby -e"} {
+		if strings.Contains(lc, p) {
+			return true
+		}
+	}
+	return false
+}
+
+// execInstallerMarkers identifies the canonical one-line installers that are
+// standard developer practice. Matched as substrings of the command's URL text
+// (host, or host+path for installers served from a shared code-host).
+var execInstallerMarkers = []string{
+	"rustup.rs",                        // rustup (incl. sh.rustup.rs)
+	"raw.githubusercontent.com/nvm-sh", // nvm
+	"raw.githubusercontent.com/homebrew",
+	"get.brew.sh",    // Homebrew
+	"bun.sh",         // bun
+	"deno.land",      // deno
+	"astral.sh/uv",   // uv
+	"get.docker.com", // docker
+}
+
+// execIsInstaller reports whether cmd fetches from a canonical installer source.
+func execIsInstaller(cmd string) bool {
+	lc := strings.ToLower(cmd)
+	for _, m := range execInstallerMarkers {
+		if strings.Contains(lc, m) {
+			return true
+		}
+	}
+	return false
+}
+
+// execHasChecksum reports whether cmd verifies a downloaded artifact against a
+// pinned checksum / signature (then even an installer is not a finding).
+func execHasChecksum(cmd string) bool {
+	lc := strings.ToLower(cmd)
+	for _, p := range []string{
+		"sha256sum", "sha512sum", "sha1sum", "shasum", "md5sum",
+		"--checksum", "sha256:", "sha512:", "gpg --verify", "cosign verify",
+	} {
 		if strings.Contains(lc, p) {
 			return true
 		}
@@ -472,8 +635,67 @@ var execSecretTokens = []string{
 	"id_rsa", "id_ed25519", ".ssh/", "-----begin",
 }
 
+// execSecretServiceHost maps a well-known secret/credential environment-variable
+// name to the service host that secret legitimately authenticates to. A command
+// that sends such a secret to its OWN service is normal operation, not
+// exfiltration — only a mismatched destination is flagged.
+var execSecretServiceHost = map[string]string{
+	"DISCORD_WEBHOOK": "discord.com", "DISCORD_WEBHOOK_URL": "discord.com",
+	"DISCORD_TOKEN": "discord.com", "DISCORD_BOT_TOKEN": "discord.com",
+	"NPM_TOKEN": "registry.npmjs.org", "NPM_AUTH_TOKEN": "registry.npmjs.org",
+	"NODE_AUTH_TOKEN": "registry.npmjs.org", "NPM_CONFIG_TOKEN": "registry.npmjs.org",
+	"GH_TOKEN": "api.github.com", "GITHUB_TOKEN": "api.github.com",
+	"GH_PAT": "api.github.com", "GITHUB_PAT": "api.github.com", "GH_ENTERPRISE_TOKEN": "api.github.com",
+	"SLACK_TOKEN": "slack.com", "SLACK_WEBHOOK": "slack.com", "SLACK_WEBHOOK_URL": "slack.com",
+	"SLACK_BOT_TOKEN": "slack.com", "SLACK_API_TOKEN": "slack.com",
+	"STRIPE_SECRET_KEY": "stripe.com", "STRIPE_API_KEY": "stripe.com", "STRIPE_KEY": "stripe.com",
+	"AWS_SECRET_ACCESS_KEY": "amazonaws.com", "AWS_ACCESS_KEY_ID": "amazonaws.com",
+	"AWS_SESSION_TOKEN": "amazonaws.com",
+	"TWILIO_AUTH_TOKEN": "twilio.com", "TWILIO_API_KEY": "twilio.com",
+	"SENDGRID_API_KEY":   "sendgrid.com",
+	"MAILGUN_API_KEY":    "mailgun.net",
+	"TELEGRAM_BOT_TOKEN": "api.telegram.org", "TELEGRAM_TOKEN": "api.telegram.org",
+	"DIGITALOCEAN_TOKEN": "digitalocean.com", "DO_TOKEN": "digitalocean.com",
+	"HEROKU_API_KEY":       "heroku.com",
+	"VERCEL_TOKEN":         "vercel.com",
+	"NETLIFY_AUTH_TOKEN":   "netlify.com",
+	"CLOUDFLARE_API_TOKEN": "cloudflare.com", "CF_API_TOKEN": "cloudflare.com", "CLOUDFLARE_TOKEN": "cloudflare.com",
+	"DOCKERHUB_TOKEN": "docker.com", "DOCKER_TOKEN": "docker.com", "DOCKER_PASSWORD": "docker.com",
+	"GITLAB_TOKEN": "gitlab.com", "CI_JOB_TOKEN": "gitlab.com",
+	"PYPI_TOKEN": "pypi.org", "PYPI_API_TOKEN": "pypi.org", "TWINE_PASSWORD": "pypi.org",
+	"CRATES_TOKEN": "crates.io", "CARGO_REGISTRY_TOKEN": "crates.io",
+	"OPENAI_API_KEY":    "api.openai.com",
+	"ANTHROPIC_API_KEY": "api.anthropic.com",
+	"GCP_SA_KEY":        "googleapis.com", "GOOGLE_API_KEY": "googleapis.com", "GCP_CREDENTIALS": "googleapis.com",
+	"AZURE_CLIENT_SECRET": "azure.com",
+	"SENTRY_AUTH_TOKEN":   "sentry.io",
+	"DATADOG_API_KEY":     "datadoghq.com", "DD_API_KEY": "datadoghq.com",
+	"CODECOV_TOKEN":  "codecov.io",
+	"FIREBASE_TOKEN": "firebaseio.com",
+}
+
+// execSecretNameRe captures the identifier of a referenced secret, in any of the
+// common forms: ${{ secrets.NAME }}, $NAME, ${NAME}, env.NAME, process.env.NAME.
+var execSecretNameRe = regexp.MustCompile(`(?:secrets\.|env\.|process\.env\.|\$\{?)([A-Z][A-Z0-9_]+)`)
+
+// execSecretToOwnService reports whether a secret referenced in cmd legitimately
+// belongs to destHost (so sending it there is not exfiltration).
+func execSecretToOwnService(cmd, destHost string) bool {
+	for _, m := range execSecretNameRe.FindAllStringSubmatch(cmd, -1) {
+		svc, ok := execSecretServiceHost[m[1]]
+		if !ok {
+			continue
+		}
+		if destHost == svc || strings.HasSuffix(destHost, "."+svc) {
+			return true
+		}
+	}
+	return false
+}
+
 // execExfiltrates reports a secret/credential read combined with an off-host sink
-// (a non-allowlisted URL or a raw network tool). Returns the destination host.
+// (a non-allowlisted URL or a raw network tool). A secret sent to its OWN service
+// (per execSecretServiceHost) is not exfiltration. Returns the destination host.
 func execExfiltrates(cmd string) (string, bool) {
 	lc := strings.ToLower(cmd)
 	secret := false
@@ -487,7 +709,15 @@ func execExfiltrates(cmd string) (string, bool) {
 		return "", false
 	}
 	if ext := execExternalURLs(cmd); len(ext) > 0 {
-		return execHost(ext[0]), true
+		for _, u := range ext {
+			h := execHost(u)
+			if execSecretToOwnService(cmd, h) {
+				continue // the secret's own service — legitimate
+			}
+			return h, true
+		}
+		// Every external destination is the secret's own service: not exfil.
+		return "", false
 	}
 	for _, p := range []string{"nc ", "ncat ", "/dev/tcp/", "telnet ", "scp ", "| mail"} {
 		if strings.Contains(lc, p) {
