@@ -1,0 +1,70 @@
+name: Publish to PyPI
+
+# Builds the per-platform `trishul-cli` binary wheels and publishes them to
+# PyPI via Trusted Publishing (OIDC) — no API token is stored in the repo.
+#
+# GATING: this entire job is a no-op (shows as "skipped", never fails the
+# release) until the owner sets the repository variable PYPI_TRUSTED to the
+# string "true" AND configures the trusted publisher on PyPI. See D-HUMAN note
+# below. Until then, nothing is published and the release stays green.
+#
+# D-HUMAN (one-time, owner): on https://pypi.org, create the project
+# `trishul-cli` (or use "pending publisher"), add a GitHub trusted publisher
+# with owner=Armur-Ai, repo=trishul, workflow=pypi-publish.yml, environment=pypi
+# (optional). Then set repo variable PYPI_TRUSTED=true. No secret is needed.
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  publish-pypi:
+    # Skip (no-op, green) until the trusted publisher is configured.
+    if: ${{ vars.PYPI_TRUSTED == 'true' }}
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      contents: read
+      id-token: write  # required for Trusted Publishing (OIDC)
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Build CLI binaries (all platforms)
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: latest
+          args: build --clean --id trishul-cli
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build per-platform wheels
+        run: |
+          python scripts/pip/build-wheels.py \
+            --dist dist \
+            --out dist_wheels \
+            --version "${{ github.event.release.tag_name }}" \
+            --require-all
+
+      - name: List built wheels
+        run: ls -l dist_wheels
+
+      - name: Publish to PyPI (Trusted Publishing / OIDC)
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist_wheels
