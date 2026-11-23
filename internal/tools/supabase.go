@@ -229,18 +229,36 @@ func scanSupabaseMigrations(directory string) ([]map[string]interface{}, error) 
 		return nil, walkErr
 	}
 
-	// Replay in filename/timestamp order. Supabase migration filenames are
-	// timestamp-prefixed, so lexical order is chronological order.
-	sort.Slice(files, func(i, j int) bool { return files[i].relPath < files[j].relPath })
-
-	var ordered []orderedStmt
+	// Replay each migrations directory independently: a tree may contain more
+	// than one Supabase project (or copies, as in tests), and merging their
+	// migrations into one global sequence would attribute a table to the wrong
+	// project and make a finding's location depend on unrelated files. Group by
+	// the file's parent directory, then within a group replay in filename order
+	// (Supabase filenames are timestamp-prefixed, so lexical order is chronological).
+	groups := map[string][]sqlFile{}
 	for _, f := range files {
-		for _, s := range splitSQLStatements(stripSQLComments(f.content)) {
-			ordered = append(ordered, orderedStmt{relPath: f.relPath, stmt: s})
-		}
+		dir := filepath.Dir(f.relPath)
+		groups[dir] = append(groups[dir], f)
 	}
+	groupDirs := make([]string, 0, len(groups))
+	for d := range groups {
+		groupDirs = append(groupDirs, d)
+	}
+	sort.Strings(groupDirs)
 
-	return replayMigrations(ordered), nil
+	var findings []map[string]interface{}
+	for _, d := range groupDirs {
+		gfiles := groups[d]
+		sort.Slice(gfiles, func(i, j int) bool { return gfiles[i].relPath < gfiles[j].relPath })
+		var ordered []orderedStmt
+		for _, f := range gfiles {
+			for _, s := range splitSQLStatements(stripSQLComments(f.content)) {
+				ordered = append(ordered, orderedStmt{relPath: f.relPath, stmt: s})
+			}
+		}
+		findings = append(findings, replayMigrations(ordered)...)
+	}
+	return findings, nil
 }
 
 // replayMigrations applies every statement in order, computing the final state
