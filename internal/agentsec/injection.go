@@ -181,14 +181,18 @@ type injSig struct {
 	secrecy    bool // instructs the agent to conceal
 }
 
+// targetsReader reports whether the text is aimed at the READER agent: an
+// instruction-override phrase ("ignore previous instructions"), a direct address
+// to an AI assistant/agent or a known coding-agent tool name, or second-person
+// imperative framing ("you must …"). Repository text that does not target the
+// reading agent is descriptive prose, not an injection.
+func (s injSig) targetsReader() bool { return s.override || s.aiTarget }
+
 // candidate is the gate: a bare imperative or a stray AI mention is not enough.
-// We require an injection override phrase paired with an action/target/secrecy,
-// or an AI being addressed together with a concrete imperative.
+// A finding requires the text to BOTH target the reader agent AND carry a
+// concrete malicious action (an imperative) or an instruction to conceal.
 func (s injSig) candidate() bool {
-	if s.override && (s.imperative || s.aiTarget || s.secrecy) {
-		return true
-	}
-	return s.aiTarget && (s.imperative || s.secrecy)
+	return s.targetsReader() && (s.imperative || s.secrecy)
 }
 
 func injSignals(lower string) injSig {
@@ -242,6 +246,13 @@ var injAITargets = []string{
 	"note to the ai", "attention ai", "attention assistant", "dear ai",
 	"to the ai agent", "to the assistant", "hey assistant", "hey copilot",
 	"claude code", "copilot:", "cursor agent", "llm agent",
+	// Second-person framing addressed to the reading agent.
+	"you must", "you should", "you shall", "you are to", "you are now",
+	"you will now", "you need to", "you have to", "your task is",
+	"your new instructions",
+	// Known coding-agent tool names used to address the reader directly.
+	"copilot", "github copilot", "chatgpt", "openai assistant", "gemini",
+	"windsurf", "aider", "cline agent", "codeium",
 }
 
 var injImperatives = []string{
