@@ -1,16 +1,18 @@
 {
-  "name": "@trishul/cli",
-  "version": "0.0.1",
+  "name": "trishul-cli",
+  "version": "0.0.0-placeholder",
   "description": "trishul — Security Scanner for Vibe-Coded Software. SAST, SCA, secrets, and IaC scanning for AI-generated code.",
   "bin": {
     "trishul": "bin/trishul.js"
   },
-  "scripts": {
-    "postinstall": "node scripts/install.js"
-  },
+  "files": [
+    "bin/",
+    "README.md"
+  ],
   "keywords": [
     "security",
     "sast",
+    "sca",
     "scanner",
     "vulnerability",
     "devsecops",
@@ -24,15 +26,29 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Armur-Ai/trishul"
+    "url": "git+https://github.com/Armur-Ai/Trishul.git"
   },
   "homepage": "https://trishul.dev",
   "bugs": {
-    "url": "https://github.com/Armur-Ai/trishul/issues"
+    "url": "https://github.com/Armur-Ai/Trishul/issues"
   },
   "engines": {
     "node": ">=16"
   },
-  "os": ["darwin", "linux", "win32"],
-  "cpu": ["x64", "arm64"]
+  "os": [
+    "darwin",
+    "linux",
+    "win32"
+  ],
+  "cpu": [
+    "x64",
+    "arm64"
+  ],
+  "optionalDependencies": {
+    "trishul-cli-darwin-arm64": "0.0.0-placeholder",
+    "trishul-cli-darwin-x64": "0.0.0-placeholder",
+    "trishul-cli-linux-x64": "0.0.0-placeholder",
+    "trishul-cli-linux-arm64": "0.0.0-placeholder",
+    "trishul-cli-win32-x64": "0.0.0-placeholder"
+  }
 }
