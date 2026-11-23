@@ -54,30 +54,72 @@ builds:
       - -X main.commit={{.ShortCommit}}
       - -X main.date={{.Date}}
 
+  # GitHub App server (webhook receiver + queue + worker).
+  - id: trishul-app
+    main: ./cmd/trishul-app
+    binary: trishul-app
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.ShortCommit}}
+
 archives:
   - id: cli-archive
-    builds:
+    ids:
       - trishul-cli
     name_template: "trishul_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     format_overrides:
       - goos: windows
-        format: zip
+        formats: [ zip ]
 
   - id: ci-archive
-    builds:
+    ids:
       - trishul-ci
     name_template: "trishul-ci_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     format_overrides:
       - goos: windows
-        format: zip
+        formats: [ zip ]
 
   - id: server-archive
-    builds:
+    ids:
       - trishul-server
     name_template: "trishul-server_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
 
+  - id: app-archive
+    ids:
+      - trishul-app
+    name_template: "trishul-app_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
 checksum:
   name_template: 'checksums.txt'
+
+# Software bill of materials per archive (syft, available in CI via goreleaser-action).
+sboms:
+  - id: archive-sbom
+    artifacts: archive
+
+# Keyless cosign signatures over the checksums file. Runs only on a real release
+# where cosign + GitHub OIDC are available; skipped on --snapshot.
+signs:
+  - id: cosign-checksum
+    cmd: cosign
+    certificate: "${artifact}.pem"
+    args:
+      - sign-blob
+      - "--yes"
+      - "--output-certificate=${certificate}"
+      - "--output-signature=${signature}"
+      - "${artifact}"
+    artifacts: checksum
+    output: true
 
 changelog:
   sort: asc
@@ -87,23 +129,21 @@ changelog:
       - '^chore:'
       - '^test:'
 
-brews:
+homebrew_casks:
   - name: trishul
     ids:
       - cli-archive
-    # Generate the formula, but only push it to the tap when a token is
-    # present. Until Armur-Ai/homebrew-tap + HOMEBREW_TAP_GITHUB_TOKEN exist,
-    # this keeps the release green (binaries still publish) instead of failing
-    # goreleaser on a 401.
-    skip_upload: '{{ eq .Env.HOMEBREW_TAP_GITHUB_TOKEN "" }}'
+    # Generate the cask, but only push it to the tap when a token is present.
+    # Until Armur-Ai/homebrew-tap + HOMEBREW_TAP_GITHUB_TOKEN exist, this keeps
+    # the release green (binaries still publish) instead of failing goreleaser
+    # on a 401.
+    skip_upload: '{{ eq (index .Env "HOMEBREW_TAP_GITHUB_TOKEN") "" }}'
     repository:
       owner: Armur-Ai
       name: homebrew-tap
-      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+      token: '{{ index .Env "HOMEBREW_TAP_GITHUB_TOKEN" }}'
     homepage: "https://trishul.dev"
     description: "Security Scanner for Vibe-Coded Software — SAST, SCA, secrets & IaC"
     license: "MIT"
-    install: |
-      bin.install "trishul"
-    test: |
-      system "#{bin}/trishul", "version"
+    # Binary is auto-detected from the archive; modern GoReleaser also strips the
+    # Gatekeeper quarantine xattr for casks automatically.
