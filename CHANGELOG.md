@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+_Nothing yet._
+
+## [0.2.0] - 2026-11-23
+
+### Precision & findings quality (Phase P)
+- New **v2 finding model** (numeric confidence + bands, located evidence steps, remediation with optional patch), **message-independent fingerprints**, and **rename-aware baseline diffing** so renames and reworded messages don't show as new.
+- **Noise reduction**: cross-analyzer dedupe, same-rule-in-one-file grouping, repo-level clustering, and a PR comment budget — everything ordered by `severity × confidence × file-context` priority.
+- A **162-rule metadata catalog** (`rules/*.yaml`) with generated per-rule docs and SARIF rule enrichment (help markdown, `security-severity`, measured precision, CWE tags, helpUri).
+- **Inline suppressions** (`trishul-ignore[RULE]: reason`, plus `nosec`/`nosemgrep`/`gitleaks:allow`), **`.trishul.yml` v2** config + JSON schema, and maturity-based visibility that auto-demotes rules below 70% measured precision.
+- **Precision harness**: a pinned public-repo corpus, a two-reviewer labeling protocol, the `trishul-bench` CLI (report/scan/label), and a nightly precision-regression workflow.
+- **Analyzer precision fixes**: Supabase RLS (per-directory migration replay + final-state), Firebase rules (effective-rule evaluation + project gating), agentsec OBFS/EXEC lexical-context gating, and FP/TP regression fixtures.
+- **Deterministic autofix** framework emitted as SARIF `fixes[]`, and **opt-in, injection-resistant AI false-positive triage** (BYO key, advisory label only, never changes severity).
+
 ### Pull-request review & pipeline
 - **PR reviews surface the agent-supply-chain findings prominently** — the review comment now counts `agent_security`/`vibe_security` findings and renders a dedicated "🔱 AI Agent Supply-Chain Security" section (attack chains first), with the passive-analysis assurance.
 - **Deterministic output** — the built-in analyzer categories (`vibe_security` aggregated from concurrent analyzers, and the map-grouped `infra_security`/`secret_detection`) are now sorted by `(path, line, check_id)`, so SARIF/CLI diffs are stable run to run. Pinned by a determinism test.
