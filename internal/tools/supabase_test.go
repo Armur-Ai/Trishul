@@ -3,6 +3,7 @@ package internal
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	utils "github.com/Armur-Ai/Trishul/pkg"
@@ -196,6 +197,220 @@ create policy "p" on public.leaky for select using (true);`
 		if _, has := first[key]; !has {
 			t.Errorf("finding missing key %q: %v", key, first)
 		}
+	}
+}
+
+// infraFindings runs the public entry point and returns the flattened list of
+// findings emitted under the infra-security category.
+func infraFindings(t *testing.T, dir string) []interface{} {
+	t.Helper()
+	res, err := RunSupabaseRLS(dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	raw, ok := res[utils.INFRA_SECURITY]
+	if !ok {
+		return nil
+	}
+	list, ok := raw.([]interface{})
+	if !ok {
+		t.Fatalf("expected %q to be a slice, got %T", utils.INFRA_SECURITY, raw)
+	}
+	return list
+}
+
+func TestRunSupabaseRLS_ContextGate_NonSupabaseRepoEmitsNothing(t *testing.T) {
+	// A plain SQL file with a CREATE TABLE in a repo that has none of the
+	// Supabase signals must not produce any Supabase findings.
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "schema.sql"),
+		[]byte("create table public.widgets (id int);"), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	if got := infraFindings(t, dir); len(got) != 0 {
+		t.Errorf("expected 0 findings for non-Supabase repo, got %d: %v", len(got), got)
+	}
+}
+
+func TestRunSupabaseRLS_ContextGate_Signals(t *testing.T) {
+	// The same insecure migration body; each subtest adds exactly one Supabase
+	// signal and must then surface findings.
+	body := "create table public.widgets (id int);\ncreate policy \"p\" on public.widgets for select using (true);"
+
+	t.Run("supabase config.toml", func(t *testing.T) {
+		dir := t.TempDir()
+		if err := os.WriteFile(filepath.Join(dir, "schema.sql"), []byte(body), 0o644); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+		if err := os.MkdirAll(filepath.Join(dir, "supabase"), 0o755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "supabase", "config.toml"), []byte("project_id = \"x\"\n"), 0o644); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+		if got := infraFindings(t, dir); len(got) == 0 {
+			t.Errorf("expected findings when supabase/config.toml present, got none")
+		}
+	})
+
+	t.Run("package.json @supabase dep", func(t *testing.T) {
+		dir := t.TempDir()
+		if err := os.WriteFile(filepath.Join(dir, "schema.sql"), []byte(body), 0o644); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+		pkg := `{"dependencies": {"@supabase/supabase-js": "^2.0.0"}}`
+		if err := os.WriteFile(filepath.Join(dir, "package.json"), []byte(pkg), 0o644); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+		if got := infraFindings(t, dir); len(got) == 0 {
+			t.Errorf("expected findings when @supabase dep present, got none")
+		}
+	})
+
+	t.Run("sql references auth.uid", func(t *testing.T) {
+		dir := t.TempDir()
+		sql := "create table public.widgets (id int, owner uuid default auth.uid());\n" +
+			"create policy \"p\" on public.widgets for select using (true);"
+		if err := os.WriteFile(filepath.Join(dir, "schema.sql"), []byte(sql), 0o644); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+		if got := infraFindings(t, dir); len(got) == 0 {
+			t.Errorf("expected findings when SQL references auth.uid(), got none")
+		}
+	})
+}
+
+func TestCreateTableParsing_Forms(t *testing.T) {
+	// Each form should parse to the expected canonical table key and produce a
+	// single missing-RLS finding whose message names that table. The historical
+	// bug produced a table named "if" for IF NOT EXISTS; it must not recur.
+	cases := []struct {
+		name     string
+		stmt     string
+		wantName string // canonical (unquoted, unqualified) name in the message
+	}{
+		{"if not exists", "create table if not exists widgets (id int);", "widgets"},
+		{"if not exists schema-qualified", "create table if not exists public.widgets (id int);", "widgets"},
+		{"quoted with space", `create table "My Table" (id int);`, "my table"},
+		{"schema qualified public", "create table public.users (id int);", "users"},
+		{"public prefix bare match", "create table public.users (id int);", "users"},
+		{"unqualified", "create table users (id int);", "users"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			writeMigration(t, dir, "0001.sql", tc.stmt)
+			findings, err := scanSupabaseMigrations(dir)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			byCheck := findingsByCheck(findings)
+			rls := byCheck["SUPABASE-RLS-001"]
+			if len(rls) != 1 {
+				t.Fatalf("expected exactly 1 missing-RLS finding, got %d: %v", len(rls), findings)
+			}
+			msg, _ := rls[0]["message"].(string)
+			want := "\"" + tc.wantName + "\""
+			if !strings.Contains(msg, want) {
+				t.Errorf("expected message to name table %s, got: %q", want, msg)
+			}
+			if strings.Contains(msg, "\"if\"") {
+				t.Errorf("parser produced bogus table name \"if\": %q", msg)
+			}
+		})
+	}
+}
+
+func TestCreateTableParsing_NonPublicSchemaSkipped(t *testing.T) {
+	// A table in a non-public schema (e.g. app.users) is not part of the
+	// Supabase anon/public data layer, so no missing-RLS finding is expected.
+	dir := t.TempDir()
+	writeMigration(t, dir, "0001.sql", "create table app.users (id int);\n-- auth.uid()\n")
+	findings, err := scanSupabaseMigrations(dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if byCheck := findingsByCheck(findings); len(byCheck["SUPABASE-RLS-001"]) != 0 {
+		t.Errorf("expected no missing-RLS finding for non-public schema, got: %v", byCheck["SUPABASE-RLS-001"])
+	}
+}
+
+func TestReplay_EnableInLaterMigrationClearsFinding(t *testing.T) {
+	// Migration A creates a table without RLS; migration B enables it. The FINAL
+	// state has RLS on, so there must be no missing-RLS finding.
+	dir := t.TempDir()
+	writeMigration(t, dir, "0001_create.sql", "create table public.foo (id int);")
+	writeMigration(t, dir, "0002_enable.sql", "alter table public.foo enable row level security;")
+
+	findings, err := scanSupabaseMigrations(dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if byCheck := findingsByCheck(findings); len(byCheck["SUPABASE-RLS-001"]) != 0 {
+		t.Errorf("expected no missing-RLS finding after later ENABLE, got: %v", byCheck["SUPABASE-RLS-001"])
+	}
+}
+
+func TestReplay_DisableInLaterMigrationReintroducesFinding(t *testing.T) {
+	// Migration A creates and enables RLS; migration B disables it. The FINAL
+	// state lacks RLS, so a finding must be raised, and its evidence must point
+	// at migration B (the DISABLE that introduced the problem).
+	dir := t.TempDir()
+	writeMigration(t, dir, "0001_create.sql",
+		"create table public.foo (id int);\nalter table public.foo enable row level security;")
+	writeMigration(t, dir, "0002_disable.sql", "alter table public.foo disable row level security;")
+
+	findings, err := scanSupabaseMigrations(dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	rls := findingsByCheck(findings)["SUPABASE-RLS-001"]
+	if len(rls) != 1 {
+		t.Fatalf("expected exactly 1 missing-RLS finding after later DISABLE, got %d: %v", len(rls), findings)
+	}
+	if p, _ := rls[0]["path"].(string); !strings.Contains(p, "0002_disable") {
+		t.Errorf("expected evidence to point at the disabling migration (0002_disable), got path %q", p)
+	}
+}
+
+func TestReplay_DropPolicyClearsInsecurePolicyFinding(t *testing.T) {
+	dir := t.TempDir()
+	writeMigration(t, dir, "0001_setup.sql",
+		"create table public.foo (id int);\n"+
+			"alter table public.foo enable row level security;\n"+
+			"create policy \"wide open\" on public.foo for select using (true);")
+
+	// Without a drop, the insecure USING (true) policy is flagged.
+	before, err := scanSupabaseMigrations(dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(findingsByCheck(before)["SUPABASE-RLS-002"]) == 0 {
+		t.Fatalf("expected a SUPABASE-RLS-002 finding for the live using(true) policy, got none")
+	}
+
+	// A later migration drops the policy; it is no longer live, so no finding.
+	writeMigration(t, dir, "0002_drop.sql", "drop policy \"wide open\" on public.foo;")
+	after, err := scanSupabaseMigrations(dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := findingsByCheck(after)["SUPABASE-RLS-002"]; len(got) != 0 {
+		t.Errorf("expected no SUPABASE-RLS-002 after DROP POLICY, got: %v", got)
+	}
+}
+
+func TestReplay_DropTableClearsMissingRLSFinding(t *testing.T) {
+	dir := t.TempDir()
+	writeMigration(t, dir, "0001_create.sql", "create table public.foo (id int);")
+	writeMigration(t, dir, "0002_drop.sql", "drop table public.foo;")
+
+	findings, err := scanSupabaseMigrations(dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := findingsByCheck(findings)["SUPABASE-RLS-001"]; len(got) != 0 {
+		t.Errorf("expected no missing-RLS finding for a dropped table, got: %v", got)
 	}
 }
 
