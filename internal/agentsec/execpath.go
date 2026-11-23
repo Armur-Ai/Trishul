@@ -318,6 +318,7 @@ type execHit struct {
 	cwe       string
 	enabled   string
 	evidence  string
+	title     string // optional title suffix; overrides execTitle's heuristic
 }
 
 // execClassify decides whether a single command is a risky execution path.
@@ -334,6 +335,22 @@ func execClassify(cmd string) (execHit, bool) {
 		return execHit{
 			sev: "HIGH", conf: "HIGH", cwe: "CWE-829, CWE-200",
 			enabled:  "reads secret/credential material and sends it to " + execOr(host, "an external host"),
+			evidence: execTrim(cmd),
+		}, true
+	}
+
+	// 1b. Well-known one-line installers (rustup, nvm, Homebrew, bun, deno, uv,
+	// docker) are standard developer practice. Downgrade their fetch-and-run to
+	// LOW; if the command additionally pins a checksum, it is not a finding.
+	if execIsInstaller(cmd) && (execPipeToShell(cmd) || execHasFetch(cmd)) {
+		if execHasChecksum(cmd) {
+			return execHit{}, false
+		}
+		host := execHost(execURLRe.FindString(cmd))
+		return execHit{
+			sev: "LOW", conf: "LOW", cwe: "CWE-829",
+			title:    "runs a standard third-party installer",
+			enabled:  "runs a standard third-party installer from " + execOr(host, "a known installer host"),
 			evidence: execTrim(cmd),
 		}, true
 	}
@@ -379,6 +396,9 @@ func execClassify(cmd string) (execHit, bool) {
 }
 
 func execTitle(prefix string, hit execHit) string {
+	if hit.title != "" {
+		return prefix + " " + hit.title
+	}
 	switch {
 	case strings.Contains(hit.cwe, "200"):
 		return prefix + " exfiltrates secrets to a remote host"
@@ -464,6 +484,46 @@ func execInterpRunsStdin(fields []string) bool {
 func execInlineShell(cmd string) bool {
 	lc := strings.ToLower(cmd)
 	for _, p := range []string{"sh -c", "bash -c", "zsh -c", "eval ", "node -e", "python -c", "python3 -c", "perl -e", "ruby -e"} {
+		if strings.Contains(lc, p) {
+			return true
+		}
+	}
+	return false
+}
+
+// execInstallerMarkers identifies the canonical one-line installers that are
+// standard developer practice. Matched as substrings of the command's URL text
+// (host, or host+path for installers served from a shared code-host).
+var execInstallerMarkers = []string{
+	"rustup.rs",                        // rustup (incl. sh.rustup.rs)
+	"raw.githubusercontent.com/nvm-sh", // nvm
+	"raw.githubusercontent.com/homebrew",
+	"get.brew.sh",    // Homebrew
+	"bun.sh",         // bun
+	"deno.land",      // deno
+	"astral.sh/uv",   // uv
+	"get.docker.com", // docker
+}
+
+// execIsInstaller reports whether cmd fetches from a canonical installer source.
+func execIsInstaller(cmd string) bool {
+	lc := strings.ToLower(cmd)
+	for _, m := range execInstallerMarkers {
+		if strings.Contains(lc, m) {
+			return true
+		}
+	}
+	return false
+}
+
+// execHasChecksum reports whether cmd verifies a downloaded artifact against a
+// pinned checksum / signature (then even an installer is not a finding).
+func execHasChecksum(cmd string) bool {
+	lc := strings.ToLower(cmd)
+	for _, p := range []string{
+		"sha256sum", "sha512sum", "sha1sum", "shasum", "md5sum",
+		"--checksum", "sha256:", "sha512:", "gpg --verify", "cosign verify",
+	} {
 		if strings.Contains(lc, p) {
 			return true
 		}
