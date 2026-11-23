@@ -1,0 +1,59 @@
+# Smithery listing manifest for Trishul's MCP server.
+#
+# Trishul is LOCAL-FIRST: the MCP server runs on the user's own machine
+# (`trishul mcp`). Nothing is hosted by us. This manifest describes how a
+# client launches the already-installed `trishul` binary over stdio.
+#
+# Keep `version` in sync with server.json / the release tag — see
+# packaging/mcp-registry/README.md and internal/mcpmeta/mcpmeta_test.go.
+
+name: trishul
+displayName: Trishul
+qualifiedName: io.github.armur-ai/trishul
+version: 0.2.0
+description: >-
+  Local-first security scanner (SAST, SCA, secrets, IaC, and AI-agent/MCP
+  supply-chain checks) exposed as MCP tools. Everything runs on your machine;
+  no code or findings leave your box.
+homepage: https://trishul.dev
+repository: https://github.com/Armur-Ai/Trishul
+license: MIT
+icon: https://trishul.dev/favicon.ico
+
+# How Smithery launches the server. Trishul must already be installed and on
+# PATH (`brew install armur-ai/tap/trishul`, `npx trishul-cli`, or
+# `go install github.com/Armur-Ai/Trishul/cli@latest`). No secrets required.
+startCommand:
+  type: stdio
+  # No configurable options and no secrets: scanning is fully local.
+  configSchema:
+    type: object
+    additionalProperties: false
+    properties: {}
+  commandFunction: |-
+    (config) => ({
+      command: "trishul",
+      args: ["mcp"]
+    })
+
+tools:
+  - name: trishul_scan_path
+    description: Scan a local file or directory for security vulnerabilities.
+  - name: trishul_scan_code
+    description: Scan a code snippet for security vulnerabilities.
+  - name: trishul_audit_mcp_config
+    description: >-
+      Audit MCP/agent client configuration for security issues (unpinned
+      servers, plaintext tokens, overbroad permissions, insecure remotes).
+  - name: trishul_suggest_fix
+    description: Suggest a deterministic, local fix for a finding (returns a patch).
+  - name: trishul_scan_diff
+    description: >-
+      Scan a git checkout and report only the findings introduced relative to
+      a base ref (the PR-gate diff).
+  - name: trishul_explain_finding
+    description: Explain a security finding in plain English.
+  - name: trishul_check_dependency
+    description: Check if a specific package version has known vulnerabilities.
+  - name: trishul_get_history
+    description: Get recent scan history.

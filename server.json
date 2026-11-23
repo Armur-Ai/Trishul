@@ -1,0 +1,65 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-07-09/server.schema.json",
+  "name": "io.github.armur-ai/trishul",
+  "description": "Local-first security scanner (SAST, SCA, secrets, IaC, and AI-agent/MCP supply-chain checks) exposed as MCP tools. Runs entirely on your machine via `trishul mcp`; no code or findings leave your box.",
+  "repository": {
+    "url": "https://github.com/Armur-Ai/Trishul",
+    "source": "github"
+  },
+  "version": "0.2.0",
+  "websiteUrl": "https://trishul.dev",
+  "packages": [
+    {
+      "registryType": "npm",
+      "registryBaseUrl": "https://registry.npmjs.org",
+      "identifier": "trishul-cli",
+      "version": "0.2.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "packageArguments": [
+        {
+          "type": "positional",
+          "value": "mcp",
+          "valueHint": "subcommand",
+          "description": "Start Trishul as a stdio MCP server."
+        }
+      ]
+    },
+    {
+      "registryType": "pypi",
+      "registryBaseUrl": "https://pypi.org",
+      "identifier": "trishul-cli",
+      "version": "0.2.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "packageArguments": [
+        {
+          "type": "positional",
+          "value": "mcp",
+          "valueHint": "subcommand",
+          "description": "Start Trishul as a stdio MCP server."
+        }
+      ]
+    }
+  ],
+  "_meta": {
+    "io.github.armur-ai/trishul": {
+      "homebrew": "armur-ai/tap/trishul",
+      "goInstall": "github.com/Armur-Ai/Trishul/cli@latest",
+      "setupOneLiner": "trishul mcp setup claude",
+      "localFirst": true,
+      "tools": [
+        "trishul_scan_path",
+        "trishul_scan_code",
+        "trishul_audit_mcp_config",
+        "trishul_suggest_fix",
+        "trishul_scan_diff",
+        "trishul_explain_finding",
+        "trishul_check_dependency",
+        "trishul_get_history"
+      ]
+    }
+  }
+}
