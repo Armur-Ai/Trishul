@@ -38,11 +38,12 @@ func scanEncoded(dir string) ([]AgentFinding, error) {
 		rel := Rel(dir, path)
 		text := string(content)
 		lines := SplitLines(content)
+		gate := newLexGate(path, content)
 		for i, line := range lines {
 			ln := i + 1
 			out = append(out, encScanUnicode(rel, line, ln, i == 0)...)
 			out = append(out, encScanHomoglyph(rel, line, ln)...)
-			out = append(out, encScanBlobs(rel, line, ln)...)
+			out = append(out, encScanBlobs(gate, rel, line, i)...)
 		}
 		out = append(out, encScanComments(rel, text)...)
 	})
@@ -254,12 +255,27 @@ func encWords(line string) []string {
 // AGENT-OBFS-003 — base64 / hex blobs decoding to instruction-like text
 // ---------------------------------------------------------------------------
 
-func encScanBlobs(rel, line string, ln int) []AgentFinding {
+// encScanBlobs scans one line (0-based lineIdx) for encoded blobs. A blob is
+// gated on lexical context: a base64/hex string shown inside a comment, inside
+// echo/printf argument text, or inside a heredoc usage block is documentation
+// (an example), not an embedded live payload, so it is skipped. A blob embedded
+// in a real string literal or in code is still flagged.
+func encScanBlobs(gate *lexGate, rel, line string, lineIdx int) []AgentFinding {
 	var out []AgentFinding
+	search := 0
 	for _, tok := range encB64Tokens(line) {
+		col := -1
+		if at := strings.Index(line[search:], tok); at >= 0 {
+			col = search + at
+			search = col + len(tok)
+		}
 		if len(tok) < 24 {
 			continue
 		}
+		if gate.obfsInertContext(lineIdx, col) {
+			continue
+		}
+		ln := lineIdx + 1
 		if b, ok := encTryBase64(tok); ok && encIsPrintableText(b) && encLooksInstructionLike(string(b)) {
 			out = append(out, encBlobFinding(rel, ln, "base64", tok, b))
 			continue

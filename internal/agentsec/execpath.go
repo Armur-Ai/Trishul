@@ -38,7 +38,7 @@ func scanExecPath(dir string) ([]AgentFinding, error) {
 		case execIsMakefile(base):
 			out = append(out, execScanMakefile(rel, content)...)
 		case strings.HasSuffix(base, ".sh"):
-			out = append(out, execScanShell(rel, content)...)
+			out = append(out, execScanShell(rel, path, content)...)
 		}
 	})
 	if err != nil {
@@ -127,11 +127,18 @@ func execKeyLine(lines []string, key string) int {
 // shell scripts
 // ---------------------------------------------------------------------------
 
-func execScanShell(rel string, content []byte) []AgentFinding {
+func execScanShell(rel, path string, content []byte) []AgentFinding {
 	var out []AgentFinding
-	for _, seg := range execLogical(SplitLines(content)) {
+	lines := SplitLines(content)
+	gate := newLexGate(path, content)
+	for _, seg := range execLogical(lines) {
 		t := strings.TrimSpace(seg.text)
 		if t == "" || strings.HasPrefix(t, "#") {
+			continue
+		}
+		// Only fire for a command that is real executable code — not a comment,
+		// a heredoc (cat <<EOF …) usage block, or echo/printf argument text.
+		if !gate.shellExecContext(lines[seg.line-1], seg.line-1) {
 			continue
 		}
 		if hit, ok := execClassify(t); ok {
