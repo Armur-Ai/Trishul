@@ -18,6 +18,6 @@ ssh "$HOST" 'set -e
   sudo install -m 644 /tmp/trishul-app.service /etc/systemd/system/trishul-app.service
   rm -f /tmp/trishul-app /tmp/trishul-app.service
   sudo systemctl daemon-reload
-  if [ -f /etc/trishul-app/env ]; then sudo systemctl enable --now trishul-app && sudo systemctl restart trishul-app; fi
+  if sudo test -f /etc/trishul-app/env; then sudo systemctl enable --now trishul-app && sudo systemctl restart trishul-app; fi
   sleep 4; curl -fsS http://127.0.0.1:4610/healthz || sudo journalctl -u trishul-app -n 30 --no-pager'
 echo "deployed $VER to $HOST"
