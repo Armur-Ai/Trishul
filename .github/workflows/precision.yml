@@ -1,0 +1,79 @@
+name: Precision
+
+# Nightly rule-precision regression (plan P0.3). Scans the pinned corpus, joins
+# findings to the committed labels, and fails if any STABLE rule's precision drops
+# more than 5 points below the committed baseline. The corpus and labels live in
+# testdata/precision/; until they are populated this runs as a no-op guard.
+
+on:
+  schedule:
+    - cron: '17 6 * * *' # 06:17 UTC nightly
+  workflow_dispatch: {}
+  pull_request:
+    branches: [main]
+    paths:
+      - 'testdata/precision/**'
+      - 'internal/precision/**'
+      - 'cmd/trishul-bench/**'
+
+jobs:
+  precision:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+
+      - name: Build trishul-bench
+        run: go build -o /tmp/trishul-bench ./cmd/trishul-bench
+
+      - name: Cache corpus
+        uses: actions/cache@v4
+        with:
+          path: .precision-cache
+          key: precision-corpus-${{ hashFiles('testdata/precision/corpus.yaml') }}
+
+      - name: Fetch corpus (read-only, pinned SHAs)
+        run: bash scripts/precision/fetch.sh testdata/precision/corpus.yaml .precision-cache
+
+      - name: Report precision from labels
+        run: |
+          /tmp/trishul-bench report \
+            --labels testdata/precision/labels.jsonl \
+            --md docs/rules/precision.md \
+            --json /tmp/precision.json
+          cat docs/rules/precision.md || true
+
+      - name: Check against baseline (stable rules, -5pt tolerance)
+        run: |
+          base=testdata/precision/baseline.json
+          if [ ! -f "$base" ]; then
+            echo "no baseline committed yet — skipping regression check"
+            exit 0
+          fi
+          # Compare per-rule precision; fail if any rule dropped > 0.05.
+          python3 - "$base" /tmp/precision.json <<'PY'
+          import json, sys
+          base = {r["rule_id"]: r for r in json.load(open(sys.argv[1]))}
+          cur  = {r["rule_id"]: r for r in json.load(open(sys.argv[2]))}
+          failed = False
+          for rid, b in base.items():
+              c = cur.get(rid)
+              if not c:
+                  continue
+              drop = b["precision"] - c["precision"]
+              if drop > 0.05:
+                  print(f"REGRESSION {rid}: {b['precision']:.2f} -> {c['precision']:.2f} (-{drop:.2f})")
+                  failed = True
+          sys.exit(1 if failed else 0)
+          PY
+
+      - name: Upload precision report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: precision-report
+          path: /tmp/precision.json
