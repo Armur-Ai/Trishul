@@ -337,6 +337,91 @@ func handle(client *anthropic.Client, ctx interface{}, params interface{}) {
 	}
 }
 
+// VIBE-LLM-002 fires on concrete SQL/HTML output sinks (marked experimental),
+// but not on a query with no model-output taint or output that is merely logged.
+func TestRunUnsafeLLMIntegration_ConcreteSinks(t *testing.T) {
+	t.Run("sql sink fires experimental", func(t *testing.T) {
+		findings := runLLM(t, "q.js", `
+const openai = new OpenAI();
+const completion = await openai.chat.completions.create({ messages: [] });
+const name = completion.choices[0].message.content;
+db.query("SELECT * FROM t WHERE n = '" + name + "'");
+`)
+		f := findByCheckID(findings, "VIBE-LLM-002")
+		if f == nil {
+			t.Fatalf("expected VIBE-LLM-002 for SQL sink; got %v", findings)
+		}
+		if f["experimental"] != true {
+			t.Errorf("SQL sink should be marked experimental; got %v", f["experimental"])
+		}
+	})
+	t.Run("html sink fires experimental", func(t *testing.T) {
+		findings := runLLM(t, "view.jsx", `
+export function View({ openai }) {
+  const completion = openai.chat.completions.create({ messages: [] });
+  const html = completion.choices[0].message.content;
+  return <div dangerouslySetInnerHTML={{ __html: html }} />;
+}
+`)
+		f := findByCheckID(findings, "VIBE-LLM-002")
+		if f == nil {
+			t.Fatalf("expected VIBE-LLM-002 for HTML sink; got %v", findings)
+		}
+		if f["experimental"] != true {
+			t.Errorf("HTML sink should be marked experimental; got %v", f["experimental"])
+		}
+	})
+	t.Run("query without taint does not fire", func(t *testing.T) {
+		findings := runLLM(t, "q.js", `
+const rows = await db.query("SELECT 1");
+console.log(rows);
+`)
+		if f := findByCheckID(findings, "VIBE-LLM-002"); f != nil {
+			t.Fatalf("VIBE-LLM-002 should not fire for an untainted query; got %v", f)
+		}
+	})
+	t.Run("model output only logged does not fire", func(t *testing.T) {
+		findings := runLLM(t, "q.js", `
+const openai = new OpenAI();
+const completion = await openai.chat.completions.create({ messages: [] });
+const text = completion.choices[0].message.content;
+console.log(text);
+res.send(text);
+`)
+		if f := findByCheckID(findings, "VIBE-LLM-002"); f != nil {
+			t.Fatalf("VIBE-LLM-002 should not fire when output is only displayed; got %v", f)
+		}
+	})
+}
+
+// VIBE-LLM-001: request-derived input built into a prompt fires; a prompt built
+// only from trusted/constant values does not.
+func TestRunUnsafeLLMIntegration_PromptInjection_FPTP(t *testing.T) {
+	t.Run("request query into prompt fires HIGH", func(t *testing.T) {
+		findings := runLLM(t, "r.js", `
+app.get("/ask", (req, res) => {
+  const prompt = "Answer this question: " + req.query.q;
+});
+`)
+		f := findByCheckID(findings, "VIBE-LLM-001")
+		if f == nil {
+			t.Fatalf("expected VIBE-LLM-001; got %v", findings)
+		}
+		if f["severity"] != "HIGH" {
+			t.Errorf("severity = %v, want HIGH", f["severity"])
+		}
+	})
+	t.Run("constant prompt does not fire", func(t *testing.T) {
+		findings := runLLM(t, "r.js", `
+const prompt = "Summarize the following: " + DOCUMENT_HEADER;
+const messages = [{ role: "system", content: "You are helpful." }];
+`)
+		if f := findByCheckID(findings, "VIBE-LLM-001"); f != nil {
+			t.Fatalf("VIBE-LLM-001 should not fire for a trusted/constant prompt; got %v", f)
+		}
+	})
+}
+
 func TestRunUnsafeLLMIntegration_Clean(t *testing.T) {
 	dir := t.TempDir()
 	writeLLMFile(t, dir, "safe.js", `
