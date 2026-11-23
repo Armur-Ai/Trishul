@@ -534,8 +534,13 @@ func execAllowedHost(h string) bool {
 	if h == "" {
 		return true // nothing to flag
 	}
-	if net.ParseIP(h) != nil {
-		return false // a raw IP is never allowlisted
+	// Loopback is the machine itself (health checks, local dev servers), not
+	// a remote code source or exfiltration destination.
+	if h == "localhost" || strings.HasSuffix(h, ".localhost") {
+		return true
+	}
+	if ip := net.ParseIP(strings.Trim(h, "[]")); ip != nil {
+		return ip.IsLoopback() // any other raw IP is never allowlisted
 	}
 	for _, b := range execAllowBase {
 		if h == b || strings.HasSuffix(h, "."+b) {
