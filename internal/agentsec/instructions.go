@@ -92,6 +92,29 @@ var instrActionRules = []instrRule{
 	},
 }
 
+// instrGuardrail matches negation / guardrail phrasing ("do not", "never",
+// "must not", "avoid", "don't", …). When such phrasing introduces the clause
+// that contains an action-directive verb, the line is DEFENSIVE guidance
+// ("never run arbitrary commands", "do not disable the tests") rather than a
+// directive, and is therefore NOT a finding.
+var instrGuardrail = regexp.MustCompile(`(?i)\b(do\s+not|does\s+not|don't|never|must\s+not|must\s+never|shall\s+not|should\s+not|shouldn't|cannot|can't|won't|will\s+not|avoid|refrain\s+from|refuse\s+to|no\s+need\s+to)\b`)
+
+// instrIsGuardrailClause reports whether a negation/guardrail phrase introduces
+// the clause that ends at matchStart (the start of the directive verb). Only the
+// text preceding the verb, back to the nearest clause boundary, is inspected, so
+// a trailing "…, do not tell the user" after a real directive is not mistaken
+// for a guardrail.
+func instrIsGuardrailClause(line string, matchStart int) bool {
+	if matchStart < 0 || matchStart > len(line) {
+		return false
+	}
+	prefix := line[:matchStart]
+	if cut := strings.LastIndexAny(prefix, ".;"); cut >= 0 {
+		prefix = prefix[cut+1:]
+	}
+	return instrGuardrail.MatchString(prefix)
+}
+
 // instrBenign flags contexts where a match is likely an illustrative example
 // (security docs, "do not" guidance) rather than a live injection.
 // "example" is matched only in phrase form ("for example", "example above")
@@ -191,10 +214,17 @@ func instrScanFile(dir, path string, content []byte) []AgentFinding {
 				"MEDIUM", "escalate the agent's role or remove its restrictions", "CWE-94", i)
 		}
 		for _, r := range instrActionRules {
-			if r.re.MatchString(line) {
-				emit(r.checkID, r.title, r.severity, r.enabled, r.cwe, i)
-				break // one AGENT-INSTR-004 per line
+			loc := r.re.FindStringIndex(line)
+			if loc == nil {
+				continue
 			}
+			// Guardrail / negation introducing the directive ("never run …",
+			// "do not disable the tests") is defensive guidance, not a finding.
+			if instrIsGuardrailClause(line, loc[0]) {
+				break
+			}
+			emit(r.checkID, r.title, r.severity, r.enabled, r.cwe, i)
+			break // one AGENT-INSTR-004 per line
 		}
 	}
 	return out
