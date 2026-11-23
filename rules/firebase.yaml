@@ -1,0 +1,93 @@
+# FIREBASE-* rule registry (internal/tools/firebase.go).
+# Read-only static scan of Firebase/Firestore/Storage security-rules files.
+rules:
+  - id: FIREBASE-001
+    title: Firestore rule allows world read and write
+    short: A Firestore match grants allow read, write with an always-true condition.
+    description: |
+      A Firestore `match` grants `allow read, write` with no condition or an always-true
+      condition (`if true`), so the data is world-readable and world-writable by any client,
+      authenticated or not.
+    default_severity: CRITICAL
+    default_confidence: 0.8
+    maturity: stable
+    languages: [firebase-rules]
+    file_kinds: [config]
+    cwe: [CWE-284]
+    owasp: [A01]
+    references: []
+    fix: "Gate the rule behind an ownership/auth predicate (e.g. if request.auth != null && request.auth.uid == resource.data.ownerId); never ship allow read, write: if true."
+    examples:
+      bad: |
+        match /notes/{id} { allow read, write: if true; }
+      good: |
+        match /notes/{id} { allow read, write: if request.auth != null && request.auth.uid == resource.data.ownerId; }
+    mode_default: block
+
+  - id: FIREBASE-002
+    title: Firestore/Storage rule allows any authenticated user without ownership check
+    short: A rule allows access for request.auth != null with no ownership predicate.
+    description: |
+      A Firestore/Storage `match` allows read or write for any authenticated user
+      (`request.auth != null`) with no ownership check, so any signed-in user can access every
+      document in the collection.
+    default_severity: HIGH
+    default_confidence: 0.6
+    maturity: stable
+    languages: [firebase-rules]
+    file_kinds: [config]
+    cwe: [CWE-285]
+    owasp: [A01]
+    references: []
+    fix: Scope the rule to the resource owner (e.g. if request.auth != null && request.auth.uid == resource.data.ownerId).
+    examples:
+      bad: |
+        match /notes/{id} { allow read: if request.auth != null; }
+      good: |
+        match /notes/{id} { allow read: if request.auth != null && request.auth.uid == resource.data.ownerId; }
+    mode_default: comment
+
+  - id: FIREBASE-003
+    title: Cloud Storage rule grants an unconditional allow
+    short: A Storage match allows write/all paths with no condition.
+    description: |
+      A Cloud Storage `match` grants an unconditional allow (no condition or `if true`) on a
+      write or on an `{allPaths=**}` block, so stored objects are world-writable/readable with
+      no authorization.
+    default_severity: HIGH
+    default_confidence: 0.8
+    maturity: stable
+    languages: [firebase-rules]
+    file_kinds: [config]
+    cwe: [CWE-668]
+    owasp: [A01]
+    references: []
+    fix: Require authentication and ownership before writing, and never leave a match /{allPaths=**} block with an unconditional allow.
+    examples:
+      bad: |
+        match /{allPaths=**} { allow write: if true; }
+      good: |
+        match /users/{userId}/{file} { allow write: if request.auth != null && request.auth.uid == userId; }
+    mode_default: comment
+
+  - id: FIREBASE-004
+    title: Broad {document=**} catch-all with a permissive allow
+    short: A {document=**} catch-all grants a permissive unconditional allow.
+    description: |
+      A Firestore `match` is a broad `{document=**}` catch-all with a permissive, unconditional
+      allow; it overrides more specific rules and exposes the whole database.
+    default_severity: MEDIUM
+    default_confidence: 0.8
+    maturity: stable
+    languages: [firebase-rules]
+    file_kinds: [config]
+    cwe: [CWE-732]
+    owasp: [A01]
+    references: []
+    fix: Remove the catch-all allow or scope it behind auth/ownership, and grant access per-collection with explicit ownership predicates.
+    examples:
+      bad: |
+        match /{document=**} { allow read, write: if true; }
+      good: |
+        match /notes/{id} { allow read, write: if request.auth != null && request.auth.uid == resource.data.ownerId; }
+    mode_default: comment

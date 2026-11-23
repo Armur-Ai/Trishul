@@ -1,0 +1,115 @@
+# SUPABASE-RLS-* rule registry (internal/tools/supabase.go).
+# Read-only static scan of SQL migrations for insecure Supabase Row-Level-Security.
+rules:
+  - id: SUPABASE-RLS-001
+    title: Table created without row-level security
+    short: A public table is created with no ENABLE ROW LEVEL SECURITY anywhere.
+    description: |
+      A public-schema table is created but no `ALTER TABLE ... ENABLE ROW LEVEL SECURITY`
+      appears for it in any scanned migration, so the data layer is open to any client using the
+      anon/public API key. RLS enabled in a later migration suppresses the finding.
+    default_severity: HIGH
+    default_confidence: 0.9
+    maturity: stable
+    languages: [sql]
+    file_kinds: [migration]
+    cwe: [CWE-284]
+    owasp: [A01]
+    references: []
+    fix: Enable row-level security on the table (ALTER TABLE <t> ENABLE ROW LEVEL SECURITY) and add explicit policies.
+    examples:
+      bad: |
+        create table public.notes (id uuid primary key, body text);
+      good: |
+        create table public.notes (id uuid primary key, body text);
+        alter table public.notes enable row level security;
+    mode_default: comment
+
+  - id: SUPABASE-RLS-002
+    title: RLS policy with an always-true predicate (effectively public)
+    short: A policy uses USING (true) or WITH CHECK (true).
+    description: |
+      An RLS policy uses `USING (true)` (matches every row for every caller) or `WITH CHECK (true)`
+      (lets any caller write arbitrary rows), making the table effectively public despite RLS
+      being enabled.
+    default_severity: CRITICAL
+    default_confidence: 0.9
+    maturity: stable
+    languages: [sql]
+    file_kinds: [migration]
+    cwe: [CWE-862]
+    owasp: [A01]
+    references: []
+    fix: Replace the always-true predicate with an auth/ownership condition such as (auth.uid() = user_id).
+    examples:
+      bad: |
+        create policy p on public.notes for select using (true);
+      good: |
+        create policy p on public.notes for select using (auth.uid() = user_id);
+    mode_default: block
+
+  - id: SUPABASE-RLS-003
+    title: RLS policy grants write/ALL to the anon role
+    short: A policy gives the anon role a write or ALL operation.
+    description: |
+      An RLS policy grants a write or ALL operation (or a policy with no FOR clause, which
+      defaults to ALL) to the `anon` role, exposing the data layer to unauthenticated callers.
+    default_severity: HIGH
+    default_confidence: 0.9
+    maturity: stable
+    languages: [sql]
+    file_kinds: [migration]
+    cwe: [CWE-862]
+    owasp: [A01]
+    references: []
+    fix: Scope sensitive operations to the authenticated role and an ownership predicate; do not grant write/ALL to anon.
+    examples:
+      bad: |
+        create policy p on public.notes for all to anon using (true);
+      good: |
+        create policy p on public.notes for select to authenticated using (auth.uid() = user_id);
+    mode_default: comment
+
+  - id: SUPABASE-RLS-004
+    title: SECURITY DEFINER function without a pinned search_path
+    short: A SECURITY DEFINER function does not pin SET search_path.
+    description: |
+      A `SECURITY DEFINER` function does not pin `SET search_path`; a mutable search_path can let
+      a caller hijack name resolution and run code with the definer's elevated privileges.
+    default_severity: HIGH
+    default_confidence: 0.9
+    maturity: stable
+    languages: [sql]
+    file_kinds: [migration]
+    cwe: [CWE-284]
+    owasp: [A01]
+    references: []
+    fix: Pin the search_path on SECURITY DEFINER functions, e.g. SET search_path = public, pg_temp.
+    examples:
+      bad: |
+        create function f() returns void security definer as $$ ... $$ language sql;
+      good: |
+        create function f() returns void security definer set search_path = public, pg_temp as $$ ... $$ language sql;
+    mode_default: comment
+
+  - id: SUPABASE-RLS-005
+    title: Public storage bucket
+    short: A storage bucket is created with public = true.
+    description: |
+      A Supabase storage bucket is created with `public = true`, so its objects are readable by
+      anyone without authorization.
+    default_severity: HIGH
+    default_confidence: 0.9
+    maturity: stable
+    languages: [sql]
+    file_kinds: [migration]
+    cwe: [CWE-284]
+    owasp: [A01]
+    references: []
+    fix: Create the bucket as private (public = false) and gate object access behind storage RLS policies.
+    examples:
+      bad: |
+        insert into storage.buckets (id, name, public) values ('avatars', 'avatars', true);
+      good: |
+        insert into storage.buckets (id, name, public) values ('avatars', 'avatars', false);
+    mode_default: comment

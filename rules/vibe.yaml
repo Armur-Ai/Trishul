@@ -1,0 +1,445 @@
+# VIBE-* rule registry (Vibe Top 10 built-in analyzers, internal/tools).
+# Read-only, deterministic detectors. Source of truth:
+# internal/tools/{abusecontrols,routeauth,depprovenance,llmintegration,webhooks,placeholder}.go
+rules:
+  # --- V08 missing abuse controls (abusecontrols.go) ---
+  - id: VIBE-ABUSE-001
+    title: Auth or LLM endpoint without rate limiting
+    short: An auth/LLM endpoint is exposed with no rate limiter in the project.
+    description: |
+      An authentication endpoint (login/signup/password-reset/OTP) or an LLM-provider call is
+      exposed but no rate limiter is present anywhere in the project, so the surface can be
+      brute-forced or abused for cost/DoS. Suppressed when a rate limiter is detected anywhere.
+    default_severity: MEDIUM
+    default_confidence: 0.5
+    maturity: stable
+    languages: [javascript, typescript, python]
+    file_kinds: [source]
+    cwe: [CWE-307, CWE-770]
+    owasp: [A04]
+    references: []
+    fix: Add a rate limiter (express-rate-limit / @upstash/ratelimit for Node, slowapi for FastAPI/Flask) as middleware on this route, keyed by IP and/or account.
+    examples:
+      bad: |
+        app.post('/login', loginHandler)
+      good: |
+        app.post('/login', rateLimit({ windowMs: 60000, max: 10 }), loginHandler)
+    mode_default: comment
+
+  - id: VIBE-ABUSE-002
+    title: File upload handler without a size limit
+    short: A file-upload handler is configured with no size limit.
+    description: |
+      A file-upload handler (multer/formidable/busboy/UploadFile/multipart) is configured in a
+      file that sets no upload size limit, so an attacker can exhaust disk/memory by uploading
+      arbitrarily large files.
+    default_severity: MEDIUM
+    default_confidence: 0.5
+    maturity: stable
+    languages: [javascript, typescript, python]
+    file_kinds: [source]
+    cwe: [CWE-400]
+    owasp: [A04]
+    references: []
+    fix: "Configure an explicit upload size limit (multer `{ limits: { fileSize: N } }`, formidable `maxFileSize`, or a request body size limit)."
+    examples:
+      bad: |
+        const upload = multer({ dest: 'uploads/' })
+      good: |
+        const upload = multer({ dest: 'uploads/', limits: { fileSize: 5 * 1024 * 1024 } })
+    mode_default: comment
+
+  - id: VIBE-ABUSE-003
+    title: Unvalidated req.body spread into a database write
+    short: A handler spreads raw req.body into a DB create/update, no validation.
+    description: |
+      A mutating handler spreads `req.body` straight into a database create/update with no
+      schema validation in the file, so attackers can set arbitrary/unexpected fields
+      (mass assignment).
+    default_severity: LOW
+    default_confidence: 0.4
+    maturity: stable
+    languages: [javascript, typescript, python]
+    file_kinds: [source]
+    cwe: [CWE-20]
+    owasp: [A04]
+    references: []
+    fix: Validate and whitelist the request body with a schema (zod/joi/yup for Node, pydantic for Python) before persisting; never spread raw `req.body` into a DB write.
+    examples:
+      bad: |
+        await User.create({ ...req.body })
+      good: |
+        const data = userSchema.parse(req.body); await User.create(data)
+    mode_default: comment
+
+  # --- V02 missing / client-only authorization (routeauth.go) ---
+  - id: VIBE-AUTHZ-001
+    title: Unauthenticated data route (missing authorization)
+    short: An API route touches a data layer with no visible auth check.
+    description: |
+      An API route/handler reads or writes persisted data but has no visible session/auth/token
+      guard (whole-file, per-handler, or Express middleware), so any unauthenticated client can
+      invoke it. Public/health/auth-endpoint paths are allow-listed and not flagged.
+    default_severity: HIGH
+    default_confidence: 0.5
+    maturity: stable
+    languages: [javascript, typescript, python]
+    file_kinds: [source]
+    cwe: [CWE-862]
+    owasp: [A01]
+    references: []
+    fix: Add an authentication/authorization check at the start of the handler (getServerSession/auth/getToken in Next.js, auth middleware in Express, Depends(get_current_user) in FastAPI) and reject unauthenticated requests before touching data.
+    examples:
+      bad: |
+        export async function GET() { return Response.json(await prisma.user.findMany()) }
+      good: |
+        export async function GET() { const s = await auth(); if (!s) return new Response(null, { status: 401 }); return Response.json(await prisma.user.findMany()) }
+    mode_default: comment
+
+  - id: VIBE-AUTHZ-002
+    title: "IDOR: record looked up by request id without owner scoping"
+    short: A handler fetches by a request-supplied id with no owner predicate.
+    description: |
+      A handler reads an id from the request (path/body/query) and queries by it with no
+      owner/user/tenant predicate, so a caller may access another user's record by changing the
+      id (IDOR). Independent of auth — an authenticated handler without owner scoping still qualifies.
+    default_severity: HIGH
+    default_confidence: 0.5
+    maturity: stable
+    languages: [javascript, typescript, python]
+    file_kinds: [source]
+    cwe: [CWE-639]
+    owasp: [A01]
+    references: []
+    fix: "Scope the query to the authenticated principal with an ownership predicate (e.g. where { id, userId: session.user.id }) so callers cannot access records they do not own."
+    examples:
+      bad: |
+        const doc = await prisma.note.findUnique({ where: { id: params.id } })
+      good: |
+        const doc = await prisma.note.findUnique({ where: { id: params.id, userId: session.user.id } })
+    mode_default: comment
+
+  # --- risky dependency provenance (depprovenance.go) ---
+  - id: VIBE-DEP-001
+    title: Dependency sourced from a non-registry location
+    short: A package.json dependency points at a git/URL/file source.
+    description: |
+      A package.json dependency is sourced from a non-registry location (git/git+/http(s)/
+      github:/gitlab:/file:/link:/raw URL), bypassing npm registry integrity checks. `npm:`
+      aliases and `workspace:`/`portal:` protocols are not flagged.
+    default_severity: MEDIUM
+    default_confidence: 0.5
+    maturity: stable
+    languages: [json]
+    file_kinds: [config]
+    cwe: [CWE-1104]
+    owasp: [A08]
+    references: []
+    fix: "Pin the dependency to a published registry version (or an npm: alias), or vendor-review the git/URL source and lock it to an immutable commit SHA."
+    examples:
+      bad: |
+        "left-pad": "git+https://github.com/attacker/left-pad.git"
+      good: |
+        "left-pad": "1.3.0"
+    mode_default: comment
+
+  - id: VIBE-DEP-002
+    title: Unpinned dependency with no lockfile
+    short: A dependency floats and the project has no lockfile.
+    description: |
+      A registry-sourced dependency uses an unpinned/floating version spec (*, latest, x, or a
+      non-exact range) while the project has no lockfile anywhere, so installs are not
+      reproducible and can silently pull new code. Suppressed entirely when a lockfile is present.
+    default_severity: LOW
+    default_confidence: 0.5
+    maturity: stable
+    languages: [json]
+    file_kinds: [config]
+    cwe: [CWE-1357]
+    owasp: [A08]
+    references: []
+    fix: Pin to an exact registry version and/or commit a lockfile (package-lock.json / yarn.lock / pnpm-lock.yaml) to freeze the dependency tree.
+    examples:
+      bad: |
+        "react": "*"
+      good: |
+        "react": "18.3.1"
+    mode_default: comment
+
+  - id: VIBE-DEP-003
+    title: Overrides/resolutions repoint a package to a non-registry source
+    short: An overrides/resolutions entry redirects a package to git/URL/file.
+    description: |
+      An overrides/resolutions entry repoints a package to a non-registry (git/URL/file) source,
+      a supply-chain redirection that can replace a trusted package with arbitrary code deep in
+      the dependency tree.
+    default_severity: MEDIUM
+    default_confidence: 0.5
+    maturity: stable
+    languages: [json]
+    file_kinds: [config]
+    cwe: [CWE-494]
+    owasp: [A08]
+    references: []
+    fix: Remove the override or point it at a published registry version; if a git/URL source is required, vendor-review it and pin it to an immutable commit SHA.
+    examples:
+      bad: |
+        "overrides": { "lodash": "git+https://evil.example/lodash.git" }
+      good: |
+        "overrides": { "lodash": "4.17.21" }
+    mode_default: comment
+
+  # --- V09 unsafe LLM integration (llmintegration.go) ---
+  - id: VIBE-LLM-001
+    title: Untrusted input interpolated into an LLM prompt (prompt injection)
+    short: Request-derived input is concatenated into an LLM prompt/message.
+    description: |
+      Request-derived (untrusted) input is concatenated or interpolated directly into an LLM
+      prompt/message content via a dynamic string build, so an attacker can inject instructions
+      into the model (prompt injection). HIGH when the request source is direct, MEDIUM otherwise.
+    default_severity: HIGH
+    default_confidence: 0.6
+    maturity: stable
+    languages: [javascript, typescript, python]
+    file_kinds: [source]
+    cwe: [CWE-94]
+    owasp: [A03]
+    references: []
+    fix: Keep untrusted text in a separate, clearly delimited user-role message, validate/escape it, and constrain the model with a fixed, trusted system prompt instead of concatenating user input.
+    examples:
+      bad: |
+        const prompt = `Answer this question: ${req.body.question}`
+      good: |
+        messages: [{ role: 'system', content: SYSTEM }, { role: 'user', content: req.body.question }]
+    mode_default: comment
+
+  - id: VIBE-LLM-002
+    title: LLM output flows into a dangerous sink
+    short: Model output reaches eval/exec/SQL/innerHTML.
+    description: |
+      An LLM response/completion value flows into a dangerous sink (eval/new Function,
+      exec/child_process/os.system/subprocess, a SQL query/execute/raw, or
+      dangerouslySetInnerHTML/innerHTML); model output is untrusted and can carry injected code.
+    default_severity: HIGH
+    default_confidence: 0.8
+    maturity: stable
+    languages: [javascript, typescript, python]
+    file_kinds: [source]
+    cwe: [CWE-94, CWE-95]
+    owasp: [A03]
+    references: []
+    fix: Treat model output as untrusted — do not eval/exec it or interpolate it into SQL or HTML; parse into a strict schema, use parameterized queries, and escape before any DOM insertion.
+    examples:
+      bad: |
+        eval(completion.choices[0].message.content)
+      good: |
+        const parsed = resultSchema.parse(JSON.parse(completion.choices[0].message.content))
+    mode_default: block
+
+  - id: VIBE-LLM-003
+    title: Provider API key used in client-side code
+    short: An OpenAI/Anthropic client holds an API key in browser code.
+    description: |
+      A provider (OpenAI/Anthropic) client is constructed with an API key in code that runs in
+      the browser (a "use client" file, a client path, or dangerouslyAllowBrowser:true), so the
+      key is shipped to every visitor and can be stolen. The key value is never emitted.
+    default_severity: CRITICAL
+    default_confidence: 0.8
+    maturity: stable
+    languages: [javascript, typescript]
+    file_kinds: [source]
+    cwe: [CWE-200]
+    owasp: [A02]
+    references: []
+    fix: Never expose a provider API key in client code; call the LLM from a server route/edge function that holds the key as a server-only secret and proxy requests from the browser.
+    examples:
+      bad: |
+        const client = new OpenAI({ apiKey: 'sk-...', dangerouslyAllowBrowser: true })
+      good: |
+        // call /api/chat (a server route) which holds OPENAI_API_KEY server-side
+    mode_default: block
+
+  # --- V07 unverified webhooks & payment logic (webhooks.go) ---
+  - id: VIBE-WEBHOOK-001
+    title: Unverified provider webhook handler
+    short: A webhook handler reads the raw body but never verifies the signature.
+    description: |
+      A webhook handler consumes the raw request body but contains no signature verification or
+      provider signature-header check anywhere, so any caller can forge webhook events (e.g. fake
+      a payment or subscription change). Any verify call or signature-header read clears it.
+    default_severity: HIGH
+    default_confidence: 0.5
+    maturity: stable
+    languages: [javascript, typescript, python]
+    file_kinds: [source]
+    cwe: [CWE-345]
+    owasp: [A08]
+    references: []
+    fix: Verify the event signature against the raw body with the webhook secret (e.g. stripe.webhooks.constructEvent, svix verify, or an HMAC constant-time compare) and reject on failure before using the payload.
+    examples:
+      bad: |
+        app.post('/webhook', (req, res) => { const event = req.body; handle(event) })
+      good: |
+        const event = stripe.webhooks.constructEvent(rawBody, req.headers['stripe-signature'], secret)
+    mode_default: comment
+
+  - id: VIBE-WEBHOOK-002
+    title: Client-trusted payment/access value from request body
+    short: A handler trusts a price/plan/role value from req.body.
+    description: |
+      A payment/checkout/order or access-control handler reads a sensitive value
+      (amount/price/total/plan/role/isAdmin) straight from the client request body and acts on
+      it, so a client can tamper with the price they pay or the privilege they receive.
+    default_severity: HIGH
+    default_confidence: 0.5
+    maturity: stable
+    languages: [javascript, typescript, python]
+    file_kinds: [source]
+    cwe: [CWE-602]
+    owasp: [A04]
+    references: []
+    fix: Enforce the value server-side — look up the price/amount from the product/order record by id, and derive roles/plan from the authenticated session, never from request input.
+    examples:
+      bad: |
+        await stripe.charges.create({ amount: req.body.amount })
+      good: |
+        const order = await db.order.findUnique({ where: { id } }); await stripe.charges.create({ amount: order.amount })
+    mode_default: comment
+
+  # --- placeholder / insecure-default (placeholder.go) ---
+  - id: VIBE-PLACEHOLDER-001
+    title: Hardcoded placeholder or weak signing secret
+    short: A signing/session secret is assigned a weak or placeholder value.
+    description: |
+      A signing/session/JWT secret is hardcoded to a weak or placeholder value (a known
+      placeholder word, or a very short string) rather than read from the environment or a
+      secrets manager. Lines that reference env access are suppressed; the value is reported redacted.
+    default_severity: HIGH
+    default_confidence: 0.7
+    maturity: stable
+    languages: [javascript, typescript, python, go, json, yaml]
+    file_kinds: [source, config]
+    cwe: [CWE-798]
+    owasp: [A05]
+    references: []
+    fix: Generate a strong random value and inject it via an environment variable or secrets manager; never commit credentials to source control.
+    examples:
+      bad: |
+        const JWT_SECRET = "changeme"
+      good: |
+        const JWT_SECRET = process.env.JWT_SECRET
+    mode_default: comment
+
+  - id: VIBE-PLACEHOLDER-002
+    title: Default or well-known credentials
+    short: A default username is paired with a weak/default password.
+    description: |
+      Default/weak credentials: an inline connection string embeds well-known credentials (e.g.
+      admin:admin, root:root), or a default username is paired with a common default password in
+      the same configuration.
+    default_severity: HIGH
+    default_confidence: 0.7
+    maturity: stable
+    languages: [javascript, typescript, python, go, json, yaml]
+    file_kinds: [source, config]
+    cwe: [CWE-798]
+    owasp: [A07]
+    references: []
+    fix: Replace default credentials with unique, rotated secrets supplied at runtime; never ship admin/admin-style defaults.
+    examples:
+      bad: |
+        DATABASE_URL = "postgres://admin:admin@localhost:5432/app"
+      good: |
+        DATABASE_URL = "postgres://app_user:${DB_PASSWORD}@localhost:5432/app"
+    mode_default: comment
+
+  - id: VIBE-PLACEHOLDER-003
+    title: Disabled TLS/certificate verification
+    short: Code disables TLS/certificate validation.
+    description: |
+      TLS/certificate verification is disabled (verify=False, rejectUnauthorized:false,
+      NODE_TLS_REJECT_UNAUTHORIZED=0, or InsecureSkipVerify:true), exposing traffic to
+      man-in-the-middle attacks.
+    default_severity: HIGH
+    default_confidence: 0.8
+    maturity: stable
+    languages: [javascript, typescript, python, go]
+    file_kinds: [source, config]
+    cwe: [CWE-295]
+    owasp: [A05]
+    references: []
+    fix: Keep certificate/host verification enabled; fix the underlying trust issue (install the correct CA) instead of disabling validation.
+    examples:
+      bad: |
+        requests.get(url, verify=False)
+      good: |
+        requests.get(url, verify=True)
+    mode_default: comment
+
+  - id: VIBE-PLACEHOLDER-004
+    title: Wildcard CORS origin combined with credentials
+    short: CORS allows origin '*' together with credentials.
+    description: |
+      A wildcard CORS origin (`*`) is combined with credentials enabled in the same file,
+      allowing any site to make authenticated cross-origin requests to the application.
+    default_severity: HIGH
+    default_confidence: 0.7
+    maturity: stable
+    languages: [javascript, typescript, python, go]
+    file_kinds: [source, config]
+    cwe: [CWE-942]
+    owasp: [A05]
+    references: []
+    fix: Replace the `*` origin with an explicit allow-list of trusted origins when credentials are enabled.
+    examples:
+      bad: |
+        app.use(cors({ origin: '*', credentials: true }))
+      good: |
+        app.use(cors({ origin: ['https://app.example.com'], credentials: true }))
+    mode_default: comment
+
+  - id: VIBE-PLACEHOLDER-005
+    title: Debug mode enabled
+    short: Debug mode is turned on in configuration.
+    description: |
+      Debug mode is enabled (DEBUG=true, app.debug=true, FLASK_DEBUG=1, or NODE_ENV set to a
+      non-production value alongside debug config), which leaks stack traces and internals and
+      should never be on in production.
+    default_severity: MEDIUM
+    default_confidence: 0.6
+    maturity: stable
+    languages: [javascript, typescript, python, go, json, yaml]
+    file_kinds: [source, config]
+    cwe: [CWE-489]
+    owasp: [A05]
+    references: []
+    fix: Disable debug mode in production builds and drive it from an environment-specific configuration that defaults to off.
+    examples:
+      bad: |
+        app.debug = True
+      good: |
+        app.debug = False
+    mode_default: comment
+
+  - id: VIBE-PLACEHOLDER-006
+    title: Security-related TODO/FIXME marker
+    short: A comment marks an unfinished or bypassed security control.
+    description: |
+      A security-related TODO/FIXME/HACK/XXX marker inside a comment indicates an unfinished or
+      intentionally bypassed security control (auth, validation, verification). Informational and
+      potentially noisy, so it is reported at LOW severity.
+    default_severity: LOW
+    default_confidence: 0.4
+    maturity: stable
+    languages: [javascript, typescript, python, go]
+    file_kinds: [source]
+    cwe: [CWE-1111]
+    owasp: []
+    references: []
+    fix: Resolve the outstanding security work before shipping, or track it as a blocking issue; do not leave auth/validation gaps behind a comment.
+    examples:
+      bad: |
+        // TODO: add the auth check here before launch
+      good: |
+        // Auth is enforced by requireUser() middleware above.
+    mode_default: monitor
