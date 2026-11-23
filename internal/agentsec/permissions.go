@@ -25,6 +25,12 @@ func init() { register(scanPermissions) }
 const (
 	permTrustBoundary = "untrusted config change -> agent tool/permission scope"
 	permWorkflow      = "an AI agent invokes configured tools"
+
+	// permAllowAllRemediation is the fix for AGENT-PERM-001. It gives a concrete
+	// least-privilege allow-list template and, because broad grants are often
+	// only wanted on one developer's machine, points to moving them out of the
+	// committed settings file into a gitignored settings.local.json.
+	permAllowAllRemediation = `replace the wildcard with an explicit least-privilege allow-list, for example "permissions": { "allow": ["Read", "Grep", "Edit", "Bash(git status)"], "deny": ["Bash(rm:*)"] }. If these broad permissions are only needed on your own machine, do not commit them: move them from .claude/settings.json into .claude/settings.local.json (which is gitignored) so they are not shared with the whole repo.`
 )
 
 type permRule struct {
@@ -66,7 +72,7 @@ var permLineRules = []permRule{
 		checkID: "AGENT-PERM-001", title: "Blanket allow-all tool permissions (inline)", severity: "HIGH", confidence: "HIGH",
 		re:          regexp.MustCompile(`(?i)"?(allow|allowed[_\-]?tools?|permissions?)"?\s*[:=]\s*("?\*"?|\[\s*"\*"\s*\]|"?all"?|"?allow[_\-]?all"?)`),
 		enabled:     "every tool is permitted without per-tool review",
-		remediation: "replace the wildcard with an explicit least-privilege allow-list",
+		remediation: permAllowAllRemediation,
 		cwe:         "CWE-732",
 	},
 	{
@@ -214,7 +220,7 @@ func permWalkJSON(key string, v interface{}, lines []string, out *[]permStructFi
 						checkID: "AGENT-PERM-001", title: "Blanket allow-all tool permissions",
 						evidence: `"` + k + `": [ "*" ]`, line: permLineOf(lines, `"`+k+`"`),
 						enabled:     "every tool is permitted without per-tool review",
-						remediation: "replace the wildcard with an explicit least-privilege allow-list",
+						remediation: permAllowAllRemediation,
 						cwe:         "CWE-732",
 					})
 				}

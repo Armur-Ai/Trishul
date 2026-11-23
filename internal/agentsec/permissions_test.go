@@ -3,6 +3,7 @@ package agentsec
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -200,6 +201,33 @@ func TestScanPermissions_DocsAndExamplesNotFlagged(t *testing.T) {
 	}
 	if f := permHas(fs, "AGENT-PERM-001"); f != nil {
 		t.Fatalf("docs/example wildcard should not be flagged, got %+v", f)
+	}
+}
+
+// The PERM-001 finding must carry an actionable fix: a least-privilege
+// allow-list template and the suggestion to move broad grants into a gitignored
+// settings.local.json.
+func TestScanPermissions_AllowAllFixSuggestion(t *testing.T) {
+	dir := t.TempDir()
+	permWrite(t, dir, ".claude/settings.json", `{
+  "permissions": {
+    "allow": [
+      "*"
+    ]
+  }
+}`)
+	fs, err := scanPermissions(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := permHas(fs, "AGENT-PERM-001")
+	if f == nil {
+		t.Fatalf("expected AGENT-PERM-001, got %+v", fs)
+	}
+	for _, want := range []string{"settings.local.json", "gitignored", "allow-list", `"allow"`} {
+		if !strings.Contains(f.Remediation, want) {
+			t.Errorf("PERM-001 remediation missing %q; got: %s", want, f.Remediation)
+		}
 	}
 }
 
