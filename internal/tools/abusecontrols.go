@@ -22,7 +22,12 @@ import (
 //
 // Detected checks:
 //
-//	VIBE-ABUSE-001  auth or LLM endpoint with no rate limiting anywhere in project
+//	VIBE-ABUSE-001  a SENSITIVE, abusable endpoint with no rate limiting anywhere
+//	              in the project. To keep precision high, "sensitive" is limited to
+//	              authentication (login/signup/register/password-reset/OTP),
+//	              LLM/AI inference call sites, and email-sending endpoints. A
+//	              generic GET or any non-sensitive route is deliberately NOT a
+//	              finding, and a bare `import openai` (no call site) does not fire.
 //	VIBE-ABUSE-002  file upload handler with no size limit configured
 //	VIBE-ABUSE-003  mutating route spreading req.body into a DB call, no validation
 func RunAbuseControls(dir string) (map[string]interface{}, error) {
@@ -61,8 +66,14 @@ var (
 	// --- auth endpoint signals ---
 	reAuthRoute = regexp.MustCompile(`(?i)/?(?:login|signin|sign-in|signup|sign-up|register|password[-_/]?reset|reset[-_/]?password|forgot[-_/]?password|\botp\b|verify[-_/]?otp|authenticate|\bauth/token\b)`)
 
-	// --- LLM provider signals ---
-	reLLMCall = regexp.MustCompile(`(?i)chat\.completions|completions\.create|messages\.create|openai|anthropic|\bclaude-|\bgpt-[0-9]|from\s+openai|import\s+openai|@anthropic-ai|langchain`)
+	// --- LLM provider CALL-SITE signals ---
+	// Only an actual inference/embedding CALL counts as a sensitive endpoint — a
+	// bare `import openai` / `require('anthropic')` must NOT fire ABUSE-001, as it
+	// is not an exposed surface. This is the main precision fix for 001.
+	reLLMCall = regexp.MustCompile(`(?i)chat\.completions|completions\.create|messages\.create|embeddings\.create|responses\.create|\.generateContent\b|anthropic\.messages|openai\.chat`)
+
+	// --- email-sending signals (sensitive: abusable for spam / email-bomb / cost) ---
+	reEmailSend = regexp.MustCompile(`(?i)nodemailer|@sendgrid/mail|\bsendgrid\b|\bsgMail\b|transporter\.sendMail|\.sendMail\s*\(|\bsendEmail\s*\(|\bsend_email\s*\(|\bsend_mail\s*\(|\bsmtplib\b|\bmailgun\b|\bpostmark\b|resend\.emails|ses\.sendEmail`)
 
 	// --- file upload signals ---
 	reUploadHandler = regexp.MustCompile(`(?i)\bmulter\b|\bformidable\b|\bbusboy\b|UploadFile|multipart/form-data|express-fileupload`)
@@ -176,17 +187,22 @@ func scanAbuseFile(f *abuseFile, projectHasRateLimiter bool) []map[string]interf
 			continue
 		}
 
-		// --- VIBE-ABUSE-001: auth/LLM endpoint with no rate limiting anywhere ---
+		// --- VIBE-ABUSE-001: a SENSITIVE endpoint with no rate limiting anywhere ---
+		// Only auth, LLM call sites, and email-sending surfaces qualify; a generic
+		// route never does.
 		if !projectHasRateLimiter && !flagged001[lineNo] {
 			isAuth := reAuthRoute.MatchString(line)
 			isLLM := reLLMCall.MatchString(line)
-			if isAuth || isLLM {
+			isEmail := reEmailSend.MatchString(line)
+			if isAuth || isLLM || isEmail {
 				cwe := []string{"CWE-770"}
 				subject := "endpoint calling an LLM provider"
 				if isAuth {
 					// CWE-307: improper restriction of excessive authentication attempts.
 					cwe = []string{"CWE-307", "CWE-770"}
 					subject = "authentication endpoint (login/signup/password-reset/OTP)"
+				} else if isEmail {
+					subject = "email-sending endpoint"
 				}
 				flagged001[lineNo] = true
 				findings = append(findings, abuseFinding(
