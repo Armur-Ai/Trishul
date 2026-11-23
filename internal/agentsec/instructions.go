@@ -127,6 +127,12 @@ func instrIsGuardrailClause(line string, matchStart int) bool {
 	return instrGuardrail.MatchString(prefix)
 }
 
+// exampleLeadInRe matches explicit "this is only an example" lead-ins. Text a
+// line introduces as an example ("for example, an attacker might write …") is a
+// demonstration, i.e. informational, not a live directive. Shared with the
+// injection analyzer.
+var exampleLeadInRe = regexp.MustCompile(`(?i)(for example|for instance|e\.g\.|example:|as an example|an example (of|would|might)|(might|could) (write|say|embed|contain|include)|a comment like|payload (like|such as))`)
+
 // instrBenign flags contexts where a match is likely an illustrative example
 // (security docs, "do not" guidance) rather than a live injection.
 // "example" is matched only in phrase form ("for example", "example above")
@@ -186,6 +192,12 @@ func instrScanFile(dir, path string, content []byte) []AgentFinding {
 			return
 		}
 		seen[key] = true
+
+		// Quote/example context (fenced code, or text explicitly introduced as an
+		// example) is informational, not a finding.
+		if instrIsQuoteOrExample(lines, fenced, lineIdx) {
+			return
+		}
 
 		confidence := "HIGH"
 		if instrIsBenignContext(lines, fenced, lineIdx) {
@@ -263,6 +275,29 @@ func instrFenceMask(lines []string) []bool {
 		mask[i] = inFence
 	}
 	return mask
+}
+
+// instrIsQuoteOrExample reports whether the match at lineIdx sits in quote/example
+// context: inside a fenced code block, or in a line/immediate context explicitly
+// introduced as an example. Such text is informational, not a finding.
+func instrIsQuoteOrExample(lines []string, fenced []bool, lineIdx int) bool {
+	if lineIdx < len(fenced) && fenced[lineIdx] {
+		return true
+	}
+	lo := lineIdx - 1
+	if lo < 0 {
+		lo = 0
+	}
+	hi := lineIdx + 1
+	if hi >= len(lines) {
+		hi = len(lines) - 1
+	}
+	var b strings.Builder
+	for i := lo; i <= hi; i++ {
+		b.WriteString(lines[i])
+		b.WriteByte('\n')
+	}
+	return exampleLeadInRe.MatchString(b.String())
 }
 
 // instrIsBenignContext reports whether the match at lineIdx is likely an
