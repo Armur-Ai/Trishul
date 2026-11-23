@@ -1,0 +1,76 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://armur.ai/trishul/schemas/trishul-yml.schema.json",
+  "title": ".trishul.yml",
+  "description": "Trishul project configuration (v2). Place this file at the repo root. Policy that decides blocking (the gate) is always read from the base branch.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "profile": {
+      "type": "string",
+      "description": "Named preset of defaults to start from (e.g. default, strict, agent)."
+    },
+    "comments": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Bounds on PR output.",
+      "properties": {
+        "max_inline": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Maximum inline review comments (default 10)."
+        },
+        "max_summary": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Maximum rows in the summary table (default 25)."
+        }
+      }
+    },
+    "gate": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Blocking policy. Read from the base branch so a PR cannot weaken its own gate.",
+      "properties": {
+        "block_on": {
+          "type": "array",
+          "items": { "enum": ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"] },
+          "description": "Severities that fail the gate (default [CRITICAL, HIGH])."
+        },
+        "fail_on_new": {
+          "type": "boolean",
+          "description": "Fail only on findings the PR introduces relative to the base (default true)."
+        }
+      }
+    },
+    "rules": {
+      "type": "object",
+      "description": "Per-rule overrides keyed by rule id or glob (e.g. EXPLOIT-AZURE-*). Most specific match wins; exact id beats glob.",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "severity": { "enum": ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"] },
+          "mode": { "enum": ["block", "comment", "monitor"] },
+          "enabled": { "type": "boolean" }
+        }
+      }
+    },
+    "paths": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Path filters.",
+      "properties": {
+        "ignore": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Globs (e.g. vendor/**, *.min.js) or bare path segments to skip."
+        }
+      }
+    },
+    "experimental": {
+      "type": "boolean",
+      "description": "Opt in to experimental rules in full reports (never shown inline)."
+    }
+  }
+}
